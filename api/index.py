@@ -5,30 +5,19 @@ import requests
 
 app = Flask(__name__)
 
-# Configuración del Bot (Telegram Webhook operativo en /webhook)
+# Configuración del Bot y Token Secreto de Administrador
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8174194177:AAHZ62p41CqtAkssj4-x1ajEQTKK60Ibs-Q")
-TELEGRAM_API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+ADMIN_TOKEN = "ubican123"  # <--- Puedes cambiar esta clave por la que tú quieras
 
-# BASE DE DATOS EN MEMORIA (Iniciamos con reportes de prueba estéticos)
-mascotas_perdidas = [
-    {
-        "nombre": "Gohan",
-        "descripcion": "Pug color arena con collar rojo. Tiene una pequeña cicatriz en la oreja izquierda. Es muy asustadizo pero no muerde.",
-        "zona": "Colonia Praderas, cerca de Av. de las Torres",
-        "contacto": "6561234567",
-        "imagenes": []
-    },
-    {
-        "nombre": "Kira",
-        "descripcion": "Husky Siberiana de ojos heterocromáticos (uno azul y uno café). Trae placa de Ubican ID pero se borró el teléfono.",
-        "zona": "Cerca del Parque Central",
-        "contacto": "6569876543",
-        "imagenes": []
-    }
-]
+# BASE DE DATOS EN MEMORIA (Vaciada para que empiece en blanco como pides)
+mascotas_perdidas = []
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
+    # Detectamos si quien navega es el administrador usando la URL
+    token_ingresado = request.args.get('admin')
+    es_admin = (token_ingresado == ADMIN_TOKEN)
+
     if request.method == 'POST':
         archivos = request.files.getlist("imagenes")
         lista_imagenes_base64 = []
@@ -49,6 +38,9 @@ def index():
         }
         
         mascotas_perdidas.insert(0, nuevo_reporte)
+        # Si el admin publica algo, lo mantenemos en el modo admin al recargar
+        if es_admin:
+            return redirect(url_for('index', admin=ADMIN_TOKEN))
         return redirect(url_for('index'))
 
     html_content = """
@@ -71,180 +63,95 @@ def index():
             }
 
             * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-            
-            body { 
-                font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-                background-color: var(--bg);
-                color: var(--dark);
-                padding-bottom: 60px;
-            }
+            body { font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; background-color: var(--bg); color: var(--dark); padding-bottom: 60px; }
 
-            /* Navbar Superior */
             .navbar {
-                background: rgba(255, 255, 255, 0.8);
-                backdrop-filter: blur(12px);
-                -webkit-backdrop-filter: blur(12px);
-                position: sticky; top: 0; z-index: 90;
-                padding: 16px 24px;
-                display: flex; justify-content: space-between; align-items: center;
+                background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+                position: sticky; top: 0; z-index: 90; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center;
                 border-bottom: 1px solid rgba(226, 232, 240, 0.8);
             }
             .navbar-brand { font-size: 1.25em; font-weight: 800; color: var(--dark); display: flex; align-items: center; gap: 8px; }
             .navbar-brand span { background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-
-            /* Contenedor Principal Dashboard */
-            .main-container { max-width: 1200px; margin: 40px auto; padding: 0 24px; }
             
+            /* Banner de aviso para el Administrador */
+            .admin-banner { background: #fee2e2; color: var(--danger); padding: 8px; text-align: center; font-size: 0.85em; font-weight: 700; border-radius: 8px; margin-bottom: 20px; }
+
+            .main-container { max-width: 1200px; margin: 40px auto; padding: 0 24px; }
             .section-intro { margin-bottom: 32px; }
-            .section-intro h2 { font-size: 1.75em; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 6px; }
+            .section-intro h2 { font-size: 1.75em; font-weight: 800; margin-bottom: 6px; }
             .section-intro p { color: var(--gray-text); font-size: 0.95em; }
 
-            /* Grid Dinámico de Tarjetas */
-            .grid-feed {
-                display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-                gap: 24px;
-            }
+            .grid-feed { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px; }
             
-            /* Tarjetas de Reporte Premium */
-            .card {
-                background: var(--card-bg);
-                border-radius: 20px;
-                border: 1px solid #e2e8f0;
-                box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02), 0 2px 4px -1px rgba(0,0,0,0.01);
-                overflow: hidden;
-                display: flex;
-                flex-direction: column;
-                transition: transform 0.25s ease, box-shadow 0.25s ease;
-            }
-            .card:hover {
-                transform: translateY(-4px);
-                box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.02);
-            }
-
+            .card { background: var(--card-bg); border-radius: 20px; border: 1px solid #e2e8f0; overflow: hidden; display: flex; flex-direction: column; transition: transform 0.25s ease, box-shadow 0.25s ease; }
+            .card:hover { transform: translateY(-4px); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05); }
             .card-body { padding: 24px; flex: 1; display: flex; flex-direction: column; }
             
             .card-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-            .card-badge { background: #fee2e2; color: var(--danger); font-size: 0.75em; font-weight: 700; padding: 4px 12px; border-radius: 99px; letter-spacing: 0.5px; }
-            .card-title { font-size: 1.4em; font-weight: 800; color: var(--dark); }
+            .card-badge { background: #fee2e2; color: var(--danger); font-size: 0.75em; font-weight: 700; padding: 4px 12px; border-radius: 99px; }
+            .card-title { font-size: 1.4em; font-weight: 800; }
 
-            .info-row { display: flex; font-size: 0.9em; margin-bottom: 8px; line-height: 1.4; }
-            .info-row strong { color: var(--dark); width: 85px; flex-shrink: 0; font-weight: 600; }
+            .info-row { display: flex; font-size: 0.9em; margin-bottom: 8px; }
+            .info-row strong { color: var(--dark); width: 85px; flex-shrink: 0; }
             .info-row span { color: var(--gray-text); }
             
-            .card-description { 
-                background: #f8fafc; padding: 14px; border-radius: 12px; 
-                font-size: 0.92em; color: #475569; margin: 16px 0; 
-                line-height: 1.5; border-left: 4px solid var(--primary);
-                flex: 1;
-            }
+            .card-description { background: #f8fafc; padding: 14px; border-radius: 12px; font-size: 0.92em; color: #475569; margin: 16px 0; line-height: 1.5; border-left: 4px solid var(--primary); flex: 1; }
 
-            /* Carrusel de Fotos Deslizable Moderno */
-            .card-gallery { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 8px; scroll-snap-type: x mandatory; }
-            .card-gallery::-webkit-scrollbar { height: 5px; }
-            .card-gallery::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-            .card-gallery img {
-                width: 75px; height: 75px; object-fit: cover; border-radius: 10px;
-                cursor: pointer; border: 1px solid #f1f5f9; transition: opacity 0.2s;
-                scroll-snap-align: start;
-            }
-            .card-gallery img:hover { opacity: 0.85; }
+            .card-gallery { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 12px; }
+            .card-gallery img { width: 75px; height: 75px; object-fit: cover; border-radius: 10px; cursor: pointer; border: 1px solid #f1f5f9; }
             .no-photos { font-size: 0.8em; color: var(--gray-text); font-style: italic; margin-bottom: 16px; text-align: center; background: #f1f5f9; padding: 10px; border-radius: 10px; }
 
-            /* Botón de Acción Principal */
-            .btn-whatsapp {
-                background: #10b981; color: white; text-decoration: none;
-                padding: 12px; border-radius: 12px; text-align: center;
-                font-weight: 700; font-size: 0.9em; display: flex; align-items: center; justify-content: center; gap: 6px;
-                box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); transition: background 0.2s, transform 0.2s;
-            }
-            .btn-whatsapp:active { transform: scale(0.98); }
-
-            /* Botón Flotante Moderno (FAB) */
-            .fab {
-                position: fixed; bottom: 32px; right: 32px;
-                background: var(--primary-gradient); color: white;
-                border: none; width: 60px; height: 60px; border-radius: 50%;
-                font-size: 24px; cursor: pointer; z-index: 100;
-                display: flex; align-items: center; justify-content: center;
-                box-shadow: 0 10px 25px -5px rgba(255, 107, 74, 0.4);
-                transition: transform 0.2s ease;
-            }
-            .fab:hover { transform: scale(1.08); }
-            .fab:active { transform: scale(0.95); }
-
-            /* Modales con Efecto Blur Avanzado */
-            .modal-overlay {
-                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-                background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-                display: none; justify-content: center; align-items: center; z-index: 200;
-                opacity: 0; transition: opacity 0.3s ease; padding: 16px;
-            }
-            .modal-overlay.active { display: flex; opacity: 1; }
-
-            .modal-box {
-                background: var(--card-bg); width: 100%; max-width: 460px;
-                border-radius: 24px; padding: 32px; max-height: 90vh; overflow-y: auto;
-                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-                transform: scale(0.9); transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            }
-            .modal-overlay.active .modal-box { transform: scale(1); }
-
-            .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-            .modal-head h3 { font-size: 1.3em; font-weight: 800; }
-            .btn-close { background: #f1f5f9; border: none; font-size: 1em; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; color: var(--gray-text); display: flex; align-items: center; justify-content: center; }
-
-            /* Estilos del Formulario */
-            .form-group { margin-bottom: 18px; }
-            .form-group label { display: block; font-size: 0.85em; font-weight: 700; color: var(--dark); margin-bottom: 6px; }
-            .form-group input, .form-group textarea {
-                width: 100%; padding: 12px 16px; border: 1px solid #cbd5e1; border-radius: 12px;
-                font-size: 0.95em; font-family: inherit; outline: none; background: #fff; transition: border-color 0.2s;
-            }
-            .form-group input:focus, .form-group textarea:focus { border-color: #ff6b4a; box-shadow: 0 0 0 3px rgba(255,107,74,0.1); }
-            .form-group textarea { height: 90px; resize: none; }
+            .btn-whatsapp { background: #10b981; color: white; text-decoration: none; padding: 12px; border-radius: 12px; text-align: center; font-weight: 700; font-size: 0.9em; display: block; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); }
             
-            .btn-publish {
-                background: var(--primary-gradient); color: white; border: none; width: 100%;
-                padding: 14px; border-radius: 12px; font-weight: 700; font-size: 1em; cursor: pointer;
-                margin-top: 12px; box-shadow: 0 4px 12px rgba(255, 107, 74, 0.2);
-            }
+            /* Botón de eliminación exclusivo de Admin */
+            .btn-delete { background: #ef4444; color: white; text-decoration: none; padding: 10px; border-radius: 12px; text-align: center; font-weight: 700; font-size: 0.85em; display: block; margin-top: 8px; border: none; cursor: pointer; width: 100%; }
 
-            /* Lightbox (Visor de Fotos) */
-            .lightbox {
-                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-                background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px);
-                display: none; justify-content: center; align-items: center; z-index: 300;
-            }
-            .lightbox img { max-width: 90%; max-height: 80vh; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
+            .fab { position: fixed; bottom: 32px; right: 32px; background: var(--primary-gradient); color: white; border: none; width: 60px; height: 60px; border-radius: 50%; font-size: 24px; cursor: pointer; z-index: 100; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px -5px rgba(255, 107, 74, 0.4); }
+
+            .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); display: none; justify-content: center; align-items: center; z-index: 200; opacity: 0; transition: opacity 0.3s ease; padding: 16px; }
+            .modal-overlay.active { display: flex; opacity: 1; }
+            .modal-box { background: var(--card-bg); width: 100%; max-width: 460px; border-radius: 24px; padding: 32px; max-height: 90vh; overflow-y: auto; transform: scale(0.9); transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+            .modal-overlay.active .modal-box { transform: scale(1); }
+            .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+            .btn-close { background: #f1f5f9; border: none; font-size: 1em; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+            .form-group { margin-bottom: 18px; }
+            .form-group label { display: block; font-size: 0.85em; font-weight: 700; margin-bottom: 6px; }
+            .form-group input, .form-group textarea { width: 100%; padding: 12px 16px; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 0.95em; font-family: inherit; outline: none; }
+            .form-group input:focus, .form-group textarea:focus { border-color: #ff6b4a; }
+            .form-group textarea { height: 90px; resize: none; }
+            .btn-publish { background: var(--primary-gradient); color: white; border: none; width: 100%; padding: 14px; border-radius: 12px; font-weight: 700; font-size: 1em; cursor: pointer; margin-top: 12px; }
+
+            .lightbox { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px); display: none; justify-content: center; align-items: center; z-index: 300; }
+            .lightbox img { max-width: 90%; max-height: 80vh; border-radius: 16px; }
             .lightbox-close { position: absolute; top: 24px; right: 24px; color: white; font-size: 32px; cursor: pointer; }
-
-            @media (max-width: 600px) {
-                .main-container { margin: 20px auto; }
-                .grid-feed { grid-template-columns: 1fr; gap: 16px; }
-                .modal-box { padding: 24px; }
-                .fab { bottom: 20px; right: 20px; width: 54px; height: 54px; }
-            }
+            @media (max-width: 600px) { .grid-feed { grid-template-columns: 1fr; } }
         </style>
     </head>
     <body>
 
-        <!-- NAVBAR -->
         <div class="navbar">
             <div class="navbar-brand">🐾 <span>Ubican ID</span> SOS</div>
         </div>
 
-        <!-- CONTENIDO PRINCIPAL -->
         <div class="main-container">
+            <!-- Si es administrador, le pintamos un anuncio de confirmación -->
+            {% if es_admin %}
+            <div class="admin-banner">
+                🛠️ MODO ADMINISTRADOR ACTIVO — Tienes permisos para eliminar reportes falsos o viejos.
+            </div>
+            {% endif %}
+
             <div class="section-intro">
                 <h2>Mascotas Extraviadas</h2>
                 <p>Red comunitaria en tiempo real para reportes y avistamientos.</p>
             </div>
 
-            <!-- FEED DE REPORTES -->
             <div class="grid-feed">
                 {% if not mascotas %}
-                    <p style="grid-column: 1/-1; text-align: center; color: var(--gray-text); padding: 60px 0;">No hay alertas SOS activas en tu zona.</p>
+                    <p style="grid-column: 1/-1; text-align: center; color: var(--gray-text); padding: 60px 0; font-style: italic;">
+                        No hay alertas SOS activas en este momento.
+                    </p>
                 {% endif %}
                 
                 {% for mascota in mascotas %}
@@ -262,27 +169,35 @@ def index():
                             {{ mascota.descripcion }}
                         </div>
 
-                        <!-- Carrusel de imágenes -->
                         {% if mascota.imagenes %}
                         <div class="card-gallery">
                             {% for img in mascota.imagenes %}
-                            <img src="{{ img }}" alt="Foto de {{ mascota.nombre }}" onclick="openLightbox(this.src)">
+                            <img src="{{ img }}" alt="Foto" onclick="openLightbox(this.src)">
                             {% endfor %}
                         </div>
                         {% else %}
                         <div class="no-photos">Sin fotografías adjuntas</div>
                         {% endif %}
 
-                        <a href="https://wa.me/{{ mascota.contacto }}?text=Hola,%20vi%20tu%20reporte%20de%20{{ mascota.nombre }}%20en%20UbicanID" target="_blank" class="btn-whatsapp">
+                        <a href="https://wa.me/{{ mascota.contacto }}?text=Hola" target="_blank" class="btn-whatsapp">
                             💬 Informar Avistamiento
                         </a>
+
+                        <!-- BOTÓN DE ELIMINAR: Solo se dibuja si es_admin es True -->
+                        {% if es_admin %}
+                        <form method="POST" action="/eliminar/{{ loop.index0 }}">
+                            <input type="hidden" name="admin_token" value="{{ admin_token }}">
+                            <button type="submit" class="btn-delete" onclick="return confirm('¿Seguro que quieres borrar a {{ mascota.nombre }}?')">
+                                🗑️ Eliminar Reporte
+                            </button>
+                        </form>
+                        {% endif %}
                     </div>
                 </div>
                 {% endfor %}
             </div>
         </div>
 
-        <!-- BOTÓN FLOTANTE (FAB) -->
         <button class="fab" onclick="toggleModal(true)">＋</button>
 
         <!-- MODAL FORMULARIO -->
@@ -292,22 +207,23 @@ def index():
                     <h3>Crear Reporte de Extravío</h3>
                     <button class="btn-close" onclick="toggleModal(false)">✕</button>
                 </div>
-                <form method="POST" action="/" enctype="multipart/form-data" id="sosForm">
+                <!-- El formulario hereda el token de admin si existe para no perder la sesión al recargar -->
+                <form method="POST" action="/?admin={% if es_admin %}{{ admin_token }}{% endif %}" enctype="multipart/form-data" id="sosForm">
                     <div class="form-group">
                         <label>Nombre de la mascota</label>
-                        <input type="text" name="nombre" placeholder="Ej. Rocko" required>
+                        <input type="text" name="nombre" required>
                     </div>
                     <div class="form-group">
                         <label>¿Dónde se vio por última vez? (Zona/Colonia)</label>
-                        <input type="text" name="zona" placeholder="Ej. Col. Juárez, calle Poniente" required>
+                        <input type="text" name="zona" required>
                     </div>
                     <div class="form-group">
                         <label>Teléfono de contacto (WhatsApp)</label>
-                        <input type="tel" name="contacto" placeholder="Ej. 6560000000" required>
+                        <input type="tel" name="contacto" required>
                     </div>
                     <div class="form-group">
                         <label>Descripción / Señas particulares</label>
-                        <textarea name="descripcion" placeholder="Tamaño, señas, si lleva collar, temperamento..." required></textarea>
+                        <textarea name="descripcion" required></textarea>
                     </div>
                     <div class="form-group">
                         <label>Fotografías (Máximo 5)</label>
@@ -318,51 +234,43 @@ def index():
             </div>
         </div>
 
-        <!-- LIGHTBOX -->
         <div id="imageLightbox" class="lightbox" onclick="closeLightbox()">
             <span class="lightbox-close">&times;</span>
             <img id="lightboxImg" src="" alt="Ampliada">
         </div>
 
-        <!-- CONTROLADORES INTERACTIVOS -->
         <script>
             function toggleModal(show) {
                 const modal = document.getElementById('formModal');
-                if (show) {
-                    modal.style.display = 'flex';
-                    setTimeout(() => modal.classList.add('active'), 10);
-                } else {
-                    modal.classList.remove('active');
-                    setTimeout(() => modal.style.display = 'none', 300);
-                }
+                if (show) { modal.style.display = 'flex'; setTimeout(() => modal.classList.add('active'), 10); }
+                else { modal.classList.remove('active'); setTimeout(() => modal.style.display = 'none', 300); }
             }
-
-            function closeModalOutside(e) {
-                if (e.target === document.getElementById('formModal')) toggleModal(false);
-            }
-
-            function openLightbox(src) {
-                document.getElementById('lightboxImg').src = src;
-                document.getElementById('imageLightbox').style.display = 'flex';
-            }
-
-            function closeLightbox() {
-                document.getElementById('imageLightbox').style.display = 'none';
-            }
-
+            if (window.history.replaceState) { window.history.replaceState( null, null, window.location.href ); }
+            function closeModalOutside(e) { if (e.target === document.getElementById('formModal')) toggleModal(false); }
+            function openLightbox(src) { document.getElementById('lightboxImg').src = src; document.getElementById('imageLightbox').style.display = 'flex'; }
+            function closeLightbox() { document.getElementById('imageLightbox').style.display = 'none'; }
             document.getElementById('sosForm').onsubmit = function() {
                 const files = document.getElementById('filesInput').files;
-                if(files.length > 5) {
-                    alert("⚠️ Por favor, selecciona un máximo de 5 fotografías.");
-                    return false;
-                }
+                if(files.length > 5) { alert("⚠️ Selecciona un máximo de 5 fotografías."); return false; }
                 return true;
             };
         </script>
     </body>
     </html>
     """
-    return render_template_string(html_content, mascotas=mascotas_perdidas)
+    return render_template_string(html_content, mascotas=mascotas_perdidas, es_admin=es_admin, admin_token=ADMIN_TOKEN)
+
+# ==================== RUTA ACCIÓN DE ELIMINAR ====================
+@app.route('/eliminar/<int:index>', methods=['POST'])
+def eliminar_mascota(index):
+    # Verificamos que la petición de borrado traiga el token correcto para evitar hackeos
+    token_verificacion = request.form.get('admin_token')
+    if token_verificacion == ADMIN_TOKEN:
+        if 0 <= index < len(mascotas_perdidas):
+            mascotas_perdidas.pop(index) # Quitamos el reporte de la lista por su posición
+    
+    # Redirigimos de vuelta manteniendo el modo administrador activo
+    return redirect(url_for('index', admin=ADMIN_TOKEN))
 
 @app.route('/webhook', methods=['POST'])
 def telegram_webhook():
