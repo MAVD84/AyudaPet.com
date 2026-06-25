@@ -51,11 +51,15 @@ def index():
                 --primary: #f39c12;
                 --primary-gradient: linear-gradient(135deg, #ff6b4a, #ff9f43);
                 --dark: #0f172a;
+                --slate-700: #334155;
                 --gray-text: #64748b;
                 --bg: #f8fafc;
                 --card-bg: #ffffff;
                 --success: #10b981;
                 --danger: #ef4444;
+                --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+                --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+                --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
             }
 
             * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -69,54 +73,179 @@ def index():
             .navbar-brand { font-size: 1.25em; font-weight: 800; color: var(--dark); display: flex; align-items: center; gap: 8px; }
             .navbar-brand span { background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
             
-            .admin-banner { background: #fee2e2; color: var(--danger); padding: 8px; text-align: center; font-size: 0.85em; font-weight: 700; border-radius: 8px; margin-bottom: 20px; }
+            .admin-banner { background: #fee2e2; color: var(--danger); padding: 10px; text-align: center; font-size: 0.85em; font-weight: 700; border-radius: 12px; margin-bottom: 24px; border: 1px solid #fca5a5; }
 
             .main-container { max-width: 1200px; margin: 40px auto; padding: 0 24px; }
             .section-intro { margin-bottom: 32px; }
-            .section-intro h2 { font-size: 1.75em; font-weight: 800; margin-bottom: 6px; }
-            .section-intro p { color: var(--gray-text); font-size: 0.95em; }
+            .section-intro h2 { font-size: 2em; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 6px; }
+            .section-intro p { color: var(--gray-text); font-size: 0.98em; }
 
-            .grid-feed { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px; }
+            /* CONTENEDOR DE TARJETAS MODERNO */
+            .grid-feed { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 28px; }
             
-            .card { background: var(--card-bg); border-radius: 20px; border: 1px solid #e2e8f0; overflow: hidden; display: flex; flex-direction: column; transition: transform 0.25s ease, box-shadow 0.25s ease; }
-            .card:hover { transform: translateY(-4px); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05); }
+            /* TARJETA PROFESIONAL REDISEÑADA */
+            .card { 
+                background: var(--card-bg); 
+                border-radius: 24px; 
+                border: 1px solid #e2e8f0; 
+                overflow: hidden; 
+                display: flex; 
+                flex-direction: column; 
+                transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
+                box-shadow: var(--shadow-sm);
+            }
+            .card:hover { 
+                transform: translateY(-6px); 
+                box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.08); 
+            }
+
+            /* Contenedor de la Imagen Destacada de la tarjeta */
+            .card-hero-image {
+                width: 100%;
+                height: 220px;
+                position: relative;
+                overflow: hidden;
+                background: #f1f5f9;
+            }
+            .card-hero-image img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+            .card-hero-placeholder {
+                width: 100%;
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+                color: var(--gray-text);
+                gap: 8px;
+            }
+            .card-hero-placeholder span { font-size: 3rem; }
+
+            /* Etiquetas flotantes sobre la imagen */
+            .card-floating-badge {
+                position: absolute;
+                top: 16px;
+                right: 16px;
+                background: var(--danger);
+                color: white;
+                font-size: 0.75em;
+                font-weight: 800;
+                padding: 6px 14px;
+                border-radius: 99px;
+                letter-spacing: 0.05em;
+                box-shadow: 0 4px 6px rgba(239, 68, 68, 0.2);
+            }
+
             .card-body { padding: 24px; flex: 1; display: flex; flex-direction: column; }
             
-            .card-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-            .card-badge { background: #fee2e2; color: var(--danger); font-size: 0.75em; font-weight: 700; padding: 4px 12px; border-radius: 99px; }
-            .card-title { font-size: 1.4em; font-weight: 800; }
+            .card-title { font-size: 1.5em; font-weight: 800; color: var(--dark); margin-bottom: 12px; letter-spacing: -0.01em; }
 
-            .info-row { display: flex; font-size: 0.9em; margin-bottom: 8px; }
-            .info-row strong { color: var(--dark); width: 85px; flex-shrink: 0; }
-            .info-row span { color: var(--gray-text); }
+            /* Bloques de Datos Técnicos o Tags */
+            .card-data-box {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                margin-bottom: 16px;
+            }
+            .data-pill {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                font-size: 0.88em;
+                color: var(--slate-700);
+                background: #f1f5f9;
+                padding: 8px 12px;
+                border-radius: 10px;
+            }
+            .data-pill strong { color: var(--dark); font-weight: 700; }
+
+            .card-description { 
+                font-size: 0.95em; 
+                color: var(--slate-700); 
+                line-height: 1.6; 
+                margin-bottom: 20px;
+                flex: 1;
+            }
+
+            /* Galería de miniaturas secundarias */
+            .card-thumb-gallery { 
+                display: flex; 
+                gap: 8px; 
+                overflow-x: auto; 
+                margin-bottom: 20px;
+                padding-bottom: 4px;
+            }
+            .card-thumb-gallery img { 
+                width: 56px; 
+                height: 56px; 
+                object-fit: cover; 
+                border-radius: 12px; 
+                cursor: pointer; 
+                border: 2px solid transparent;
+                transition: border-color 0.2s;
+            }
+            .card-thumb-gallery img:hover {
+                border-color: #ff6b4a;
+            }
+
+            /* Botonera integrada */
+            .btn-whatsapp { 
+                background: var(--success); 
+                color: white; 
+                text-decoration: none; 
+                padding: 14px; 
+                border-radius: 16px; 
+                text-align: center; 
+                font-weight: 700; 
+                font-size: 0.95em; 
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15); 
+                transition: background 0.2s;
+            }
+            .btn-whatsapp:hover { background: #059669; }
             
-            .card-description { background: #f8fafc; padding: 14px; border-radius: 12px; font-size: 0.92em; color: #475569; margin: 16px 0; line-height: 1.5; border-left: 4px solid var(--primary); flex: 1; }
+            .btn-delete { 
+                background: #fff5f5; 
+                color: var(--danger); 
+                text-decoration: none; 
+                padding: 10px; 
+                border-radius: 14px; 
+                text-align: center; 
+                font-weight: 700; 
+                font-size: 0.85em; 
+                display: block; 
+                margin-top: 10px; 
+                border: 1px dashed rgba(239, 68, 68, 0.3); 
+                cursor: pointer; 
+                width: 100%; 
+                transition: background 0.2s;
+            }
+            .btn-delete:hover { background: #fee2e2; }
 
-            .card-gallery { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 12px; }
-            .card-gallery img { width: 75px; height: 75px; object-fit: cover; border-radius: 10px; cursor: pointer; border: 1px solid #f1f5f9; }
-            .no-photos { font-size: 0.8em; color: var(--gray-text); font-style: italic; margin-bottom: 16px; text-align: center; background: #f1f5f9; padding: 10px; border-radius: 10px; }
-
-            .btn-whatsapp { background: #10b981; color: white; text-decoration: none; padding: 12px; border-radius: 12px; text-align: center; font-weight: 700; font-size: 0.9em; display: block; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); }
-            
-            .btn-delete { background: #ef4444; color: white; text-decoration: none; padding: 10px; border-radius: 12px; text-align: center; font-weight: 700; font-size: 0.85em; display: block; margin-top: 8px; border: none; cursor: pointer; width: 100%; }
-
-            /* EL FOOTER FIJO DE ACCIÓN */
+            /* FOOTER FIJO */
             .app-footer-bar { 
                 position: fixed; bottom: 0; left: 0; width: 100%; 
-                background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+                background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
                 border-top: 1px solid #e2e8f0; padding: 16px 24px; z-index: 100;
                 display: flex; justify-content: center; align-items: center;
-                box-shadow: 0 -10px 25px rgba(15, 23, 42, 0.04);
+                box-shadow: 0 -10px 30px rgba(15, 23, 42, 0.05);
             }
             .btn-trigger-form {
                 background: var(--primary-gradient); color: white; border: none;
-                padding: 14px 28px; border-radius: 14px; font-weight: 700; font-size: 0.95em;
+                padding: 16px 32px; border-radius: 16px; font-weight: 700; font-size: 1em;
                 cursor: pointer; width: 100%; max-width: 500px; text-align: center;
-                box-shadow: 0 4px 14px rgba(255, 107, 74, 0.3); transition: transform 0.2s ease;
+                box-shadow: 0 6px 20px rgba(255, 107, 74, 0.25); transition: transform 0.2s ease;
             }
             .btn-trigger-form:active { transform: scale(0.98); }
 
-            /* EL FORMULARIO DESLIZANTE DESDE ABAJO */
+            /* MODAL PANEL INFERIOR SLIDE-UP */
             .modal-overlay { 
                 position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
                 background: rgba(15, 23, 42, 0); backdrop-filter: blur(0px); -webkit-backdrop-filter: blur(0px);
@@ -124,31 +253,31 @@ def index():
                 transition: background 0.3s ease, backdrop-filter 0.3s ease;
             }
             .modal-overlay.active { 
-                background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+                background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
             }
             .modal-box { 
                 background: var(--card-bg); width: 100%; max-width: 550px; 
-                border-top-left-radius: 28px; border-top-right-radius: 28px; 
+                border-top-left-radius: 32px; border-top-right-radius: 32px; 
                 padding: 32px 24px; max-height: 85vh; overflow-y: auto; 
                 transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); 
-                box-shadow: 0 -15px 30px rgba(0,0,0,0.1);
+                box-shadow: 0 -15px 35px rgba(0,0,0,0.08);
             }
             .modal-overlay.active .modal-box { transform: translateY(0); }
             
             .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-            .btn-close { background: #f1f5f9; border: none; font-size: 1em; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+            .btn-close { background: #f1f5f9; border: none; font-size: 1em; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 
-            .form-group { margin-bottom: 18px; }
-            .form-group label { display: block; font-size: 0.85em; font-weight: 700; margin-bottom: 6px; }
-            .form-group input, .form-group textarea { width: 100%; padding: 12px 16px; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 0.95em; font-family: inherit; outline: none; }
-            .form-group input:focus, .form-group textarea:focus { border-color: #ff6b4a; }
-            .form-group textarea { height: 90px; resize: none; }
-            .btn-publish { background: var(--primary-gradient); color: white; border: none; width: 100%; padding: 14px; border-radius: 12px; font-weight: 700; font-size: 1em; cursor: pointer; margin-top: 12px; }
+            .form-group { margin-bottom: 20px; }
+            .form-group label { display: block; font-size: 0.85em; font-weight: 700; margin-bottom: 8px; color: var(--slate-700); }
+            .form-group input, .form-group textarea { width: 100%; padding: 14px 16px; border: 1px solid #cbd5e1; border-radius: 14px; font-size: 0.95em; font-family: inherit; outline: none; background: #f8fafc; transition: border-color 0.2s, background 0.2s; }
+            .form-group input:focus, .form-group textarea:focus { border-color: #ff6b4a; background: white; }
+            .form-group textarea { height: 100px; resize: none; }
+            .btn-publish { background: var(--primary-gradient); color: white; border: none; width: 100%; padding: 16px; border-radius: 14px; font-weight: 700; font-size: 1em; cursor: pointer; margin-top: 12px; box-shadow: 0 4px 12px rgba(255, 107, 74, 0.2); }
 
-            .lightbox { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px); display: none; justify-content: center; align-items: center; z-index: 300; }
-            .lightbox img { max-width: 90%; max-height: 80vh; border-radius: 16px; }
+            .lightbox { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(12px); display: none; justify-content: center; align-items: center; z-index: 300; }
+            .lightbox img { max-width: 90%; max-height: 80vh; border-radius: 20px; box-shadow: var(--shadow-lg); }
             .lightbox-close { position: absolute; top: 24px; right: 24px; color: white; font-size: 32px; cursor: pointer; }
-            @media (max-width: 600px) { .grid-feed { grid-template-columns: 1fr; } }
+            @media (max-width: 600px) { .grid-feed { grid-template-columns: 1fr; } .main-container { margin: 20px auto; } }
         </style>
     </head>
     <body>
@@ -160,56 +289,75 @@ def index():
         <div class="main-container">
             {% if es_admin %}
             <div class="admin-banner">
-                🛠️ MODO ADMINISTRADOR ACTIVO — Tienes permisos para eliminar reportes falsos o viejos.
+                🛠️ MODO ADMINISTRADOR ACTIVO — Tienes permisos para gestionar y eliminar reportes.
             </div>
             {% endif %}
 
             <div class="section-intro">
                 <h2>Mascotas Extraviadas</h2>
-                <p>Red comunitaria en tiempo real para reportes y avistamientos.</p>
+                <p>Ayúdanos a reportar avistamientos. La comunidad unida los lleva a casa.</p>
             </div>
 
             <div class="grid-feed">
                 {% if not mascotas %}
-                    <p style="grid-column: 1/-1; text-align: center; color: var(--gray-text); padding: 60px 0; font-style: italic;">
-                        No hay alertas SOS activas en este momento.
+                    <p style="grid-column: 1/-1; text-align: center; color: var(--gray-text); padding: 80px 0; font-style: italic; font-size: 1.05em;">
+                        📍 No hay alertas activas en este momento. La red está limpia.
                     </p>
                 {% endif %}
                 
                 {% for mascota in mascotas %}
                 <div class="card">
-                    <div class="card-body">
-                        <div class="card-meta">
-                            <h3 class="card-title">{{ mascota.nombre }}</h3>
-                            <span class="card-badge">SOS</span>
-                        </div>
-                        
-                        <div class="info-row"><strong>📍 Zona:</strong> <span>{{ mascota.zona }}</span></div>
-                        <div class="info-row"><strong>📞 Contacto:</strong> <span>{{ mascota.contacto }}</span></div>
-                        
-                        <div class="card-description">
-                            {{ mascota.descripcion }}
-                        </div>
-
+                    <!-- CONTENEDOR DE IMAGEN PRINCIPAL -->
+                    <div class="card-hero-image">
+                        <span class="card-floating-badge">ALERTA SOS</span>
                         {% if mascota.imagenes %}
-                        <div class="card-gallery">
+                            <!-- Mostramos la primera imagen como foto principal -->
+                            <img src="{{ mascota.imagenes[0] }}" alt="Foto de {{ mascota.nombre }}" id="mainPhoto-{{ loop.index0 }}" onclick="openLightbox(this.src)">
+                        {% else %}
+                            <div class="card-hero-placeholder">
+                                <span>🐾</span>
+                                <p>Sin foto adjunta</p>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="card-body">
+                        <h3 class="card-title">{{ mascota.nombre }}</h3>
+                        
+                        <!-- DATOS ESPECÍFICOS EN FORMATO PILL -->
+                        <div class="card-data-box">
+                            <div class="data-pill">
+                                <span>📍</span>
+                                <span><strong>Zona:</strong> {{ mascota.zona }}</span>
+                            </div>
+                            <div class="data-pill">
+                                <span>📞</span>
+                                <span><strong>Contacto:</strong> {{ mascota.contacto }}</span>
+                            </div>
+                        </div>
+                        
+                        <p class="card-description">
+                            {{ mascota.descripcion }}
+                        </p>
+
+                        <!-- MINIATURAS ADICIONALES (Si hay más de una foto) -->
+                        {% if mascota.imagenes and mascota.imagenes|length > 1 %}
+                        <div class="card-thumb-gallery">
                             {% for img in mascota.imagenes %}
-                            <img src="{{ img }}" alt="Foto" onclick="openLightbox(this.src)">
+                            <img src="{{ img }}" alt="Miniatura" onclick="changeHero('{{ loop.parent.index0 }}', this.src)">
                             {% endfor %}
                         </div>
-                        {% else %}
-                        <div class="no-photos">Sin fotografías adjuntas</div>
                         {% endif %}
 
-                        <a href="https://wa.me/{{ mascota.contacto }}?text=Hola" target="_blank" class="btn-whatsapp">
-                            💬 Informar Avistamiento
+                        <a href="https://wa.me/{{ mascota.contacto }}?text=Hola,%20tengo%20información%20sobre%20{{ mascota.nombre }}" target="_blank" class="btn-whatsapp">
+                            💬 Enviar Mensaje / Avistamiento
                         </a>
 
                         {% if es_admin %}
                         <form method="POST" action="/eliminar/{{ loop.index0 }}">
                             <input type="hidden" name="admin_token" value="{{ admin_token }}">
-                            <button type="submit" class="btn-delete" onclick="return confirm('¿Seguro que quieres borrar a {{ mascota.nombre }}?')">
-                                🗑️ Eliminar Reporte
+                            <button type="submit" class="btn-delete" onclick="return confirm('¿Seguro que deseas eliminar el reporte de {{ mascota.nombre }}?')">
+                                🗑️ Eliminar Reporte Permanente
                             </button>
                         </form>
                         {% endif %}
@@ -219,40 +367,40 @@ def index():
             </div>
         </div>
 
-        <!-- EL FOOTER CON EL ACCESO AL FORMULARIO -->
+        <!-- FOOTER FIJO -->
         <div class="app-footer-bar">
             <button class="btn-trigger-form" onclick="toggleModal(true)">🚨 Reportar Mascota Perdida</button>
         </div>
 
-        <!-- PANEL SLIDE-UP DESDE EL FONDO -->
+        <!-- FORMULARIO SLIDE-UP -->
         <div id="formModal" class="modal-overlay" onclick="closeModalOutside(event)">
             <div class="modal-box">
                 <div class="modal-head">
-                    <h3>Crear Reporte de Extravío</h3>
+                    <h3>Registrar Reporte de Extravío</h3>
                     <button class="btn-close" onclick="toggleModal(false)">✕</button>
                 </div>
                 <form method="POST" action="/?admin={% if es_admin %}{{ admin_token }}{% endif %}" enctype="multipart/form-data" id="sosForm">
                     <div class="form-group">
                         <label>Nombre de la mascota</label>
-                        <input type="text" name="nombre" required>
+                        <input type="text" name="nombre" placeholder="Ej. Rocko, Luna..." required>
                     </div>
                     <div class="form-group">
-                        <label>¿Dónde se vio por última vez? (Zona/Colonia)</label>
-                        <input type="text" name="zona" required>
+                        <label>¿Dónde se extravió? (Zona / Colonia / Cruces)</label>
+                        <input type="text" name="zona" placeholder="Ej. Col. San Ángel, cerca del parque" required>
                     </div>
                     <div class="form-group">
-                        <label>Teléfono de contacto (WhatsApp)</label>
-                        <input type="tel" name="contacto" required>
+                        <label>Teléfono de contacto (WhatsApp con lada)</label>
+                        <input type="tel" name="contacto" placeholder="Ej. 526561234567" required>
                     </div>
                     <div class="form-group">
                         <label>Descripción / Señas particulares</label>
-                        <textarea name="descripcion" required></textarea>
+                        <textarea name="descripcion" placeholder="Ej. Lleva un collar rojo, es muy tímido, tiene una mancha blanca en el pecho..." required></textarea>
                     </div>
                     <div class="form-group">
-                        <label>Fotografías (Máximo 5)</label>
-                        <input type="file" id="filesInput" name="imagenes" accept="image/*" multiple style="padding: 8px 0;">
+                        <label>Fotografías (Máximo 5 fotos)</label>
+                        <input type="file" id="filesInput" name="imagenes" accept="image/*" multiple style="padding: 8px 0; background: none; border: none;">
                     </div>
-                    <button type="submit" class="btn-publish">🚨 Publicar Alerta SOS</button>
+                    <button type="submit" class="btn-publish">🚨 Publicar Alerta de Inmediato</button>
                 </form>
             </div>
         </div>
@@ -275,8 +423,15 @@ def index():
             }
             if (window.history.replaceState) { window.history.replaceState( null, null, window.location.href ); }
             function closeModalOutside(e) { if (e.target === document.getElementById('formModal')) toggleModal(false); }
+            
+            // Función para alternar la foto principal de la tarjeta al hacer clic en las miniaturas
+            function changeHero(cardIndex, newSrc) {
+                document.getElementById('mainPhoto-' + cardIndex).src = newSrc;
+            }
+
             function openLightbox(src) { document.getElementById('lightboxImg').src = src; document.getElementById('imageLightbox').style.display = 'flex'; }
             function closeLightbox() { document.getElementById('imageLightbox').style.display = 'none'; }
+            
             document.getElementById('sosForm').onsubmit = function() {
                 const files = document.getElementById('filesInput').files;
                 if(files.length > 5) { alert("⚠️ Selecciona un máximo de 5 fotografías."); return false; }
