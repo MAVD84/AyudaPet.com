@@ -1,20 +1,17 @@
 import os
 import base64
 from flask import Flask, request, jsonify, render_template_string, redirect, url_for
-import requests
 
 app = Flask(__name__)
 
-# Configuración del Bot y Token Secreto de Administrador
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8174194177:AAHZ62p41CqtAkssj4-x1ajEQTKK60Ibs-Q")
-ADMIN_TOKEN = "ubican123"  # <--- Puedes cambiar esta clave por la que tú quieras
+# Configuración del Admin (Token Secreto)
+ADMIN_TOKEN = "ubican123" 
 
-# BASE DE DATOS EN MEMORIA (Vaciada para que empiece en blanco como pides)
+# BASE DE DATOS EN MEMORIA (Inicia limpia)
 mascotas_perdidas = []
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    # Detectamos si quien navega es el administrador usando la URL
     token_ingresado = request.args.get('admin')
     es_admin = (token_ingresado == ADMIN_TOKEN)
 
@@ -38,7 +35,6 @@ def index():
         }
         
         mascotas_perdidas.insert(0, nuevo_reporte)
-        # Si el admin publica algo, lo mantenemos en el modo admin al recargar
         if es_admin:
             return redirect(url_for('index', admin=ADMIN_TOKEN))
         return redirect(url_for('index'))
@@ -63,7 +59,7 @@ def index():
             }
 
             * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-            body { font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; background-color: var(--bg); color: var(--dark); padding-bottom: 60px; }
+            body { font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; background-color: var(--bg); color: var(--dark); padding-bottom: 90px; }
 
             .navbar {
                 background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
@@ -73,7 +69,6 @@ def index():
             .navbar-brand { font-size: 1.25em; font-weight: 800; color: var(--dark); display: flex; align-items: center; gap: 8px; }
             .navbar-brand span { background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
             
-            /* Banner de aviso para el Administrador */
             .admin-banner { background: #fee2e2; color: var(--danger); padding: 8px; text-align: center; font-size: 0.85em; font-weight: 700; border-radius: 8px; margin-bottom: 20px; }
 
             .main-container { max-width: 1200px; margin: 40px auto; padding: 0 24px; }
@@ -103,15 +98,43 @@ def index():
 
             .btn-whatsapp { background: #10b981; color: white; text-decoration: none; padding: 12px; border-radius: 12px; text-align: center; font-weight: 700; font-size: 0.9em; display: block; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); }
             
-            /* Botón de eliminación exclusivo de Admin */
             .btn-delete { background: #ef4444; color: white; text-decoration: none; padding: 10px; border-radius: 12px; text-align: center; font-weight: 700; font-size: 0.85em; display: block; margin-top: 8px; border: none; cursor: pointer; width: 100%; }
 
-            .fab { position: fixed; bottom: 32px; right: 32px; background: var(--primary-gradient); color: white; border: none; width: 60px; height: 60px; border-radius: 50%; font-size: 24px; cursor: pointer; z-index: 100; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px -5px rgba(255, 107, 74, 0.4); }
+            /* EL FOOTER FIJO DE ACCIÓN */
+            .app-footer-bar { 
+                position: fixed; bottom: 0; left: 0; width: 100%; 
+                background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+                border-top: 1px solid #e2e8f0; padding: 16px 24px; z-index: 100;
+                display: flex; justify-content: center; align-items: center;
+                box-shadow: 0 -10px 25px rgba(15, 23, 42, 0.04);
+            }
+            .btn-trigger-form {
+                background: var(--primary-gradient); color: white; border: none;
+                padding: 14px 28px; border-radius: 14px; font-weight: 700; font-size: 0.95em;
+                cursor: pointer; width: 100%; max-width: 500px; text-align: center;
+                box-shadow: 0 4px 14px rgba(255, 107, 74, 0.3); transition: transform 0.2s ease;
+            }
+            .btn-trigger-form:active { transform: scale(0.98); }
 
-            .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); display: none; justify-content: center; align-items: center; z-index: 200; opacity: 0; transition: opacity 0.3s ease; padding: 16px; }
-            .modal-overlay.active { display: flex; opacity: 1; }
-            .modal-box { background: var(--card-bg); width: 100%; max-width: 460px; border-radius: 24px; padding: 32px; max-height: 90vh; overflow-y: auto; transform: scale(0.9); transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
-            .modal-overlay.active .modal-box { transform: scale(1); }
+            /* EL FORMULARIO DESLIZANTE DESDE ABAJO */
+            .modal-overlay { 
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+                background: rgba(15, 23, 42, 0); backdrop-filter: blur(0px); -webkit-backdrop-filter: blur(0px);
+                display: none; align-items: flex-end; justify-content: center; z-index: 200;
+                transition: background 0.3s ease, backdrop-filter 0.3s ease;
+            }
+            .modal-overlay.active { 
+                background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            }
+            .modal-box { 
+                background: var(--card-bg); width: 100%; max-width: 550px; 
+                border-top-left-radius: 28px; border-top-right-radius: 28px; 
+                padding: 32px 24px; max-height: 85vh; overflow-y: auto; 
+                transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); 
+                box-shadow: 0 -15px 30px rgba(0,0,0,0.1);
+            }
+            .modal-overlay.active .modal-box { transform: translateY(0); }
+            
             .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
             .btn-close { background: #f1f5f9; border: none; font-size: 1em; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 
@@ -135,7 +158,6 @@ def index():
         </div>
 
         <div class="main-container">
-            <!-- Si es administrador, le pintamos un anuncio de confirmación -->
             {% if es_admin %}
             <div class="admin-banner">
                 🛠️ MODO ADMINISTRADOR ACTIVO — Tienes permisos para eliminar reportes falsos o viejos.
@@ -183,7 +205,6 @@ def index():
                             💬 Informar Avistamiento
                         </a>
 
-                        <!-- BOTÓN DE ELIMINAR: Solo se dibuja si es_admin es True -->
                         {% if es_admin %}
                         <form method="POST" action="/eliminar/{{ loop.index0 }}">
                             <input type="hidden" name="admin_token" value="{{ admin_token }}">
@@ -198,16 +219,18 @@ def index():
             </div>
         </div>
 
-        <button class="fab" onclick="toggleModal(true)">＋</button>
+        <!-- EL FOOTER CON EL ACCESO AL FORMULARIO -->
+        <div class="app-footer-bar">
+            <button class="btn-trigger-form" onclick="toggleModal(true)">🚨 Reportar Mascota Perdida</button>
+        </div>
 
-        <!-- MODAL FORMULARIO -->
+        <!-- PANEL SLIDE-UP DESDE EL FONDO -->
         <div id="formModal" class="modal-overlay" onclick="closeModalOutside(event)">
             <div class="modal-box">
                 <div class="modal-head">
                     <h3>Crear Reporte de Extravío</h3>
                     <button class="btn-close" onclick="toggleModal(false)">✕</button>
                 </div>
-                <!-- El formulario hereda el token de admin si existe para no perder la sesión al recargar -->
                 <form method="POST" action="/?admin={% if es_admin %}{{ admin_token }}{% endif %}" enctype="multipart/form-data" id="sosForm">
                     <div class="form-group">
                         <label>Nombre de la mascota</label>
@@ -242,8 +265,13 @@ def index():
         <script>
             function toggleModal(show) {
                 const modal = document.getElementById('formModal');
-                if (show) { modal.style.display = 'flex'; setTimeout(() => modal.classList.add('active'), 10); }
-                else { modal.classList.remove('active'); setTimeout(() => modal.style.display = 'none', 300); }
+                if (show) { 
+                    modal.style.display = 'flex'; 
+                    setTimeout(() => modal.classList.add('active'), 10); 
+                } else { 
+                    modal.classList.remove('active'); 
+                    setTimeout(() => modal.style.display = 'none', 300); 
+                }
             }
             if (window.history.replaceState) { window.history.replaceState( null, null, window.location.href ); }
             function closeModalOutside(e) { if (e.target === document.getElementById('formModal')) toggleModal(false); }
@@ -260,16 +288,12 @@ def index():
     """
     return render_template_string(html_content, mascotas=mascotas_perdidas, es_admin=es_admin, admin_token=ADMIN_TOKEN)
 
-# ==================== RUTA ACCIÓN DE ELIMINAR ====================
 @app.route('/eliminar/<int:index>', methods=['POST'])
 def eliminar_mascota(index):
-    # Verificamos que la petición de borrado traiga el token correcto para evitar hackeos
     token_verificacion = request.form.get('admin_token')
     if token_verificacion == ADMIN_TOKEN:
         if 0 <= index < len(mascotas_perdidas):
-            mascotas_perdidas.pop(index) # Quitamos el reporte de la lista por su posición
-    
-    # Redirigimos de vuelta manteniendo el modo administrador activo
+            mascotas_perdidas.pop(index)
     return redirect(url_for('index', admin=ADMIN_TOKEN))
 
 @app.route('/webhook', methods=['POST'])
