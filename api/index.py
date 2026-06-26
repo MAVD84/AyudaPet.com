@@ -1,5 +1,6 @@
 import os
 import base64
+import traceback  # <-- Importamos esto para rastrear el error exacto
 from flask import Flask, request, jsonify, render_template_string, redirect, url_for
 
 app = Flask(__name__)
@@ -8,6 +9,27 @@ ADMIN_TOKEN = "ubican123"
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 mascotas_perdidas = []
+
+# =====================================================================
+# 🛠️ ATRAPADOR DE ERRORES (Muestra el fallo real en la pantalla del celular)
+# =====================================================================
+@app.errorhandler(500)
+def handle_internal_server_error(e):
+    error_exacto = traceback.format_exc()
+    return f"""
+    <!DOCTYPE html>
+    <html lang="es">
+    <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Error en Servidor</title></head>
+    <body style="font-family: system-ui, sans-serif; background: #f8fafc; padding: 20px; color: #0f172a;">
+        <div style="max-width: 600px; margin: 40px auto; background: white; padding: 32px; border-radius: 24px; border: 1px solid #fca5a5; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+            <h2 style="color: #ef4444; margin-bottom: 12px;">⚠️ Ocurrió un error en Python</h2>
+            <p style="color: #64748b; font-size: 0.95em; line-height: 1.5;">El formulario intentó procesarse pero algo falló en el código. Cópia todo el texto de la caja negra de abajo y pégamelo en el chat para corregirlo de inmediato:</p>
+            <pre style="background: #0f172a; color: #38bdf8; padding: 16px; border-radius: 14px; overflow-x: auto; font-size: 0.85em; font-family: monospace; margin-top: 20px; white-space: pre-wrap;">{error_exacto}</pre>
+        </div>
+    </body>
+    </html>
+    """, 500
+# =====================================================================
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -19,22 +41,21 @@ def index():
         if nombre and nombre.strip() != "":
             url_principal = ""
             lista_secundarias = []
-            try:
-                foto_principal = request.files.get("imagen_principal")
-                if foto_principal and foto_principal.filename != '':
-                    bytes_p = foto_principal.read()
-                    b64_p = base64.b64encode(bytes_p).decode('utf-8')
-                    url_principal = f"data:{foto_principal.content_type};base64,{b64_p}"
+            
+            # Procesamiento de imágenes
+            foto_principal = request.files.get("imagen_principal")
+            if foto_principal and foto_principal.filename != '':
+                bytes_p = foto_principal.read()
+                b64_p = base64.b64encode(bytes_p).decode('utf-8')
+                url_principal = f"data:{foto_principal.content_type};base64,{b64_p}"
 
-                fotos_secundarias = request.files.getlist("imagenes_secundarias")
-                for archivo in fotos_secundarias[:4]:
-                    if archivo and archivo.filename != '':
-                        bytes_s = archivo.read()
-                        b64_s = base64.b64encode(bytes_s).decode('utf-8')
-                        data_url = f"data:{archivo.content_type};base64,{b64_s}"
-                        lista_secundarias.append(data_url)
-            except Exception as e:
-                print(f"⚠️ Error en imágenes: {e}")
+            fotos_secundarias = request.files.getlist("imagenes_secundarias")
+            for archivo in fotos_secundarias[:4]:
+                if archivo and archivo.filename != '':
+                    bytes_s = archivo.read()
+                    b64_s = base64.b64encode(bytes_s).decode('utf-8')
+                    data_url = f"data:{archivo.content_type};base64,{b64_s}"
+                    lista_secundarias.append(data_url)
 
             nuevo_reporte = {
                 "nombre": nombre,
@@ -113,7 +134,6 @@ def index():
             .app-footer-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-top: 1px solid #e2e8f0; padding: 16px 24px; z-index: 100; display: flex; justify-content: center; }
             .btn-trigger-form { background: var(--primary-gradient); color: white; border: none; padding: 16px 32px; border-radius: 16px; font-weight: 700; font-size: 1em; cursor: pointer; width: 100%; max-width: 500px; text-align: center; box-shadow: 0 6px 20px rgba(255, 107, 74, 0.25); }
 
-            /* MODAL REESTRUCTURADO PARA HACER CLIC SIN BLOQUEOS */
             .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.5); display: none; align-items: flex-end; justify-content: center; z-index: 200; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
             .modal-box { background: var(--card-bg); width: 100%; max-width: 550px; border-top-left-radius: 32px; border-top-right-radius: 32px; padding: 32px 24px; max-height: 85vh; overflow-y: auto; z-index: 250; position: relative; pointer-events: auto; }
             
@@ -124,7 +144,6 @@ def index():
             .form-group label { display: block; font-size: 0.85em; font-weight: 700; margin-bottom: 8px; color: var(--slate-700); }
             .form-group input[type="text"], .form-group input[type="tel"], .form-group textarea { width: 100%; padding: 14px 16px; border: 1px solid #cbd5e1; border-radius: 14px; font-size: 0.95em; font-family: inherit; outline: none; background: #f8fafc; }
             
-            /* DISEÑO DE BOTÓN DE CARGA REFORZADO PARA MÓVILES */
             .file-input-styled { display: block; width: 100%; padding: 14px; border: 2px dashed #cbd5e1; background: #f8fafc; border-radius: 14px; font-size: 0.9em; color: var(--slate-700); cursor: pointer; outline: none; position: relative; z-index: 350 !important; }
             .file-input-styled:active { background: #e2e8f0; border-color: #ff6b4a; }
 
