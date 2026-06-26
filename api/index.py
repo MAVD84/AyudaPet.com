@@ -18,7 +18,10 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 # ─── LabsMobile config ────────────────────────────────────────────────────────
 LABSMOBILE_USER  = "hola@ubicanid.com"   # ← tu email de cuenta LabsMobile
 LABSMOBILE_TOKEN = "zuK99as7kNvGDMJtfshF5UnYDEOJa1fA"  # ← TOKEN API (Configuración API en tu panel), NO la contraseña web
-LABSMOBILE_SENDER = "UbicanID"  # ← remitente (tpoa). Máx 11 caracteres alfanuméricos, sin espacios.
+# México suele rechazar remitente alfanumérico personalizado para SMS transaccional/OTP
+# (queda "enviando" sin entregarse). Deja LABSMOBILE_SENDER en None para usar el
+# remitente por defecto de tu cuenta LabsMobile (numérico), que sí entrega en México.
+LABSMOBILE_SENDER = None
 LABSMOBILE_API   = "https://api.labsmobile.com/json/send"
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -58,11 +61,12 @@ def enviar_sms_otp(telefono, codigo):
     """
     payload = {
         "message": f"Tu código de verificación Ubican ID es: {codigo}. Válido 5 minutos.",
-        "tpoa":    LABSMOBILE_SENDER,
         "recipient": [
             {"msisdn": telefono}
         ],
     }
+    if LABSMOBILE_SENDER:
+        payload["tpoa"] = LABSMOBILE_SENDER
     try:
         r = requests.post(
             LABSMOBILE_API,
