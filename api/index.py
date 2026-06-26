@@ -59,7 +59,24 @@ def enviar_sms_otp(telefono, codigo):
     }
     try:
         r = requests.post(LABSMOBILE_API, json=payload, timeout=10)
-        return r.status_code == 200
+        print(f"📨 LabsMobile status={r.status_code} body={r.text}")
+        if r.status_code != 200:
+            return False
+        # LabsMobile puede responder 200 HTTP pero con un error dentro del JSON
+        try:
+            data = r.json()
+        except ValueError:
+            # No vino JSON válido; nos quedamos con el status 200 como éxito
+            return True
+        # Formato típico: {"code": 0, ...} = éxito. code != 0 o "errors" = falla.
+        if isinstance(data, dict):
+            if "code" in data and str(data.get("code")) != "0":
+                print(f"⚠️ LabsMobile rechazó el envío: {data}")
+                return False
+            if "errors" in data or "error" in data:
+                print(f"⚠️ LabsMobile reportó error: {data}")
+                return False
+        return True
     except Exception as e:
         print(f"⚠️ Error SMS: {e}")
         return False
