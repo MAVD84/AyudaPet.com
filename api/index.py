@@ -32,7 +32,7 @@ def handle_internal_server_error(e):
     """, 500
 
 # =====================================================================
-# 🏠 RUTA PRINCIPAL: FEED MINIMALISTA
+# 🏠 RUTA PRINCIPAL: FEED MINIMALISTA (Tarjetas limpias con enlace expandido)
 # =====================================================================
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -61,7 +61,6 @@ def index():
             except Exception as e:
                 print(f"⚠️ Error en imágenes: {e}")
 
-            # ID único para la navegación individual
             id_unico = str(int(time.time() * 1000))
 
             nuevo_reporte = {
@@ -107,22 +106,33 @@ def index():
             .section-intro p { color: var(--gray); font-size: 0.95em; }
 
             .grid-feed { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 24px; }
-            .card-wrapper { text-decoration: none; color: inherit; }
             
+            /* Tarjeta minimalista limpia con posición relativa */
             .card-minimal { 
                 background: var(--card-bg); border-radius: 20px; border: 1px solid #e2e8f0; overflow: hidden; 
                 transition: transform 0.2s ease, box-shadow 0.2s ease; display: flex; flex-direction: column; height: 100%;
+                position: relative; /* Clave para el enlace expandido */
             }
             .card-minimal:active { transform: scale(0.98); }
             @media (min-width: 768px) { .card-minimal:hover { transform: translateY(-4px); box-shadow: 0 12px 20px -8px rgba(0,0,0,0.08); } }
 
             .card-img-box { width: 100%; height: 260px; background: #f1f5f9; position: relative; }
             .card-img-box img { width: 100%; height: 100%; object-fit: cover; }
-            .card-badge { position: absolute; top: 12px; right: 12px; background: #ef4444; color: white; font-size: 0.7em; font-weight: 800; padding: 4px 10px; border-radius: 99px; letter-spacing: 0.05em; }
+            .card-badge { position: absolute; top: 12px; right: 12px; background: #ef4444; color: white; font-size: 0.7em; font-weight: 800; padding: 4px 10px; border-radius: 99px; letter-spacing: 0.05em; z-index: 2; }
             
             .card-info { padding: 16px; display: flex; flex-direction: column; gap: 4px; }
             .card-info h3 { font-size: 1.15em; font-weight: 700; color: var(--dark); }
             .card-info p { color: var(--gray); font-size: 0.88em; display: flex; align-items: center; gap: 4px; }
+
+            /* 🔗 ENLACE EXPANDIDO (Llena toda la tarjeta invisiblemente) */
+            .stretched-link {
+                position: absolute;
+                top: 0; right: 0; bottom: 0; left: 0;
+                z-index: 5;
+                /* Elimina cualquier residuo visual */
+                text-indent: -9999px;
+                overflow: hidden;
+            }
 
             .app-footer-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-top: 1px solid #e2e8f0; padding: 16px 24px; z-index: 100; display: flex; justify-content: center; }
             .btn-trigger-form { background: var(--primary-gradient); color: white; border: none; padding: 16px 32px; border-radius: 16px; font-weight: 700; font-size: 1em; cursor: pointer; width: 100%; max-width: 450px; text-align: center; box-shadow: 0 4px 12px rgba(255, 107, 74, 0.2); }
@@ -147,7 +157,7 @@ def index():
         <div class="main-container">
             <div class="section-intro">
                 <h2>Mascotas Extraviadas</h2>
-                <p>Haz clic en una tarjeta para ver toda la información de contacto.</p>
+                <p>Haz clic en cualquier tarjeta para ver toda la información de contacto.</p>
             </div>
 
             <div class="grid-feed">
@@ -158,22 +168,22 @@ def index():
                 {% endif %}
                 
                 {% for mascota in mascotas %}
-                <a href="/mascota/{{ mascota.id }}" class="card-wrapper">
-                    <div class="card-minimal">
-                        <div class="card-img-box">
-                            <span class="card-badge">SOS</span>
-                            {% if mascota.principal %}
-                                <img src="{{ mascota.principal }}" alt="{{ mascota.nombre }}">
-                            {% else %}
-                                <div style="display:flex; justify-content:center; align-items:center; height:100%; font-size:2.5em;">🐾</div>
-                            {% endif %}
-                        </div>
-                        <div class="card-info">
-                            <h3>{{ mascota.nombre }}</h3>
-                            <p>📍 {{ mascota.zona }}</p>
-                        </div>
+                <div class="card-minimal">
+                    <a href="/mascota/{{ mascota.id }}" class="stretched-link">Ver detalles</a>
+                    
+                    <div class="card-img-box">
+                        <span class="card-badge">SOS</span>
+                        {% if mascota.principal %}
+                            <img src="{{ mascota.principal }}" alt="{{ mascota.nombre }}">
+                        {% else %}
+                            <div style="display:flex; justify-content:center; align-items:center; height:100%; font-size:2.5em;">🐾</div>
+                        {% endif %}
                     </div>
-                </a>
+                    <div class="card-info">
+                        <h3>{{ mascota.nombre }}</h3>
+                        <p>📍 {{ mascota.zona }}</p>
+                    </div>
+                </div>
                 {% endfor %}
             </div>
         </div>
@@ -222,7 +232,6 @@ def index():
 # =====================================================================
 @app.route('/mascota/<id>')
 def detalle_mascota(id):
-    # Buscar el registro exacto usando el ID único
     mascota = next((m for m in mascotas_perdidas if m["id"] == id), None)
     
     if not mascota:
@@ -249,7 +258,7 @@ def detalle_mascota(id):
             .detail-container { max-width: 650px; margin: 20px auto; background: white; border-radius: 24px; border: 1px solid #e2e8f0; overflow: hidden; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
             
             .btn-back { display: inline-flex; align-items: center; gap: 8px; color: var(--gray); text-decoration: none; font-weight: 600; font-size: 0.95em; margin-bottom: 24px; transition: color 0.2s; }
-            .btn-back:shadow { color: var(--dark); }
+            .btn-back:active { color: var(--dark); }
 
             .hero-image-box { width: 100%; height: 320px; border-radius: 18px; overflow: hidden; background: #f1f5f9; cursor: pointer; margin-bottom: 16px; }
             .hero-image-box img { width: 100%; height: 100%; object-fit: cover; }
