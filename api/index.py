@@ -17,7 +17,7 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 # ─── LabsMobile config ────────────────────────────────────────────────────────
 LABSMOBILE_USER  = "hola@ubicanid.com"   # ← tu email de cuenta LabsMobile
-LABSMOBILE_TOKEN = "T7vpvB4jeIOzu8juyw1rc1DTXzMMS4Tq1"  # ← TOKEN API (Configuración API en tu panel), NO la contraseña web
+LABSMOBILE_TOKEN = "zuK99as7kNvGDMJtfshF5UnYDEOJa1fA"  # ← TOKEN API (Configuración API en tu panel), NO la contraseña web
 LABSMOBILE_SENDER = "UbicanID"  # ← remitente (tpoa). Máx 11 caracteres alfanuméricos, sin espacios.
 LABSMOBILE_API   = "https://api.labsmobile.com/json/send"
 # ─────────────────────────────────────────────────────────────────────────────
