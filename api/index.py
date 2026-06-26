@@ -50,7 +50,7 @@ def generar_otp():
     return str(random.randint(100000, 999999))
 
 def enviar_sms_otp(telefono, codigo):
-    """Envía el OTP via LabsMobile JSON API."""
+    """Envía el OTP via LabsMobile JSON API. Devuelve (ok: bool, detalle: str)."""
     payload = {
         "username": LABSMOBILE_USER,
         "password": LABSMOBILE_PASS,
@@ -59,27 +59,29 @@ def enviar_sms_otp(telefono, codigo):
     }
     try:
         r = requests.post(LABSMOBILE_API, json=payload, timeout=10)
-        print(f"📨 LabsMobile status={r.status_code} body={r.text}")
+        detalle = f"HTTP {r.status_code} | body: {r.text[:300]}"
+        print(f"📨 LabsMobile {detalle}")
         if r.status_code != 200:
-            return False
+            return False, detalle
         # LabsMobile puede responder 200 HTTP pero con un error dentro del JSON
         try:
             data = r.json()
         except ValueError:
             # No vino JSON válido; nos quedamos con el status 200 como éxito
-            return True
+            return True, detalle
         # Formato típico: {"code": 0, ...} = éxito. code != 0 o "errors" = falla.
         if isinstance(data, dict):
             if "code" in data and str(data.get("code")) != "0":
                 print(f"⚠️ LabsMobile rechazó el envío: {data}")
-                return False
+                return False, detalle
             if "errors" in data or "error" in data:
                 print(f"⚠️ LabsMobile reportó error: {data}")
-                return False
-        return True
+                return False, detalle
+        return True, detalle
     except Exception as e:
+        detalle = f"Excepción: {e}"
         print(f"⚠️ Error SMS: {e}")
-        return False
+        return False, detalle
 
 def guardar_otp(telefono, codigo):
     otp_store[telefono] = {"code": codigo, "expires": time.time() + 300}  # 5 min
@@ -183,11 +185,11 @@ def registro():
         else:
             codigo = generar_otp()
             guardar_otp(telefono, codigo)
-            ok = enviar_sms_otp(telefono, codigo)
+            ok, detalle = enviar_sms_otp(telefono, codigo)
             if ok:
                 return redirect(url_for('verificar_registro', tel=telefono))
             else:
-                error = "No se pudo enviar el SMS. Verifica el número e intenta de nuevo."
+                error = f"No se pudo enviar el SMS. Verifica el número e intenta de nuevo.<br><small style='opacity:.7'>DEBUG: {detalle}</small>"
 
     html = BASE_CSS + """
     <div class='auth-wrap'>
@@ -296,11 +298,11 @@ def login():
         else:
             codigo = generar_otp()
             guardar_otp(telefono, codigo)
-            ok = enviar_sms_otp(telefono, codigo)
+            ok, detalle = enviar_sms_otp(telefono, codigo)
             if ok:
                 return redirect(url_for('verificar_login', tel=telefono))
             else:
-                error = "No se pudo enviar el SMS. Intenta de nuevo."
+                error = f"No se pudo enviar el SMS. Intenta de nuevo.<br><small style='opacity:.7'>DEBUG: {detalle}</small>"
 
     html = BASE_CSS + """
     <div class='auth-wrap'>
