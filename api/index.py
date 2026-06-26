@@ -116,9 +116,9 @@ def index():
                 display: flex; flex-direction: column; box-shadow: var(--shadow-sm);
             }
 
-            .card-hero-image { width: 100%; height: 240px; position: relative; overflow: hidden; background: #f1f5f9; }
+            .card-hero-image { width: 100%; height: 240px; position: relative; overflow: hidden; background: #f1f5f9; cursor: pointer; }
             .card-hero-image img { width: 100%; height: 100%; object-fit: cover; }
-            .card-floating-badge { position: absolute; top: 16px; right: 16px; background: var(--danger); color: white; font-size: 0.75em; font-weight: 800; padding: 6px 14px; border-radius: 99px; }
+            .card-floating-badge { position: absolute; top: 16px; right: 16px; background: var(--danger); color: white; font-size: 0.75em; font-weight: 800; padding: 6px 14px; border-radius: 99px; z-index: 10; }
 
             .card-body { padding: 24px; flex: 1; display: flex; flex-direction: column; }
             .card-title { font-size: 1.5em; font-weight: 800; color: var(--dark); margin-bottom: 12px; }
@@ -128,7 +128,7 @@ def index():
             .card-description { font-size: 0.95em; color: var(--slate-700); line-height: 1.6; margin-bottom: 20px; flex: 1; }
 
             .card-thumb-gallery { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 20px; }
-            .card-thumb-gallery img { width: 100%; height: 55px; object-fit: cover; border-radius: 10px; cursor: pointer; }
+            .card-thumb-gallery img { width: 100%; height: 55px; object-fit: cover; border-radius: 10px; cursor: pointer; border: 1px solid #cbd5e1; }
 
             .btn-whatsapp { background: var(--success); color: white; text-decoration: none; padding: 14px; border-radius: 16px; text-align: center; font-weight: 700; font-size: 0.95em; display: flex; align-items: center; justify-content: center; gap: 8px; }
 
@@ -151,7 +151,7 @@ def index():
             .btn-publish { background: var(--primary-gradient); color: white; border: none; width: 100%; padding: 16px; border-radius: 14px; font-weight: 700; font-size: 1em; cursor: pointer; margin-top: 12px; position: relative; z-index: 300; }
 
             .lightbox { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.95); display: none; justify-content: center; align-items: center; z-index: 400; }
-            .lightbox img { max-width: 90%; max-height: 80vh; border-radius: 20px; }
+            .lightbox img { max-width: 95%; max-height: 85vh; border-radius: 20px; object-fit: contain; }
             @media (max-width: 600px) { .grid-feed { grid-template-columns: 1fr; } }
         </style>
     </head>
@@ -175,12 +175,12 @@ def index():
                 {% endif %}
                 
                 {% for mascota in mascotas %}
-                {% set card_id = loop.index0 %} <!-- Evitamos loop.parent guardando el ID aquí -->
+                {% set card_id = loop.index0 %}
                 <div class="card">
-                    <div class="card-hero-image">
+                    <div class="card-hero-image" onclick="openLightbox(document.getElementById('mainPhoto-{{ card_id }}').src)">
                         <span class="card-floating-badge">ALERTA SOS</span>
                         {% if mascota.principal %}
-                            <img src="{{ mascota.principal }}" alt="Foto" id="mainPhoto-{{ card_id }}" onclick="openLightbox(this.src)">
+                            <img src="{{ mascota.principal }}" alt="Foto" id="mainPhoto-{{ card_id }}">
                         {% else %}
                             <div class="card-hero-placeholder"><span>🐾</span><p>Sin foto</p></div>
                         {% endif %}
@@ -194,10 +194,10 @@ def index():
                         <p class="card-description">{{ mascota.descripcion }}</p>
                         <div class="card-thumb-gallery">
                             {% if mascota.principal %}
-                            <img src="{{ mascota.principal }}" alt="P" onclick="changeHero('{{ card_id }}', this.src)">
+                            <img src="{{ mascota.principal }}" alt="P" onclick="changeHero('{{ card_id }}', this.src); openLightbox(this.src); event.stopPropagation();">
                             {% endif %}
                             {% for img in mascota.secundarias %}
-                            <img src="{{ img }}" alt="S" onclick="changeHero('{{ card_id }}', this.src)">
+                            <img src="{{ img }}" alt="S" onclick="changeHero('{{ card_id }}', this.src); openLightbox(this.src); event.stopPropagation();">
                             {% endfor %}
                         </div>
                         <a href="https://wa.me/{{ mascota.contacto }}" target="_blank" class="btn-whatsapp">💬 Enviar Mensaje</a>
