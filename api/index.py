@@ -1,6 +1,6 @@
 import os
 import base64
-import traceback  # <-- Importamos esto para rastrear el error exacto
+import traceback
 from flask import Flask, request, jsonify, render_template_string, redirect, url_for
 
 app = Flask(__name__)
@@ -11,7 +11,7 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 mascotas_perdidas = []
 
 # =====================================================================
-# 🛠️ ATRAPADOR DE ERRORES (Muestra el fallo real en la pantalla del celular)
+# 🛠️ ATRAPADOR DE ERRORES (Muestra el fallo real en la pantalla)
 # =====================================================================
 @app.errorhandler(500)
 def handle_internal_server_error(e):
@@ -41,21 +41,22 @@ def index():
         if nombre and nombre.strip() != "":
             url_principal = ""
             lista_secundarias = []
-            
-            # Procesamiento de imágenes
-            foto_principal = request.files.get("imagen_principal")
-            if foto_principal and foto_principal.filename != '':
-                bytes_p = foto_principal.read()
-                b64_p = base64.b64encode(bytes_p).decode('utf-8')
-                url_principal = f"data:{foto_principal.content_type};base64,{b64_p}"
+            try:
+                foto_principal = request.files.get("imagen_principal")
+                if foto_principal and foto_principal.filename != '':
+                    bytes_p = foto_principal.read()
+                    b64_p = base64.b64encode(bytes_p).decode('utf-8')
+                    url_principal = f"data:{foto_principal.content_type};base64,{b64_p}"
 
-            fotos_secundarias = request.files.getlist("imagenes_secundarias")
-            for archivo in fotos_secundarias[:4]:
-                if archivo and archivo.filename != '':
-                    bytes_s = archivo.read()
-                    b64_s = base64.b64encode(bytes_s).decode('utf-8')
-                    data_url = f"data:{archivo.content_type};base64,{b64_s}"
-                    lista_secundarias.append(data_url)
+                fotos_secundarias = request.files.getlist("imagenes_secundarias")
+                for archivo in fotos_secundarias[:4]:
+                    if archivo and archivo.filename != '':
+                        bytes_s = archivo.read()
+                        b64_s = base64.b64encode(bytes_s).decode('utf-8')
+                        data_url = f"data:{archivo.content_type};base64,{b64_s}"
+                        lista_secundarias.append(data_url)
+            except Exception as e:
+                print(f"⚠️ Error en imágenes: {e}")
 
             nuevo_reporte = {
                 "nombre": nombre,
@@ -174,11 +175,12 @@ def index():
                 {% endif %}
                 
                 {% for mascota in mascotas %}
+                {% set card_id = loop.index0 %} <!-- Evitamos loop.parent guardando el ID aquí -->
                 <div class="card">
                     <div class="card-hero-image">
                         <span class="card-floating-badge">ALERTA SOS</span>
                         {% if mascota.principal %}
-                            <img src="{{ mascota.principal }}" alt="Foto" id="mainPhoto-{{ loop.index0 }}" onclick="openLightbox(this.src)">
+                            <img src="{{ mascota.principal }}" alt="Foto" id="mainPhoto-{{ card_id }}" onclick="openLightbox(this.src)">
                         {% else %}
                             <div class="card-hero-placeholder"><span>🐾</span><p>Sin foto</p></div>
                         {% endif %}
@@ -192,10 +194,10 @@ def index():
                         <p class="card-description">{{ mascota.descripcion }}</p>
                         <div class="card-thumb-gallery">
                             {% if mascota.principal %}
-                            <img src="{{ mascota.principal }}" alt="P" onclick="changeHero('{{ loop.index0 }}', this.src)">
+                            <img src="{{ mascota.principal }}" alt="P" onclick="changeHero('{{ card_id }}', this.src)">
                             {% endif %}
                             {% for img in mascota.secundarias %}
-                            <img src="{{ img }}" alt="S" onclick="changeHero('{{ loop.parent.index0 }}', this.src)">
+                            <img src="{{ img }}" alt="S" onclick="changeHero('{{ card_id }}', this.src)">
                             {% endfor %}
                         </div>
                         <a href="https://wa.me/{{ mascota.contacto }}" target="_blank" class="btn-whatsapp">💬 Enviar Mensaje</a>
