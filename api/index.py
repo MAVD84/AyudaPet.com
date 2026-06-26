@@ -17,7 +17,7 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 # ─── LabsMobile config ────────────────────────────────────────────────────────
 LABSMOBILE_USER  = "hola@ubicanid.com"   # ← reemplaza
-LABSMOBILE_PASS  = "T7vpvB4jeIOzu8juyw1rc1DTXzMMS4Tq1"  # ← reemplaza
+LABSMOBILE_PASS  = "zuK99as7kNvGDMJtfshF5UnYDEOJa1fA"  # ← reemplaza
 LABSMOBILE_API   = "https://api.labsmobile.com/json/send"
 # ─────────────────────────────────────────────────────────────────────────────
 
