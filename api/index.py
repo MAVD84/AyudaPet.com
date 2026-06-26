@@ -205,7 +205,7 @@ def registro():
             if ok:
                 return redirect(url_for('verificar_registro', tel=telefono))
             else:
-                error = f"No se pudo enviar el SMS. Verifica el número e intenta de nuevo.<br><small style='opacity:.7'>DEBUG: {detalle}</small>"
+                error = "No se pudo enviar el SMS. Verifica el número e intenta de nuevo."
 
     html = BASE_CSS + """
     <div class='auth-wrap'>
@@ -318,7 +318,7 @@ def login():
             if ok:
                 return redirect(url_for('verificar_login', tel=telefono))
             else:
-                error = f"No se pudo enviar el SMS. Intenta de nuevo.<br><small style='opacity:.7'>DEBUG: {detalle}</small>"
+                error = "No se pudo enviar el SMS. Intenta de nuevo."
 
     html = BASE_CSS + """
     <div class='auth-wrap'>
@@ -837,4 +837,5 @@ def detalle_mascota(id):
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get('PORT', 3000))
+    app.run(host='0.0.0.0', port=port, debug=False)
