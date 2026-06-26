@@ -107,11 +107,10 @@ def index():
 
             .grid-feed { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 24px; }
             
-            /* Tarjeta minimalista limpia con posición relativa */
             .card-minimal { 
                 background: var(--card-bg); border-radius: 20px; border: 1px solid #e2e8f0; overflow: hidden; 
                 transition: transform 0.2s ease, box-shadow 0.2s ease; display: flex; flex-direction: column; height: 100%;
-                position: relative; /* Clave para el enlace expandido */
+                position: relative;
             }
             .card-minimal:active { transform: scale(0.98); }
             @media (min-width: 768px) { .card-minimal:hover { transform: translateY(-4px); box-shadow: 0 12px 20px -8px rgba(0,0,0,0.08); } }
@@ -124,12 +123,10 @@ def index():
             .card-info h3 { font-size: 1.15em; font-weight: 700; color: var(--dark); }
             .card-info p { color: var(--gray); font-size: 0.88em; display: flex; align-items: center; gap: 4px; }
 
-            /* 🔗 ENLACE EXPANDIDO (Llena toda la tarjeta invisiblemente) */
             .stretched-link {
                 position: absolute;
                 top: 0; right: 0; bottom: 0; left: 0;
                 z-index: 5;
-                /* Elimina cualquier residuo visual */
                 text-indent: -9999px;
                 overflow: hidden;
             }
@@ -170,7 +167,6 @@ def index():
                 {% for mascota in mascotas %}
                 <div class="card-minimal">
                     <a href="/mascota/{{ mascota.id }}" class="stretched-link">Ver detalles</a>
-                    
                     <div class="card-img-box">
                         <span class="card-badge">SOS</span>
                         {% if mascota.principal %}
@@ -225,10 +221,11 @@ def index():
     </body>
     </html>
     """
+    # 🌟 CORRECCIÓN AQUÍ: Se cambió html_content por html_index
     return render_template_string(html_index, mascotas=mascotas_perdidas, es_admin=es_admin)
 
 # =====================================================================
-# 📄 RUTA DE DETALLES: PÁGINA INDIVIDUAL COMPLETA
+# 📄 RUTA DE DETALLES: INTEGRADO NATURALMENTE (Sin Card Blanca flotante)
 # =====================================================================
 @app.route('/mascota/<id>')
 def detalle_mascota(id):
@@ -251,29 +248,33 @@ def detalle_mascota(id):
                 --slate: #334155;
                 --gray: #64748b;
                 --success: #10b981;
+                --bg: #f8fafc; /* Color de fondo general de la app */
             }
             * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-            body { font-family: system-ui, -apple-system, sans-serif; background: #f8fafc; color: var(--dark); padding: 20px; }
             
-            .detail-container { max-width: 650px; margin: 20px auto; background: white; border-radius: 24px; border: 1px solid #e2e8f0; overflow: hidden; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+            /* 🌟 El fondo ahora unifica toda la pantalla sin bordes de tarjeta */
+            body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--dark); padding: 24px 16px 120px 16px; }
+            
+            /* Contenedor fluido sin bordes, sombras ni fondo blanco artificial */
+            .detail-container { max-width: 600px; margin: 0 auto; background: transparent; }
             
             .btn-back { display: inline-flex; align-items: center; gap: 8px; color: var(--gray); text-decoration: none; font-weight: 600; font-size: 0.95em; margin-bottom: 24px; transition: color 0.2s; }
             .btn-back:active { color: var(--dark); }
 
-            .hero-image-box { width: 100%; height: 320px; border-radius: 18px; overflow: hidden; background: #f1f5f9; cursor: pointer; margin-bottom: 16px; }
+            .hero-image-box { width: 100%; height: 350px; border-radius: 24px; overflow: hidden; background: #e2e8f0; cursor: pointer; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
             .hero-image-box img { width: 100%; height: 100%; object-fit: cover; }
 
-            .thumb-gallery { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 24px; }
-            .thumb-gallery img { width: 100%; height: 60px; object-fit: cover; border-radius: 10px; cursor: pointer; border: 1px solid #e2e8f0; }
+            .thumb-gallery { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 28px; }
+            .thumb-gallery img { width: 100%; height: 65px; object-fit: cover; border-radius: 12px; cursor: pointer; border: 1px solid #e2e8f0; background: #fff; }
 
-            .info-box h2 { font-size: 2.2em; font-weight: 800; margin-bottom: 16px; letter-spacing: -0.02em; }
+            .info-box h2 { font-size: 2.4em; font-weight: 800; margin-bottom: 18px; letter-spacing: -0.03em; }
             
-            .data-pills { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
-            .pill { display: flex; align-items: center; gap: 8px; font-size: 0.95em; color: var(--slate); background: #f1f5f9; padding: 10px 14px; border-radius: 12px; }
+            .data-pills { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
+            .pill { display: flex; align-items: center; gap: 8px; font-size: 0.95em; color: var(--slate); background: #ffffff; padding: 12px 16px; border-radius: 14px; border: 1px solid #e2e8f0; }
             
-            .description-box { font-size: 1.05em; color: var(--slate); line-height: 1.7; margin-bottom: 28px; border-top: 1px solid #e2e8f0; padding-top: 20px; }
+            .description-box { font-size: 1.05em; color: var(--slate); line-height: 1.7; margin-bottom: 32px; border-top: 1px solid #e2e8f0; padding-top: 24px; }
 
-            .btn-whatsapp { background: var(--success); color: white; text-decoration: none; padding: 16px; border-radius: 16px; text-align: center; font-weight: 700; font-size: 1.05em; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); }
+            .btn-whatsapp { background: var(--success); color: white; text-decoration: none; padding: 16px; border-radius: 18px; text-align: center; font-weight: 700; font-size: 1.05em; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 6px 20px rgba(16, 185, 129, 0.25); }
 
             .lightbox { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.95); display: none; justify-content: center; align-items: center; z-index: 400; }
             .lightbox img { max-width: 95%; max-height: 85vh; border-radius: 16px; object-fit: contain; }
