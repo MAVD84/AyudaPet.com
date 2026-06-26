@@ -5,152 +5,133 @@ import traceback
 from flask import Flask, request, render_template_string, redirect, url_for
 
 app = Flask(__name__)
+
+ADMIN_TOKEN = "ubican123" 
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 mascotas_perdidas = []
 
 @app.errorhandler(500)
 def handle_internal_server_error(e):
-    return "Error en el servidor: " + traceback.format_exc(), 500
+    error_exacto = traceback.format_exc()
+    return f"<pre>{error_exacto}</pre>", 500
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
-        # Mapeo de todos los campos solicitados
-        nueva_mascota = {
-            "id": str(int(time.time() * 1000)),
-            "fecha": request.form.get("fecha"),
-            "nombre": request.form.get("nombre"),
-            "edad": request.form.get("edad"),
-            "raza": request.form.get("raza"),
-            "genero": request.form.get("genero"),
-            "color": request.form.get("color"),
-            "collar": request.form.get("collar"),
-            "docil": request.form.get("docil"),
-            "direccion": request.form.get("direccion"),
-            "ciudad": request.form.get("ciudad"),
-            "estado": request.form.get("estado"),
-            "cp": request.form.get("cp"),
-            "calles": request.form.get("calles"),
-            "dueno": request.form.get("dueno"),
-            "whatsapp": request.form.get("whatsapp"),
-            "recompensa": request.form.get("recompensa")
-        }
-        
-        foto = request.files.get("imagen")
-        if foto and foto.filename != '':
-            bytes_p = foto.read()
-            b64_p = base64.b64encode(bytes_p).decode('utf-8')
-            nueva_mascota["foto"] = f"data:{foto.content_type};base64,{b64_p}"
-            
-        mascotas_perdidas.insert(0, nueva_mascota)
+        nombre = request.form.get("nombre")
+        if nombre:
+            url_principal = ""
+            foto_principal = request.files.get("imagen_principal")
+            if foto_principal and foto_principal.filename != '':
+                bytes_p = foto_principal.read()
+                b64_p = base64.b64encode(bytes_p).decode('utf-8')
+                url_principal = f"data:{foto_principal.content_type};base64,{b64_p}"
+
+            nuevo_reporte = {
+                "id": str(int(time.time() * 1000)),
+                "nombre": nombre,
+                "descripcion": request.form.get("descripcion"),
+                "zona": request.form.get("zona"),
+                "contacto": request.form.get("contacto"),
+                # Nuevos campos
+                "fecha": request.form.get("fecha"),
+                "edad": request.form.get("edad"),
+                "raza": request.form.get("raza"),
+                "genero": request.form.get("genero"),
+                "color": request.form.get("color"),
+                "collar": request.form.get("collar"),
+                "docil": request.form.get("docil"),
+                "direccion": request.form.get("direccion"),
+                "ciudad": request.form.get("ciudad"),
+                "estado": request.form.get("estado"),
+                "cp": request.form.get("cp"),
+                "calles": request.form.get("calles"),
+                "dueno": request.form.get("dueno"),
+                "whatsapp": request.form.get("whatsapp"),
+                "recompensa": request.form.get("recompensa"),
+                "principal": url_principal
+            }
+            mascotas_perdidas.insert(0, nuevo_reporte)
         return redirect(url_for('index'))
 
-    html = """
+    html_index = """
     <!DOCTYPE html>
     <html lang="es">
-    <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reportar Mascota</title>
+    <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Ubican ID SOS</title>
     <style>
-        body { font-family: system-ui, sans-serif; padding: 20px; line-height: 1.5; max-width: 500px; margin: auto; background: #f9f9f9; }
-        .section { background: white; padding: 20px; margin-bottom: 20px; border-radius: 12px; border: 1px solid #eee; }
-        label { display: block; font-weight: 600; font-size: 0.9em; margin-top: 10px; color: #444; }
-        input, select { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
-        button { background: #ff6b4a; color: white; border: none; padding: 16px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 8px; font-size: 1em; }
+        body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: auto; background: #f8fafc; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-weight: bold; font-size: 0.9em; }
+        input, select, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 8px; }
+        .btn-publish { background: #ff6b4a; color: white; padding: 15px; width: 100%; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
     </style>
     </head>
     <body>
-        <h2>Reportar Mascota Perdida</h2>
+        <h2>Reportar Mascota</h2>
         <form method="POST" enctype="multipart/form-data">
-            <div class="section">
-                <label>01. FECHA DE EXTRAVÍO:</label>
-                <input type="date" name="fecha" required>
-            </div>
-
-            <div class="section">
-                <h3>INFORMACIÓN DE LA MASCOTA</h3>
-                <label>Nombre:</label><input type="text" name="nombre">
-                <label>Edad:</label><input type="text" name="edad">
-                <label>Raza:</label><input type="text" name="raza">
-                <label>Género:</label><select name="genero"><option>Macho</option><option>Hembra</option></select>
-                <label>Color:</label><input type="text" name="color">
-                <label>¿Collar?:</label><select name="collar"><option>Si</option><option>No</option></select>
-                <label>¿Dócil?:</label><select name="docil"><option>Si</option><option>No</option></select>
-            </div>
-
-            <div class="section">
-                <h3>UBICACIÓN DE EXTRAVÍO</h3>
-                <label>Dirección:</label><input type="text" name="direccion">
-                <label>Ciudad:</label><input type="text" name="ciudad">
-                <label>Estado:</label><input type="text" name="estado">
-                <label>Codigo Postal:</label><input type="text" name="cp">
-                <label>Entre calles:</label><input type="text" name="calles">
-            </div>
-
-            <div class="section">
-                <h3>CONTACTO / DUEÑO</h3>
-                <label>Dueño/Contacto:</label><input type="text" name="dueno">
-                <label>WhatsApp (Lada +52/+1):</label><input type="text" name="whatsapp" placeholder="+52...">
-                <label>Recompensa:</label><select name="recompensa"><option>No</option><option>Si</option></select>
-                <label>Foto:</label><input type="file" name="imagen" accept="image/*">
-            </div>
-            
-            <button type="submit">PUBLICAR ALERTA</button>
+            <div class="form-group"><label>01. FECHA DE EXTRAVÍO:</label><input type="date" name="fecha"></div>
+            <h3>INFORMACIÓN DE LA MASCOTA</h3>
+            <div class="form-group"><label>Nombre:</label><input type="text" name="nombre" required></div>
+            <div class="form-group"><label>Edad:</label><input type="text" name="edad"></div>
+            <div class="form-group"><label>Raza:</label><input type="text" name="raza"></div>
+            <div class="form-group"><label>Género:</label><select name="genero"><option>Macho</option><option>Hembra</option></select></div>
+            <div class="form-group"><label>Color:</label><input type="text" name="color"></div>
+            <div class="form-group"><label>¿Collar?:</label><select name="collar"><option>Si</option><option>No</option></select></div>
+            <div class="form-group"><label>¿Dócil?:</label><select name="docil"><option>Si</option><option>No</option></select></div>
+            <h3>UBICACIÓN</h3>
+            <div class="form-group"><label>Dirección:</label><input type="text" name="direccion"></div>
+            <div class="form-group"><label>Ciudad:</label><input type="text" name="ciudad"></div>
+            <div class="form-group"><label>Estado:</label><input type="text" name="estado"></div>
+            <div class="form-group"><label>Código Postal:</label><input type="text" name="cp"></div>
+            <div class="form-group"><label>Entre calles:</label><input type="text" name="calles"></div>
+            <div class="form-group"><label>Zona (Resumen):</label><input type="text" name="zona"></div>
+            <h3>CONTACTO</h3>
+            <div class="form-group"><label>Dueño/Contacto:</label><input type="text" name="dueno"></div>
+            <div class="form-group"><label>WhatsApp (+52/+1):</label><input type="tel" name="whatsapp"></div>
+            <div class="form-group"><label>Recompensa:</label><select name="recompensa"><option>No</option><option>Si</option></select></div>
+            <div class="form-group"><label>Descripción:</label><textarea name="descripcion"></textarea></div>
+            <div class="form-group"><label>Foto Principal:</label><input type="file" name="imagen_principal"></div>
+            <button type="submit" class="btn-publish">PUBLICAR ALERTA</button>
         </form>
-
-        <hr style="margin: 40px 0;">
-        <h2>Reportes Activos</h2>
+        <hr>
         {% for m in mascotas %}
-            <div style="padding: 10px 0; border-bottom: 1px solid #ddd;">
-                <a href="/mascota/{{ m.id }}" style="text-decoration:none; color:#333;">
-                    <strong>{{ m.nombre }}</strong> <small>({{ m.ciudad }})</small>
-                </a>
+            <div style="padding:10px; border-bottom:1px solid #ccc;">
+                <a href="/mascota/{{ m.id }}"><strong>{{ m.nombre }}</strong> - {{ m.zona }}</a>
             </div>
         {% endfor %}
     </body>
     </html>
     """
-    return render_template_string(html, mascotas=mascotas_perdidas)
+    return render_template_string(html_index, mascotas=mascotas_perdidas)
 
 @app.route('/mascota/<id>')
 def detalle_mascota(id):
-    m = next((item for item in mascotas_perdidas if item["id"] == id), None)
-    if not m: return "No encontrado"
-    
-    html = """
+    m = next((m for m in mascotas_perdidas if m["id"] == id), None)
+    if not m: return redirect(url_for('index'))
+
+    html_detalle = """
     <!DOCTYPE html>
     <html lang="es">
-    <head><title>{{ m.nombre }}</title>
-    <style>
-        body { font-family: system-ui, sans-serif; padding: 20px; line-height: 1.6; max-width: 600px; margin: auto; }
-        .data-box { margin-bottom: 10px; }
-    </style>
-    </head>
-    <body>
+    <head><title>{{ m.nombre }}</title></head>
+    <body style="font-family:sans-serif; padding:20px; line-height:1.6;">
         <a href="/">← Regresar</a>
         <h1>{{ m.nombre }}</h1>
-        {% if m.foto %}<img src="{{ m.foto }}" style="max-width: 100%; border-radius: 12px;">{% endif %}
-        
-        <h3>Información</h3>
-        <p class="data-box">📅 <strong>Fecha extravío:</strong> {{ m.fecha }}</p>
-        <p class="data-box">🐕 <strong>Raza:</strong> {{ m.raza }} | <strong>Edad:</strong> {{ m.edad }} | <strong>Color:</strong> {{ m.color }}</p>
-        <p class="data-box">⚧ <strong>Género:</strong> {{ m.genero }} | <strong>Collar:</strong> {{ m.collar }} | <strong>Dócil:</strong> {{ m.docil }}</p>
-        
-        <h3>Ubicación</h3>
-        <p class="data-box">📍 {{ m.direccion }}, {{ m.ciudad }}, {{ m.estado }} (CP: {{ m.cp }})</p>
-        <p class="data-box">🗺️ <strong>Entre calles:</strong> {{ m.calles }}</p>
-        
-        <h3>Contacto</h3>
-        <p class="data-box">👤 <strong>Dueño:</strong> {{ m.dueno }}</p>
-        <p class="data-box">💰 <strong>Recompensa:</strong> {{ m.recompensa }}</p>
-        
-        <a href="https://wa.me/{{ m.whatsapp }}" style="display:block; background: #25D366; color: white; padding: 15px; text-align:center; text-decoration: none; border-radius: 10px; font-weight:bold; margin-top:20px;">
-            💬 Contactar por WhatsApp
-        </a>
+        {% if m.principal %}<img src="{{ m.principal }}" style="max-width:300px; display:block;">{% endif %}
+        <p><strong>Fecha Extravío:</strong> {{ m.fecha }}</p>
+        <p><strong>Raza:</strong> {{ m.raza }} | <strong>Edad:</strong> {{ m.edad }} | <strong>Color:</strong> {{ m.color }}</p>
+        <p><strong>Género:</strong> {{ m.genero }} | <strong>Collar:</strong> {{ m.collar }} | <strong>Dócil:</strong> {{ m.docil }}</p>
+        <hr>
+        <p><strong>Dirección:</strong> {{ m.direccion }}, {{ m.ciudad }}, {{ m.estado }} (CP: {{ m.cp }})</p>
+        <p><strong>Entre calles:</strong> {{ m.calles }}</p>
+        <hr>
+        <p><strong>Dueño:</strong> {{ m.dueno }} | <strong>Recompensa:</strong> {{ m.recompensa }}</p>
+        <p><strong>Detalles:</strong> {{ m.descripcion }}</p>
+        <a href="https://wa.me/{{ m.whatsapp }}" style="background:green; color:white; padding:10px; text-decoration:none;">Contactar por WhatsApp</a>
     </body>
     </html>
     """
-    return render_template_string(html, m=m)
+    return render_template_string(html_detalle, m=m)
 
 if __name__ == '__main__':
     app.run(debug=True)
