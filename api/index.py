@@ -4,10 +4,10 @@ from flask import Flask, request, jsonify, render_template_string, redirect, url
 
 app = Flask(__name__)
 
-# Configuración del Admin (Token Secreto)
+# Configuración del Admin
 ADMIN_TOKEN = "ubican123" 
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
-# BASE DE DATOS EN MEMORIA (Inicia completamente vacía)
 mascotas_perdidas = []
 
 @app.route('/', methods=['GET', 'POST'])
@@ -18,26 +18,29 @@ def index():
     if request.method == 'POST':
         nombre = request.form.get("nombre")
         
-        # 🛡️ CANDADO: Solo si el nombre existe y no está vacío procesamos la tarjeta
         if nombre and nombre.strip() != "":
-            
-            # 1. PROCESAR FOTO PRINCIPAL
-            foto_principal = request.files.get("imagen_principal")
             url_principal = ""
-            if foto_principal and foto_principal.filename != '':
-                bytes_p = foto_principal.read()
-                b64_p = base64.b64encode(bytes_p).decode('utf-8')
-                url_principal = f"data:{foto_principal.content_type};base64,{b64_p}"
-
-            # 2. PROCESAR FOTOS SECUNDARIAS (Máximo 4)
-            fotos_secundarias = request.files.getlist("imagenes_secundarias")
             lista_secundarias = []
-            for archivo in fotos_secundarias[:4]:
-                if archivo and archivo.filename != '':
-                    bytes_s = archivo.read()
-                    b64_s = base64.b64encode(bytes_s).decode('utf-8')
-                    data_url = f"data:{archivo.content_type};base64,{b64_s}"
-                    lista_secundarias.append(data_url)
+            
+            try:
+                # 1. FOTO PRINCIPAL
+                foto_principal = request.files.get("imagen_principal")
+                if foto_principal and foto_principal.filename != '':
+                    bytes_p = foto_principal.read()
+                    b64_p = base64.b64encode(bytes_p).decode('utf-8')
+                    url_principal = f"data:{foto_principal.content_type};base64,{b64_p}"
+
+                # 2. FOTOS SECUNDARIAS
+                fotos_secundarias = request.files.getlist("imagenes_secundarias")
+                for archivo in fotos_secundarias[:4]:
+                    if archivo and archivo.filename != '':
+                        bytes_s = archivo.read()
+                        b64_s = base64.b64encode(bytes_s).decode('utf-8')
+                        data_url = f"data:{archivo.content_type};base64,{b64_s}"
+                        lista_secundarias.append(data_url)
+            
+            except Exception as e:
+                print(f"⚠️ Error en imágenes: {e}")
 
             nuevo_reporte = {
                 "nombre": nombre,
@@ -47,10 +50,8 @@ def index():
                 "principal": url_principal,
                 "secundarias": lista_secundarias
             }
-            
             mascotas_perdidas.insert(0, nuevo_reporte)
             
-        # Al redirigir limpiamos el flujo de envío del navegador para evitar el molesto bug del F5
         if es_admin:
             return redirect(url_for('index', admin=ADMIN_TOKEN))
         return redirect(url_for('index'))
@@ -77,7 +78,7 @@ def index():
             }
 
             * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-            body { font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; background-color: var(--bg); color: var(--dark); padding-bottom: 90px; }
+            body { font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; background-color: var(--bg); color: var(--dark); padding-bottom: 100px; }
 
             .navbar {
                 background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
@@ -120,22 +121,20 @@ def index():
 
             .card-description { font-size: 0.95em; color: var(--slate-700); line-height: 1.6; margin-bottom: 20px; flex: 1; }
 
-            .card-thumb-gallery { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 20px; }
-            .card-thumb-gallery img { width: 100%; height: 65px; object-fit: cover; border-radius: 12px; cursor: pointer; border: 2px solid transparent; transition: border-color 0.2s, transform 0.2s; }
-            .card-thumb-gallery img:hover { border-color: #ff6b4a; transform: scale(1.03); }
+            .card-thumb-gallery { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 20px; }
+            .card-thumb-gallery img { width: 100%; height: 55px; object-fit: cover; border-radius: 10px; cursor: pointer; border: 2px solid transparent; transition: border-color 0.2s; }
+            .card-thumb-gallery img:hover { border-color: #ff6b4a; }
 
             .btn-whatsapp { background: var(--success); color: white; text-decoration: none; padding: 14px; border-radius: 16px; text-align: center; font-weight: 700; font-size: 0.95em; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15); }
-            .btn-whatsapp:hover { background: #059669; }
             
             .btn-delete { background: #fff5f5; color: var(--danger); text-decoration: none; padding: 10px; border-radius: 14px; text-align: center; font-weight: 700; font-size: 0.85em; display: block; margin-top: 10px; border: 1px dashed rgba(239, 68, 68, 0.3); cursor: pointer; width: 100%; }
-            .btn-delete:hover { background: #fee2e2; }
 
             .app-footer-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-top: 1px solid #e2e8f0; padding: 16px 24px; z-index: 100; display: flex; justify-content: center; align-items: center; box-shadow: 0 -10px 30px rgba(15, 23, 42, 0.05); }
-            .btn-trigger-form { background: var(--primary-gradient); color: white; border: none; padding: 16px 32px; border-radius: 16px; font-weight: 700; font-size: 1em; cursor: pointer; width: 100%; max-width: 500px; text-align: center; box-shadow: 0 6px 20px rgba(255, 107, 74, 0.25); }
+            .btn-trigger-form { background: var(--primary-gradient); color: white; border: none; padding: 16px 32px; border-radius: 16px; font-weight: 700; font-size: 1em; cursor: pointer; width: 100%; max-width: 500px; text-align: center; box-shadow: 0 6px 20px rgba(255, 107, 74, 0.25); z-index: 105; position: relative; }
 
             .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0); display: none; align-items: flex-end; justify-content: center; z-index: 200; transition: background 0.3s ease; }
             .modal-overlay.active { background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
-            .modal-box { background: var(--card-bg); width: 100%; max-width: 550px; border-top-left-radius: 32px; border-top-right-radius: 32px; padding: 32px 24px; max-height: 85vh; overflow-y: auto; transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+            .modal-box { background: var(--card-bg); width: 100%; max-width: 550px; border-top-left-radius: 32px; border-top-right-radius: 32px; padding: 32px 24px; max-height: 85vh; overflow-y: auto; transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); z-index: 210; position: relative; }
             .modal-overlay.active .modal-box { transform: translateY(0); }
             
             .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
@@ -164,7 +163,7 @@ def index():
         <div class="main-container">
             {% if es_admin %}
             <div class="admin-banner">
-                🛠️ MODO ADMINISTRADOR ACTIVO — Tienes permisos para gestionar y eliminar reportes.
+                🛠️ MODO ADMINISTRADOR ACTIVO
             </div>
             {% endif %}
 
@@ -174,10 +173,9 @@ def index():
             </div>
 
             <div class="grid-feed">
-                <!-- Si la lista de mascotas verdaderamente no tiene elementos, pintamos este letrero estilizado -->
                 {% if not mascotas %}
                     <div style="grid-column: 1/-1; text-align: center; color: var(--gray-text); padding: 80px 0; font-style: italic; font-size: 1.05em;">
-                        📍 No hay alertas activas en este momento. La red está limpia.
+                        📍 No hay alertas activas en este momento.
                     </div>
                 {% endif %}
                 
@@ -186,7 +184,7 @@ def index():
                     <div class="card-hero-image">
                         <span class="card-floating-badge">ALERTA SOS</span>
                         {% if mascota.principal %}
-                            <img src="{{ mascota.principal }}" alt="Foto de {{ mascota.nombre }}" id="mainPhoto-{{ loop.index0 }}" onclick="openLightbox(this.src)">
+                            <img src="{{ mascota.principal }}" alt="Foto" id="mainPhoto-{{ loop.index0 }}" onclick="openLightbox(this.src)">
                         {% else %}
                             <div class="card-hero-placeholder">
                                 <span>🐾</span>
@@ -197,87 +195,68 @@ def index():
 
                     <div class="card-body">
                         <h3 class="card-title">{{ mascota.nombre }}</h3>
-                        
                         <div class="card-data-box">
-                            <div class="data-pill">
-                                <span>📍</span>
-                                <span><strong>Zona:</strong> {{ mascota.zona }}</span>
-                            </div>
-                            <div class="data-pill">
-                                <span>📞</span>
-                                <span><strong>Contacto:</strong> {{ mascota.contacto }}</span>
-                            </div>
+                            <div class="data-pill">📍 <span><strong>Zona:</strong> {{ mascota.zona }}</span></div>
+                            <div class="data-pill">📞 <span><strong>Contacto:</strong> {{ mascota.contacto }}</span></div>
                         </div>
-                        
-                        <p class="card-description">
-                            {{ mascota.descripcion }}
-                        </p>
+                        <p class="card-description">{{ mascota.descripcion }}</p>
 
-                        {% if mascota.secundarias %}
                         <div class="card-thumb-gallery">
-                            <img src="{{ mascota.principal }}" alt="Portada" onclick="changeHero('{{ loop.index0 }}', this.src)">
+                            {% if mascota.principal %}
+                            <img src="{{ mascota.principal }}" alt="P" onclick="changeHero('{{ loop.index0 }}', this.src)">
+                            {% endif %}
                             {% for img in mascota.secundarias %}
-                            <img src="{{ img }}" alt="Miniatura" onclick="changeHero('{{ loop.parent.index0 }}', this.src)">
+                            <img src="{{ img }}" alt="S" onclick="changeHero('{{ loop.parent.index0 }}', this.src)">
                             {% endfor %}
                         </div>
-                        {% endif %}
 
-                        <a href="https://wa.me/{{ mascota.contacto }}?text=Hola,%20tengo%20información%20sobre%20{{ mascota.nombre }}" target="_blank" class="btn-whatsapp">
-                            💬 Enviar Mensaje / Avistamiento
+                        <a href="https://wa.me/{{ mascota.contacto }}?text=Hola,%20tengo%20información" target="_blank" class="btn-whatsapp">
+                            💬 Enviar Mensaje
                         </a>
-
-                        {% if es_admin %}
-                        <form method="POST" action="/eliminar/{{ loop.index0 }}">
-                            <input type="hidden" name="admin_token" value="{{ admin_token }}">
-                            <button type="submit" class="btn-delete" onclick="return confirm('¿Seguro que deseas eliminar el reporte de {{ mascota.nombre }}?')">
-                                🗑️ Eliminar Reporte Permanente
-                            </button>
-                        </form>
-                        {% endif %}
                     </div>
                 </div>
                 {% endfor %}
             </div>
         </div>
 
-        <!-- FOOTER -->
         <div class="app-footer-bar">
             <button class="btn-trigger-form" onclick="toggleModal(true)">🚨 Reportar Mascota Perdida</button>
         </div>
 
-        <!-- MODAL FORMULARIO -->
+        <!-- MODAL ACTUALIZADO -->
         <div id="formModal" class="modal-overlay" onclick="closeModalOutside(event)">
             <div class="modal-box">
                 <div class="modal-head">
                     <h3>Registrar Reporte de Extravío</h3>
                     <button class="btn-close" onclick="toggleModal(false)">✕</button>
                 </div>
-                <form method="POST" action="/?admin={% if es_admin %}{{ admin_token }}{% endif %}" enctype="multipart/form-data" id="sosForm">
+                <form method="POST" action="/?admin={% if es_admin %}{{ admin_token }}{% endif %}" enctype="multipart/form-data" id="sosForm" novalidate>
                     <div class="form-group">
-                        <label>Nombre de la mascota</label>
-                        <input type="text" name="nombre" placeholder="Ej. Rocko, Luna..." required>
+                        <label>Nombre de la mascota *</label>
+                        <input type="text" id="formNombre" name="nombre" placeholder="Ej. Rocko, Luna...">
                     </div>
                     <div class="form-group">
-                        <label>¿Dónde se extravió? (Zona / Colonia)</label>
-                        <input type="text" name="zona" placeholder="Ej. Col. San Ángel, cerca del parque" required>
+                        <label>¿Dónde se extravió? (Zona / Colonia) *</label>
+                        <input type="text" id="formZona" name="zona" placeholder="Ej. Col. San Ángel">
                     </div>
                     <div class="form-group">
-                        <label>Teléfono de contacto (WhatsApp)</label>
-                        <input type="tel" name="contacto" placeholder="Ej. 526561234567" required>
+                        <label>Teléfono de contacto (WhatsApp) *</label>
+                        <input type="tel" id="formContacto" name="contacto" placeholder="Ej. 526561234567">
                     </div>
                     <div class="form-group">
-                        <label>Descripción / Señas particulares</label>
-                        <textarea name="descripcion" placeholder="Ej. Lleva un collar rojo, tiene una mancha blanca..." required></textarea>
+                        <label>Descripción / Señas particulares *</label>
+                        <textarea id="formDesc" name="descripcion" placeholder="Ej. Lleva un collar rojo..."></textarea>
                     </div>
                     
+                    <!-- FORMATOS EXPLÍCITOS PARA ASEGURAR QUE ABRA LA GALERÍA -->
                     <div class="form-group">
-                        <label>📸 Foto Principal (Aparecerá en grande arriba) *</label>
-                        <input type="file" name="imagen_principal" accept="image/*" required style="padding: 4px 0;">
+                        <label>📸 Foto Principal (Obligatoria) *</label>
+                        <input type="file" id="principalInput" name="imagen_principal" accept=".jpg, .jpeg, .png" style="padding: 4px 0;">
                     </div>
 
                     <div class="form-group">
-                        <label>🐾 Fotos Adicionales de Apoyo (Máximo 4 imágenes debajo)</label>
-                        <input type="file" id="secundariasInput" name="imagenes_secundarias" accept="image/*" multiple style="padding: 4px 0;">
+                        <label>🐾 Fotos Adicionales (Máx. 4 imágenes)</label>
+                        <input type="file" id="secundariasInput" name="imagenes_secundarias" accept=".jpg, .jpeg, .png" multiple style="padding: 4px 0;">
                     </div>
 
                     <button type="submit" class="btn-publish">🚨 Publicar Alerta de Inmediato</button>
@@ -287,7 +266,7 @@ def index():
 
         <div id="imageLightbox" class="lightbox" onclick="closeLightbox()">
             <span class="lightbox-close">&times;</span>
-            <img id="lightboxImg" src="" alt="Ampliada">
+            <img id="lightboxImg" src="">
         </div>
 
         <script>
@@ -298,20 +277,37 @@ def index():
             }
             if (window.history.replaceState) { window.history.replaceState( null, null, window.location.href ); }
             function closeModalOutside(e) { if (e.target === document.getElementById('formModal')) toggleModal(false); }
-            
-            function changeHero(cardIndex, newSrc) {
-                document.getElementById('mainPhoto-' + cardIndex).src = newSrc;
-            }
-
+            function changeHero(cardIndex, newSrc) { document.getElementById('mainPhoto-' + cardIndex).src = newSrc; }
             function openLightbox(src) { document.getElementById('lightboxImg').src = src; document.getElementById('imageLightbox').style.display = 'flex'; }
             function closeLightbox() { document.getElementById('imageLightbox').style.display = 'none'; }
             
-            document.getElementById('sosForm').onsubmit = function() {
-                const files = document.getElementById('secundariasInput').files;
-                if(files.length > 4) { 
-                    alert("⚠️ Por favor, selecciona un máximo de 4 fotografías adicionales para la galería de abajo."); 
-                    return false; 
+            // VALIDACIÓN MANUAL PARA EVITAR ERRORES FANTASMA
+            document.getElementById('sosForm').onsubmit = function(e) {
+                const nombre = document.getElementById('formNombre').value.trim();
+                const zona = document.getElementById('formZona').value.trim();
+                const contacto = document.getElementById('formContacto').value.trim();
+                const desc = document.getElementById('formDesc').value.trim();
+                const fotoP = document.getElementById('principalInput').files[0];
+                
+                if (!nombre || !zona || !contacto || !desc) {
+                    e.preventDefault();
+                    alert("⚠️ Por favor rellena todos los campos de texto obligatorios.");
+                    return false;
                 }
+                
+                if (!fotoP) {
+                    e.preventDefault();
+                    alert("⚠️ Debes seleccionar una 'Foto Principal' para crear la alerta.");
+                    return false;
+                }
+
+                const MAX_SIZE = 4 * 1024 * 1024;
+                if (fotoP.size > MAX_SIZE) {
+                    e.preventDefault();
+                    alert("⚠️ La foto principal supera los 4MB. Intenta con una más ligera o tómale una captura de pantalla.");
+                    return false;
+                }
+
                 return true;
             };
         </script>
@@ -319,14 +315,6 @@ def index():
     </html>
     """
     return render_template_string(html_content, mascotas=mascotas_perdidas, es_admin=es_admin, admin_token=ADMIN_TOKEN)
-
-@app.route('/eliminar/<int:index>', methods=['POST'])
-def eliminar_mascota(index):
-    token_verificacion = request.form.get('admin_token')
-    if token_verificacion == ADMIN_TOKEN:
-        if 0 <= index < len(mascotas_perdidas):
-            mascotas_perdidas.pop(index)
-    return redirect(url_for('index', admin=ADMIN_TOKEN))
 
 if __name__ == '__main__':
     app.run(debug=True)
