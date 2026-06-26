@@ -16,8 +16,9 @@ MASCOTAS_FILE = "mascotas.json"
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 # ─── LabsMobile config ────────────────────────────────────────────────────────
-LABSMOBILE_USER  = "hola@ubicanid.com"   # ← reemplaza
-LABSMOBILE_PASS  = "3kAmA4ftCrkn"  # ← reemplaza
+LABSMOBILE_USER  = "hola@ubicanid.com"   # ← tu email de cuenta LabsMobile
+LABSMOBILE_TOKEN = "T7vpvB4jeIOzu8juyw1rc1DTXzMMS4Tq1"  # ← TOKEN API (Configuración API en tu panel), NO la contraseña web
+LABSMOBILE_SENDER = "UbicanID"  # ← remitente (tpoa). Máx 11 caracteres alfanuméricos, sin espacios.
 LABSMOBILE_API   = "https://api.labsmobile.com/json/send"
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -50,15 +51,26 @@ def generar_otp():
     return str(random.randint(100000, 999999))
 
 def enviar_sms_otp(telefono, codigo):
-    """Envía el OTP via LabsMobile JSON API. Devuelve (ok: bool, detalle: str)."""
+    """Envía el OTP via LabsMobile JSON API. Devuelve (ok: bool, detalle: str).
+
+    LabsMobile usa HTTP Basic Auth con usuario:token_api (NO van en el body),
+    y el body espera 'recipient' como lista de {'msisdn': ...}.
+    """
     payload = {
-        "username": LABSMOBILE_USER,
-        "password": LABSMOBILE_PASS,
-        "message":  f"Tu código de verificación Ubican ID es: {codigo}. Válido 5 minutos.",
-        "tphone":   telefono,
+        "message": f"Tu código de verificación Ubican ID es: {codigo}. Válido 5 minutos.",
+        "tpoa":    LABSMOBILE_SENDER,
+        "recipient": [
+            {"msisdn": telefono}
+        ],
     }
     try:
-        r = requests.post(LABSMOBILE_API, json=payload, timeout=10)
+        r = requests.post(
+            LABSMOBILE_API,
+            json=payload,
+            auth=(LABSMOBILE_USER, LABSMOBILE_TOKEN),
+            headers={"Content-Type": "application/json", "Cache-Control": "no-cache"},
+            timeout=10,
+        )
         detalle = f"HTTP {r.status_code} | body: {r.text[:300]}"
         print(f"📨 LabsMobile {detalle}")
         if r.status_code != 200:
@@ -69,7 +81,7 @@ def enviar_sms_otp(telefono, codigo):
         except ValueError:
             # No vino JSON válido; nos quedamos con el status 200 como éxito
             return True, detalle
-        # Formato típico: {"code": 0, ...} = éxito. code != 0 o "errors" = falla.
+        # Formato típico: {"code": "0", ...} = éxito. code != "0" = falla (ej. sin saldo).
         if isinstance(data, dict):
             if "code" in data and str(data.get("code")) != "0":
                 print(f"⚠️ LabsMobile rechazó el envío: {data}")
