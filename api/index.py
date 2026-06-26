@@ -9,11 +9,11 @@ app = Flask(__name__)
 ADMIN_TOKEN = "ubican123" 
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
-# Base de datos en memoria
+# Base de datos temporal en memoria
 mascotas_perdidas = []
 
 # =====================================================================
-# 🛠️ ATRAPADOR DE ERRORES
+# 🛠️ ATRAPADOR DE ERRORES (Muestra fallos de Python en pantalla)
 # =====================================================================
 @app.errorhandler(500)
 def handle_internal_server_error(e):
@@ -61,7 +61,7 @@ def index():
             except Exception as e:
                 print(f"⚠️ Error en imágenes: {e}")
 
-            # Identificador único para cada mascota basado en tiempo
+            # ID único para la navegación individual
             id_unico = str(int(time.time() * 1000))
 
             nuevo_reporte = {
@@ -106,7 +106,6 @@ def index():
             .section-intro h2 { font-size: 1.8em; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 4px; }
             .section-intro p { color: var(--gray); font-size: 0.95em; }
 
-            /* Grid Estilo Tarjetas Minimalistas */
             .grid-feed { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 24px; }
             .card-wrapper { text-decoration: none; color: inherit; }
             
@@ -128,7 +127,6 @@ def index():
             .app-footer-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-top: 1px solid #e2e8f0; padding: 16px 24px; z-index: 100; display: flex; justify-content: center; }
             .btn-trigger-form { background: var(--primary-gradient); color: white; border: none; padding: 16px 32px; border-radius: 16px; font-weight: 700; font-size: 1em; cursor: pointer; width: 100%; max-width: 450px; text-align: center; box-shadow: 0 4px 12px rgba(255, 107, 74, 0.2); }
 
-            /* Modal Formularios */
             .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.4); display: none; align-items: flex-end; justify-content: center; z-index: 200; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
             .modal-box { background: var(--card-bg); width: 100%; max-width: 500px; border-top-left-radius: 28px; border-top-right-radius: 28px; padding: 24px; max-height: 85vh; overflow-y: auto; }
             .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
@@ -224,7 +222,7 @@ def index():
 # =====================================================================
 @app.route('/mascota/<id>')
 def detalle_mascota(id):
-    # Buscar la mascota correspondiente por su ID único
+    # Buscar el registro exacto usando el ID único
     mascota = next((m for m in mascotas_perdidas if m["id"] == id), None)
     
     if not mascota:
@@ -245,13 +243,13 @@ def detalle_mascota(id):
                 --gray: #64748b;
                 --success: #10b981;
             }
-            * { box-sizing: border-box; margin: 0; padding: 0; }
+            * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
             body { font-family: system-ui, -apple-system, sans-serif; background: #f8fafc; color: var(--dark); padding: 20px; }
             
             .detail-container { max-width: 650px; margin: 20px auto; background: white; border-radius: 24px; border: 1px solid #e2e8f0; overflow: hidden; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
             
             .btn-back { display: inline-flex; align-items: center; gap: 8px; color: var(--gray); text-decoration: none; font-weight: 600; font-size: 0.95em; margin-bottom: 24px; transition: color 0.2s; }
-            .btn-back:active { color: var(--dark); }
+            .btn-back:shadow { color: var(--dark); }
 
             .hero-image-box { width: 100%; height: 320px; border-radius: 18px; overflow: hidden; background: #f1f5f9; cursor: pointer; margin-bottom: 16px; }
             .hero-image-box img { width: 100%; height: 100%; object-fit: cover; }
@@ -268,7 +266,6 @@ def detalle_mascota(id):
 
             .btn-whatsapp { background: var(--success); color: white; text-decoration: none; padding: 16px; border-radius: 16px; text-align: center; font-weight: 700; font-size: 1.05em; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); }
 
-            /* Lightbox Pantalla Completa */
             .lightbox { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.95); display: none; justify-content: center; align-items: center; z-index: 400; }
             .lightbox img { max-width: 95%; max-height: 85vh; border-radius: 16px; object-fit: contain; }
         </style>
@@ -276,7 +273,6 @@ def detalle_mascota(id):
     <body>
 
         <div class="detail-container">
-            <!-- Botón de regreso al Inicio -->
             <a href="/" class="btn-back">← Regresar al inicio</a>
 
             <div class="hero-image-box" onclick="openLightbox(document.getElementById('mainPhoto').src)">
@@ -287,7 +283,6 @@ def detalle_mascota(id):
                 {% endif %}
             </div>
 
-            <!-- Galería de fotos adicionales -->
             <div class="thumb-gallery">
                 {% if mascota.principal %}
                 <img src="{{ mascota.principal }}" alt="P" onclick="changeHero(this.src); openLightbox(this.src); event.stopPropagation();">
@@ -326,7 +321,7 @@ def detalle_mascota(id):
     </body>
     </html>
     """
-    return render_template_string(html_detalle, mascota=mascotas)
+    return render_template_string(html_detalle, mascota=mascota)
 
 if __name__ == '__main__':
     app.run(debug=True)
