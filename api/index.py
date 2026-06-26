@@ -7,7 +7,7 @@ app = Flask(__name__)
 # Configuración del Admin (Token Secreto)
 ADMIN_TOKEN = "ubican123" 
 
-# BASE DE DATOS EN MEMORIA (Inicia limpia)
+# BASE DE DATOS EN MEMORIA (Inicia completamente vacía)
 mascotas_perdidas = []
 
 @app.route('/', methods=['GET', 'POST'])
@@ -16,34 +16,41 @@ def index():
     es_admin = (token_ingresado == ADMIN_TOKEN)
 
     if request.method == 'POST':
-        # 1. PROCESAR FOTO PRINCIPAL
-        foto_principal = request.files.get("imagen_principal")
-        url_principal = ""
-        if foto_principal and foto_principal.filename != '':
-            bytes_p = foto_principal.read()
-            b64_p = base64.b64encode(bytes_p).decode('utf-8')
-            url_principal = f"data:{foto_principal.content_type};base64,{b64_p}"
-
-        # 2. PROCESAR FOTOS SECUNDARIAS (Máximo 4)
-        fotos_secundarias = request.files.getlist("imagenes_secundarias")
-        lista_secundarias = []
-        for archivo in fotos_secundarias[:4]: # Capamos estrictamente a 4
-            if archivo and archivo.filename != '':
-                bytes_s = archivo.read()
-                b64_s = base64.b64encode(bytes_s).decode('utf-8')
-                data_url = f"data:{archivo.content_type};base64,{b64_s}"
-                lista_secundarias.append(data_url)
-
-        nuevo_reporte = {
-            "nombre": request.form.get("nombre"),
-            "descripcion": request.form.get("descripcion"),
-            "zona": request.form.get("zona"),
-            "contacto": request.form.get("contacto"),
-            "principal": url_principal,
-            "secundarias": lista_secundarias
-        }
+        nombre = request.form.get("nombre")
         
-        mascotas_perdidas.insert(0, nuevo_reporte)
+        # 🛡️ CANDADO: Solo si el nombre existe y no está vacío procesamos la tarjeta
+        if nombre and nombre.strip() != "":
+            
+            # 1. PROCESAR FOTO PRINCIPAL
+            foto_principal = request.files.get("imagen_principal")
+            url_principal = ""
+            if foto_principal and foto_principal.filename != '':
+                bytes_p = foto_principal.read()
+                b64_p = base64.b64encode(bytes_p).decode('utf-8')
+                url_principal = f"data:{foto_principal.content_type};base64,{b64_p}"
+
+            # 2. PROCESAR FOTOS SECUNDARIAS (Máximo 4)
+            fotos_secundarias = request.files.getlist("imagenes_secundarias")
+            lista_secundarias = []
+            for archivo in fotos_secundarias[:4]:
+                if archivo and archivo.filename != '':
+                    bytes_s = archivo.read()
+                    b64_s = base64.b64encode(bytes_s).decode('utf-8')
+                    data_url = f"data:{archivo.content_type};base64,{b64_s}"
+                    lista_secundarias.append(data_url)
+
+            nuevo_reporte = {
+                "nombre": nombre,
+                "descripcion": request.form.get("descripcion"),
+                "zona": request.form.get("zona"),
+                "contacto": request.form.get("contacto"),
+                "principal": url_principal,
+                "secundarias": lista_secundarias
+            }
+            
+            mascotas_perdidas.insert(0, nuevo_reporte)
+            
+        # Al redirigir limpiamos el flujo de envío del navegador para evitar el molesto bug del F5
         if es_admin:
             return redirect(url_for('index', admin=ADMIN_TOKEN))
         return redirect(url_for('index'))
@@ -96,7 +103,6 @@ def index():
             }
             .card:hover { transform: translateY(-6px); box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.08); }
 
-            /* CONTENEDOR FOTO PRINCIPAL */
             .card-hero-image { width: 100%; height: 240px; position: relative; overflow: hidden; background: #f1f5f9; }
             .card-hero-image img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
             
@@ -114,7 +120,6 @@ def index():
 
             .card-description { font-size: 0.95em; color: var(--slate-700); line-height: 1.6; margin-bottom: 20px; flex: 1; }
 
-            /* GALERÍA DE 4 IMÁGENES ABAJO */
             .card-thumb-gallery { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 20px; }
             .card-thumb-gallery img { width: 100%; height: 65px; object-fit: cover; border-radius: 12px; cursor: pointer; border: 2px solid transparent; transition: border-color 0.2s, transform 0.2s; }
             .card-thumb-gallery img:hover { border-color: #ff6b4a; transform: scale(1.03); }
@@ -125,11 +130,9 @@ def index():
             .btn-delete { background: #fff5f5; color: var(--danger); text-decoration: none; padding: 10px; border-radius: 14px; text-align: center; font-weight: 700; font-size: 0.85em; display: block; margin-top: 10px; border: 1px dashed rgba(239, 68, 68, 0.3); cursor: pointer; width: 100%; }
             .btn-delete:hover { background: #fee2e2; }
 
-            /* FOOTER */
             .app-footer-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-top: 1px solid #e2e8f0; padding: 16px 24px; z-index: 100; display: flex; justify-content: center; align-items: center; box-shadow: 0 -10px 30px rgba(15, 23, 42, 0.05); }
             .btn-trigger-form { background: var(--primary-gradient); color: white; border: none; padding: 16px 32px; border-radius: 16px; font-weight: 700; font-size: 1em; cursor: pointer; width: 100%; max-width: 500px; text-align: center; box-shadow: 0 6px 20px rgba(255, 107, 74, 0.25); }
 
-            /* MODAL SLIDE-UP */
             .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0); display: none; align-items: flex-end; justify-content: center; z-index: 200; transition: background 0.3s ease; }
             .modal-overlay.active { background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
             .modal-box { background: var(--card-bg); width: 100%; max-width: 550px; border-top-left-radius: 32px; border-top-right-radius: 32px; padding: 32px 24px; max-height: 85vh; overflow-y: auto; transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
@@ -143,9 +146,6 @@ def index():
             .form-group input, .form-group textarea { width: 100%; padding: 14px 16px; border: 1px solid #cbd5e1; border-radius: 14px; font-size: 0.95em; font-family: inherit; outline: none; background: #f8fafc; }
             .form-group input:focus, .form-group textarea:focus { border-color: #ff6b4a; background: white; }
             .form-group textarea { height: 100px; resize: none; }
-            
-            .file-input-wrapper { background: #f1f5f9; border: 2px dashed #cbd5e1; padding: 12px; border-radius: 14px; text-align: center; position: relative; cursor: pointer; }
-            .file-input-wrapper input { absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 
             .btn-publish { background: var(--primary-gradient); color: white; border: none; width: 100%; padding: 16px; border-radius: 14px; font-weight: 700; font-size: 1em; cursor: pointer; margin-top: 12px; }
 
@@ -174,15 +174,15 @@ def index():
             </div>
 
             <div class="grid-feed">
+                <!-- Si la lista de mascotas verdaderamente no tiene elementos, pintamos este letrero estilizado -->
                 {% if not mascotas %}
-                    <p style="grid-column: 1/-1; text-align: center; color: var(--gray-text); padding: 80px 0; font-style: italic; font-size: 1.05em;">
+                    <div style="grid-column: 1/-1; text-align: center; color: var(--gray-text); padding: 80px 0; font-style: italic; font-size: 1.05em;">
                         📍 No hay alertas activas en este momento. La red está limpia.
-                    </p>
+                    </div>
                 {% endif %}
                 
                 {% for mascota in mascotas %}
                 <div class="card">
-                    <!-- FOTO PRINCIPAL (HERO) -->
                     <div class="card-hero-image">
                         <span class="card-floating-badge">ALERTA SOS</span>
                         {% if mascota.principal %}
@@ -213,12 +213,9 @@ def index():
                             {{ mascota.descripcion }}
                         </p>
 
-                        <!-- LAS 4 FOTOS DEBAJO -->
                         {% if mascota.secundarias %}
                         <div class="card-thumb-gallery">
-                            <!-- Agregamos la foto principal original como primera opción para poder regresar a ella -->
                             <img src="{{ mascota.principal }}" alt="Portada" onclick="changeHero('{{ loop.index0 }}', this.src)">
-                            
                             {% for img in mascota.secundarias %}
                             <img src="{{ img }}" alt="Miniatura" onclick="changeHero('{{ loop.parent.index0 }}', this.src)">
                             {% endfor %}
@@ -248,7 +245,7 @@ def index():
             <button class="btn-trigger-form" onclick="toggleModal(true)">🚨 Reportar Mascota Perdida</button>
         </div>
 
-        <!-- FORMULARIO SLIDE-UP REESTRUCTURADO -->
+        <!-- MODAL FORMULARIO -->
         <div id="formModal" class="modal-overlay" onclick="closeModalOutside(event)">
             <div class="modal-box">
                 <div class="modal-head">
@@ -273,13 +270,11 @@ def index():
                         <textarea name="descripcion" placeholder="Ej. Lleva un collar rojo, tiene una mancha blanca..." required></textarea>
                     </div>
                     
-                    <!-- CAMPO 1: FOTO DE PORTADA (OBLIGATORIA) -->
                     <div class="form-group">
                         <label>📸 Foto Principal (Aparecerá en grande arriba) *</label>
                         <input type="file" name="imagen_principal" accept="image/*" required style="padding: 4px 0;">
                     </div>
 
-                    <!-- CAMPO 2: FOTOS SECUNDARIAS (HASTA 4) -->
                     <div class="form-group">
                         <label>🐾 Fotos Adicionales de Apoyo (Máximo 4 imágenes debajo)</label>
                         <input type="file" id="secundariasInput" name="imagenes_secundarias" accept="image/*" multiple style="padding: 4px 0;">
@@ -311,7 +306,6 @@ def index():
             function openLightbox(src) { document.getElementById('lightboxImg').src = src; document.getElementById('imageLightbox').style.display = 'flex'; }
             function closeLightbox() { document.getElementById('imageLightbox').style.display = 'none'; }
             
-            // Validación estricta antes de subir
             document.getElementById('sosForm').onsubmit = function() {
                 const files = document.getElementById('secundariasInput').files;
                 if(files.length > 4) { 
@@ -334,6 +328,5 @@ def eliminar_mascota(index):
             mascotas_perdidas.pop(index)
     return redirect(url_for('index', admin=ADMIN_TOKEN))
 
-@app.route('/webhook', methods=['POST'])
-def telegram_webhook():
-    return jsonify({"status": "success"}), 200
+if __name__ == '__main__':
+    app.run(debug=True)
