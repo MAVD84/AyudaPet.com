@@ -1,56 +1,22 @@
 import os
 import time
-import random
 import requests
 from flask import Flask, request, render_template_string, redirect, url_for, session
 from dotenv import load_dotenv
-from werkzeug.security import generate_password_hash, check_password_hash
 
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "cambia_esto_en_produccion")
-app.config['MAX_CONTENT_LENGTH'] = int(os.getenv("MAX_CONTENT_LENGTH", 16777216))
 
-ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "ubican123")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
-
 SUPABASE_HEADERS = {
     "apikey": SUPABASE_ANON_KEY,
     "Authorization": f"Bearer {SUPABASE_ANON_KEY}",
     "Content-Type": "application/json",
     "Prefer": "return=representation"
 }
-
-# ─── ESTILOS Y TEMPLATES ─────────────────────────────────────────────────────
-BASE_HTML = """
-<!DOCTYPE html>
-<html>
-<head>
-    <meta name='viewport' content='width=device-width, initial-scale=1'>
-    <style>
-        :root { --grad: linear-gradient(135deg,#ff6b4a,#ff9f43); --bg: #f8fafc; }
-        body { font-family:sans-serif; background:var(--bg); margin:0; }
-        .navbar { background:#fff; padding:20px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; }
-        .navbar-brand { font-size:1.5em; font-weight:800; text-decoration:none; color:#1e293b; }
-        .navbar-brand span { background:var(--grad); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
-        .main-container { max-width:1000px; margin:20px auto; padding:0 20px; }
-        .grid-feed { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:20px; }
-        .card { background:#fff; border-radius:15px; padding:15px; box-shadow:0 4px 6px rgba(0,0,0,0.05); }
-    </style>
-</head>
-<body>
-    <div class='navbar'>
-        <a href='/' class='navbar-brand'>🐾 UBICAN <span>ID</span></a>
-        <div><a href='/registro'>Registrar</a> | <a href='/login'>Login</a></div>
-    </div>
-    <div class='main-container'>
-        {% block content %}{% endblock %}
-    </div>
-</body>
-</html>
-"""
 
 # ─── FUNCIONES BASE DE DATOS ─────────────────────────────────────────────────
 def db_get_mascotas():
@@ -99,21 +65,44 @@ def index():
         db_save_mascota(nuevo)
         return redirect(url_for('index'))
 
-    template = BASE_HTML + """
-    {% block content %}
-    <h2>Mascotas Reportadas</h2>
-    <div class='grid-feed'>
-        {% for m in mascotas %}
-        <div class='card'>
-            <h3>{{ m.nombre }}</h3>
-            <p>📍 {{ m.zona }}</p>
-            <p>Raza: {{ m.raza }}</p>
+    # Diseño plano (sin bloques para evitar el error)
+    html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta name='viewport' content='width=device-width, initial-scale=1'>
+        <style>
+            :root { --grad: linear-gradient(135deg,#ff6b4a,#ff9f43); }
+            body { font-family:sans-serif; background:#f8fafc; margin:0; }
+            .navbar { background:#fff; padding:20px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; }
+            .navbar-brand { font-size:1.5em; font-weight:800; text-decoration:none; color:#1e293b; }
+            .navbar-brand span { background:var(--grad); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+            .main-container { max-width:1000px; margin:20px auto; padding:0 20px; }
+            .grid-feed { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:20px; }
+            .card { background:#fff; border-radius:15px; padding:15px; box-shadow:0 4px 6px rgba(0,0,0,0.05); }
+        </style>
+    </head>
+    <body>
+        <div class='navbar'>
+            <a href='/' class='navbar-brand'>🐾 UBICAN <span>ID</span></a>
+            <div><a href='/registro'>Registrar</a> | <a href='/login'>Login</a></div>
         </div>
-        {% endfor %}
-    </div>
-    {% endblock %}
+        <div class='main-container'>
+            <h2>Mascotas Reportadas</h2>
+            <div class='grid-feed'>
+                {% for m in mascotas %}
+                <div class='card'>
+                    <h3>{{ m.nombre }}</h3>
+                    <p>📍 {{ m.zona }}</p>
+                    <p>Raza: {{ m.raza }}</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </body>
+    </html>
     """
-    return render_template_string(template, mascotas=mascotas)
+    return render_template_string(html, mascotas=mascotas)
 
 @app.route('/mascota/editar/<id_mascota>', methods=['POST'])
 def editar_mascota(id_mascota):
@@ -138,11 +127,6 @@ def editar_mascota(id_mascota):
         "recompensa": request.form.get("recompensa")
     }
     db_update_mascota(id_mascota, datos)
-    return redirect(url_for('index'))
-
-@app.route('/logout')
-def logout():
-    session.clear()
     return redirect(url_for('index'))
 
 if __name__ == '__main__':
