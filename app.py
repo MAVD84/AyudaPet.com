@@ -139,7 +139,7 @@ def enviar_sms_otp(telefono, codigo):
         return r.status_code == 200, r.text
     except Exception as e: return False, str(e)
 
-# ─── CSS BASE ─────────────────────────────────────────────────────────────────
+# ─── CSS ESTILIZADO COMPLETO ──────────────────────────────────────────────────
 BASE_CSS = """
 <meta name='viewport' content='width=device-width, initial-scale=1, maximum-scale=1'>
 <style>
@@ -157,10 +157,18 @@ body { font-family:system-ui,-apple-system,sans-serif; background:var(--bg); col
 .nav-user a { color:var(--danger); font-weight:600; text-decoration:none; }
 .auth-wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px 16px; }
 .auth-box { background:var(--card); border-radius:28px; border:1px solid #e2e8f0; padding:36px 32px; width:100%; max-width:520px; box-shadow:0 8px 24px -8px rgba(0,0,0,.08); }
-.form-group { margin-bottom:18px; }
+
+/* Grid de Formulario Modular */
+.form-section { border-bottom: 1px dashed #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; }
+.form-section h4 { color: #475569; margin-bottom: 12px; font-size: 0.95em; text-transform: uppercase; letter-spacing: 0.5px; }
+.form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 500px) { .form-grid-2 { grid-template-columns: 1fr; } }
+
+.form-group { margin-bottom: 14px; }
 .form-group label { display:block; font-size:0.82em; font-weight:700; margin-bottom:6px; color:#475569; }
-.form-group input, .form-group textarea { width:100%; padding:13px 14px; border:1px solid #cbd5e1; border-radius:12px; font-size:1em; background:#f8fafc; outline:none; }
-.form-group input:focus { border-color:#ff9f43; }
+.form-group input, .form-group textarea, .form-group select { width:100%; padding:11px 14px; border:1px solid #cbd5e1; border-radius:10px; font-size:0.95em; background:#f8fafc; outline:none; font-family: inherit;}
+.form-group input:focus, .form-group select:focus { border-color:#ff9f43; background:#fff; }
+
 .btn-primary { background:var(--grad); color:white; border:none; width:100%; padding:14px; border-radius:12px; font-weight:700; font-size:1em; cursor:pointer; min-height:48px; text-decoration:none; display:inline-block; text-align:center;}
 .alert-error { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; padding:12px; border-radius:12px; margin-bottom:15px;}
 .otp-inputs { display:flex; gap:8px; justify-content:center; }
@@ -168,37 +176,42 @@ body { font-family:system-ui,-apple-system,sans-serif; background:var(--bg); col
 .main-container { max-width:1100px; margin:40px auto; padding:0 24px; }
 .grid-feed { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:24px; margin-top:24px; }
 
-/* Tarjetas como Enlaces */
-.card-link { text-decoration: none; color: inherit; display: block; height: 100%; transition: transform 0.2s, box-shadow 0.2s; }
-.card-link:hover { transform: translateY(-4px); }
-.card-minimal { background:var(--card); border-radius:20px; border:1px solid #e2e8f0; overflow:hidden; display:flex; flex-direction:column; height:100%; position:relative; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); }
+/* Tarjetas */
+.card-link { text-decoration: none; color: inherit; display: block; height: 100%; }
+.card-minimal { background:var(--card); border-radius:20px; border:1px solid #e2e8f0; overflow:hidden; display:flex; flex-direction:column; height:100%; position:relative; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); transition: transform 0.2s; }
+.card-minimal:hover { transform: translateY(-4px); }
 .card-img-box { width:100%; aspect-ratio:4/3; background:#f1f5f9; position:relative; }
 .card-img-box img { width:100%; height:100%; object-fit:cover; }
 .card-badge { position:absolute; top:12px; right:12px; background:#ef4444; color:white; font-size:.7em; font-weight:800; padding:4px 10px; border-radius:99px; }
+.card-reward-badge { position:absolute; top:12px; left:12px; background:#10b981; color:white; font-size:.7em; font-weight:800; padding:4px 10px; border-radius:99px; }
 .card-info { padding:16px; display:flex; flex-direction:column; gap:4px; flex-grow:1; }
 .card-info h3 { font-size:1.15em; margin-bottom:4px; color:var(--dark); }
 .card-info p { font-size:0.9em; color:var(--gray); line-height:1.4; }
 
-.card-actions { padding:12px 16px; border-top:1px solid #f1f5f9; background:#f8fafc; display:flex; gap:8px; position: relative; z-index: 10; }
+.card-actions { padding:12px 16px; border-top:1px solid #f1f5f9; background:#f8fafc; display:flex; gap:8px; }
 .btn-action { flex:1; text-align:center; padding:8px; border-radius:8px; font-size:0.85em; font-weight:600; text-decoration:none; border:none; cursor:pointer; }
 .btn-edit { background:#e0f2fe; color:#0369a1; }
 .btn-delete { background:#fee2e2; color:#b91c1c; }
-.form-report { background:#fff; padding:24px; border-radius:20px; border:1px solid #e2e8f0; margin-bottom:32px; }
+.form-report { background:#fff; padding:28px; border-radius:24px; border:1px solid #e2e8f0; margin-bottom:32px; box-shadow:0 10px 15px -3px rgba(0,0,0,0.02); }
 
-/* Estilos de Vista Detalle */
-.detail-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 20px; }
+/* Perfil Detallado */
+.detail-layout { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; margin-top: 20px; }
 @media (max-width: 768px) { .detail-layout { grid-template-columns: 1fr; gap: 24px; } }
 .detail-img { width: 100%; border-radius: 24px; border: 1px solid #e2e8f0; aspect-ratio: 4/3; object-fit: cover; background: #f1f5f9; }
 .detail-content { display: flex; flex-direction: column; gap: 16px; }
-.detail-title { font-size: 2.2em; font-weight: 800; }
-.meta-badge { display: inline-block; background: #fee2e2; color: #b91c1c; font-weight: 700; padding: 6px 14px; border-radius: 99px; font-size: 0.85em; width: max-content; }
-.info-row { display: flex; padding: 12px 0; border-bottom: 1px solid #e2e8f0; font-size: 1.05em; }
-.info-label { width: 130px; font-weight: 700; color: #475569; }
-.info-val { color: var(--dark); flex: 1; }
+.detail-title { font-size: 2.5em; font-weight: 800; }
+.badge-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.meta-badge { display: inline-block; background: #fee2e2; color: #b91c1c; font-weight: 700; padding: 6px 14px; border-radius: 99px; font-size: 0.85em; }
+.meta-badge.reward { background: #d1fae5; color: #065f46; }
+.info-block { background: white; padding: 24px; border-radius: 24px; border: 1px solid #e2e8f0; }
+.info-row { display: flex; padding: 12px 0; border-bottom: 1px solid #f1f5f9; font-size: 1em; align-items: baseline; }
+.info-row:last-child { border-bottom: none; }
+.info-label { width: 140px; font-weight: 700; color: #64748b; font-size: 0.9em; text-transform: uppercase; }
+.info-val { color: var(--dark); flex: 1; line-height: 1.5; }
 </style>
 """
 
-# ─── VISTAS DE AUTENTICACIÓN ──────────────────────────────────────────────────
+# ─── RUTAS DE AUTENTICACIÓN (LÓGICA INTERNA) ──────────────────────────────────
 @app.route('/registro', methods=['GET','POST'])
 def registro():
     error = ""
@@ -276,7 +289,8 @@ def logout():
     session.clear()
     return redirect(url_for('index'))
 
-# ─── NÚCLEO CRUD DE MASCOTAS ──────────────────────────────────────────────────
+
+# ─── NÚCLEO CRUD DE MASCOTAS (CON TODOS LOS CAMPOS DE LA DB) ──────────────────
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -291,12 +305,26 @@ def index():
             nuevo = {
                 "id": str(int(time.time() * 1000)),
                 "reportado_por": usuario,
-                "nombre": nombre,
-                "descripcion": request.form.get("descripcion"),
-                "zona": request.form.get("zona"),
-                "contacto": request.form.get("contacto"),
-                "principal": url_p,
-                "secundarias": []
+                "nombre":       nombre,
+                "descripcion":  request.form.get("descripcion"),
+                "zona":         request.form.get("zona"),
+                "contacto":     request.form.get("contacto"),
+                "principal":    url_p,
+                "secundarias":  [],
+                "fecha":        request.form.get("fecha"),
+                "edad":         request.form.get("edad"),
+                "raza":         request.form.get("raza"),
+                "genero":       request.form.get("genero"),
+                "color":        request.form.get("color"),
+                "collar":       request.form.get("collar"),
+                "docil":        request.form.get("docil"),
+                "direccion":    request.form.get("direccion"),
+                "ciudad":       request.form.get("ciudad"),
+                "estado":       request.form.get("estado"),
+                "cp":           request.form.get("cp"),
+                "calles":       request.form.get("calles"),
+                "dueno":        request.form.get("dueno"),
+                "recompensa":   request.form.get("recompensa")
             }
             db_save_mascota(nuevo)
         return redirect(url_for('index', admin=ADMIN_TOKEN if es_admin else None))
@@ -305,25 +333,87 @@ def index():
     <div class='navbar'>
       <a href='/' class='navbar-brand'>🐾 Ubican<span>ID</span></a>
       <div class='nav-user'>
-        {% if usuario %}<span>📱 {{ usuario }}</span> | <a href='/logout'>Salir</a>{% else %}<a href='/login'>Entrar</a>{% endif %}
+        {% if usuario %}<span>📱 {{ usuario }}</span> | <a href='/logout'>Salir</a>{% else %}<a href='/login'>Entrar / Registrarse</a>{% endif %}
       </div>
     </div>
     <div class='main-container'>
       {% if usuario %}
       <div class='form-report'>
-        <h3>📢 Publicar nueva mascota extraviada</h3><br>
+        <h3 style='font-size:1.4em; font-weight:800; margin-bottom:15px;'>📢 Publicar Reporte de Mascota Extraviada</h3>
         <form method='POST' enctype='multipart/form-data'>
-          <div class='form-group'><label>Nombre</label><input type='text' name='nombre' required></div>
-          <div class='form-group'><label>Descripción</label><textarea name='descripcion'></textarea></div>
-          <div class='form-group'><label>Zona o Colonia</label><input type='text' name='zona' required></div>
-          <div class='form-group'><label>Teléfono de Contacto</label><input type='text' name='contacto' required></div>
+          
+          <div class='form-section'>
+            <h4>1. Datos Básicos</h4>
+            <div class='form-grid-2'>
+              <div class='form-group'><label>Nombre de la mascota</label><input type='text' name='nombre' required></div>
+              <div class='form-group'><label>Fecha de Extravío</label><input type='date' name='fecha'></div>
+            </div>
+            <div class='form-group'><label>Descripción / Señas Particulares</label><textarea name='descripcion' rows='2' placeholder='Ej: Mancha blanca en ojo derecho, cicatriz...'></textarea></div>
+          </div>
+
+          <div class='form-section'>
+            <h4>2. Características Físicas</h4>
+            <div class='form-grid-2'>
+              <div class='form-group'><label>Raza</label><input type='text' name='raza' placeholder='Ej: Husky, Mestizo'></div>
+              <div class='form-group'><label>Edad aproximada</label><input type='text' name='edad' placeholder='Ej: 2 años'></div>
+            </div>
+            <div class='form-grid-2'>
+              <div class='form-group'>
+                <label>Género</label>
+                <select name='genero'>
+                  <option value=''>Selecciona...</option>
+                  <option value='Macho'>Macho</option>
+                  <option value='Hembra'>Hembra</option>
+                </select>
+              </div>
+              <div class='form-group'><label>Color de pelaje</label><input type='text' name='color' placeholder='Ej: Negro con blanco'></div>
+            </div>
+            <div class='form-grid-2'>
+              <div class='form-group'><label>¿Lleva collar? (Color / Tipo)</label><input type='text' name='collar' placeholder='Ej: Rojo con placa'></div>
+              <div class='form-group'>
+                <label>¿Es dócil con extraños?</label>
+                <select name='docil'>
+                  <option value='Sí'>Sí, es muy dócil</option>
+                  <option value='No'>No, es miedoso/agresivo</option>
+                  <option value='Regular'>Regular / Desconfiado</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class='form-section'>
+            <h4>3. ¿Dónde se perdió?</h4>
+            <div class='form-grid-2'>
+              <div class='form-group'><label>Zona o Colonia (Obligatorio)</label><input type='text' name='zona' placeholder='Ej: Las Misiones' required></div>
+              <div class='form-group'><label>Dirección aproximada</label><input type='text' name='direccion' placeholder='Ej: Av. Tecnológico 1230'></div>
+            </div>
+            <div class='form-grid-2'>
+              <div class='form-group'><label>Entre qué calles</label><input type='text' name='calles' placeholder='Ej: Entre Calle 1 y Calle 2'></div>
+              <div class='form-group'><label>Código Postal</label><input type='text' name='cp'></div>
+            </div>
+            <div class='form-grid-2'>
+              <div class='form-group'><label>Ciudad</label><input type='text' name='ciudad' value='Ciudad Juárez'></div>
+              <div class='form-group'><label>Estado</label><input type='text' name='estado' value='Chihuahua'></div>
+            </div>
+          </div>
+
+          <div class='form-section'>
+            <h4>4. Contacto y Recompensa</h4>
+            <div class='form-grid-2'>
+              <div class='form-group'><label>Nombre del Dueño</label><input type='text' name='dueno'></div>
+              <div class='form-group'><label>Teléfono de Contacto (Obligatorio)</label><input type='tel' name='contacto' placeholder='Ej: 6561234567' required></div>
+            </div>
+            <div class='form-group'><label>Monto de Recompensa (Opcional)</label><input type='text' name='recompensa' placeholder='Ej: $5,000 MXN o Dejar en blanco'></div>
+          </div>
+
           <div class='form-group'><label>Foto de la Mascota</label><input type='file' name='imagen_principal' accept='image/*'></div>
-          <button type='submit' class='btn-primary'>Publicar Reporte</button>
+          
+          <button type='submit' class='btn-primary' style='margin-top:10px;'>🚀 Publicar Reporte de Búsqueda</button>
         </form>
       </div>
       {% endif %}
       
-      <h2>Reportes Activos</h2>
+      <h2 style='font-size:1.6em; font-weight:800; margin-bottom:15px;'>Mascotas Extraviadas Recientemente</h2>
       <div class='grid-feed'>
         {% for m in mascotas %}
         <div style='display: flex; flex-direction: column; height: 100%; position: relative;'>
@@ -332,11 +422,12 @@ def index():
               <div class='card-img-box'>
                 {% if m.principal %}<img src='{{ m.principal }}'>{% else %}<div style='padding:40px;text-align:center;color:var(--gray);'>Sin foto</div>{% endif %}
                 <span class='card-badge'>PERDIDO</span>
+                {% if m.recompensa %}<span class='card-reward-badge'>💰 Recompensa</span>{% endif %}
               </div>
               <div class='card-info'>
                 <h3>{{ m.nombre }}</h3>
-                <p>{{ m.descripcion if m.descripcion|length < 80 else m.descripcion[:80] ~ '...' }}</p>
-                <p style='font-size:0.85em; margin-top:auto; font-weight: 600;'>📍 {{ m.zona }}</p>
+                <p><strong>Raza:</strong> {{ m.raza if m.raza else 'No especificada' }}</p>
+                <p style='font-size:0.85em; margin-top:auto; font-weight: 600; color:#ff6b4a;'>📍 {{ m.zona }}</p>
               </div>
             </div>
           </a>
@@ -353,7 +444,7 @@ def index():
     return render_template_string(html_index, mascotas=mascotas_perdidas, usuario=usuario, es_admin=es_admin)
 
 
-# ─── NUEVA VISTA DETALLADA DE LA MASCOTA ──────────────────────────────────────
+# ─── VISTA DETALLADA COMPLETA (MUESTRA ABSOLUTAMENTE TODO) ────────────────────
 @app.route('/mascota/<id_mascota>')
 def ver_mascota(id_mascota):
     mascota = db_get_mascota_por_id(id_mascota)
@@ -363,7 +454,7 @@ def ver_mascota(id_mascota):
     html_detail = BASE_CSS + """
     <div class='navbar'>
       <a href='/' class='navbar-brand'>🐾 Ubican<span>ID</span></a>
-      <div class='nav-user'><a href='/' style='color:var(--blue); text-decoration:none; font-weight:700;'>← Volver al inicio</a></div>
+      <div class='nav-user'><a href='/' style='color:var(--blue); text-decoration:none; font-weight:700;'>← Volver a la Lista</a></div>
     </div>
     
     <div class='main-container'>
@@ -372,33 +463,46 @@ def ver_mascota(id_mascota):
           {% if m.principal %}
             <img class='detail-img' src='{{ m.principal }}' alt='{{ m.nombre }}'>
           {% else %}
-            <div class='detail-img' style='display:flex; align-items:center; justify-content:center; color:var(--gray);'>Sin Imagen Adjunta</div>
+            <div class='detail-img' style='display:flex; align-items:center; justify-content:center; color:var(--gray); font-weight:bold;'>Sin foto disponible</div>
           {% endif %}
         </div>
         
         <div class='detail-content'>
-          <span class='meta-badge'>🚨 SE BUSCA</span>
-          <h1 class='detail-title'>{{ m.nombre }}</h1>
-          
-          <div style='background: white; padding: 20px; border-radius: 20px; border: 1px solid #e2e8f0; margin-top: 10px;'>
-            <div class='info-row'>
-              <div class='info-label'>📍 Zona:</div>
-              <div class='info-val'>{{ m.zona }}</div>
-            </div>
-            <div class='info-row'>
-              <div class='info-label'>📞 Contacto:</div>
-              <div class='info-val'>
-                <a href='tel:{{ m.contacto }}' style='color:var(--blue); text-decoration:none; font-weight:600;'>{{ m.contacto }}</a>
-              </div>
-            </div>
-            <div class='info-row' style='border-bottom:none; flex-direction:column; gap:8px;'>
-              <div class='info-label' style='width:100%;'>📝 Descripción Completa:</div>
-              <div class='info-val' style='line-height:1.6;'>{{ m.descripcion if m.descripcion else 'Sin descripción adicional proporcionada.' }}</div>
-            </div>
+          <div class='badge-row'>
+            <span class='meta-badge'>🚨 SE BUSCA</span>
+            {% if m.recompensa %}<span class='meta-badge reward'>💰 RECOMPENSA: {{ m.recompensa }}</span>{% endif %}
           </div>
           
-          <a href='https://wa.me/{{ m.contacto }}' target='_blank' class='btn-primary' style='background:#25d366; margin-top:10px;'>
-            💬 Contactar por WhatsApp
+          <h1 class='detail-title'>{{ m.nombre if m.nombre else 'Mascota Sin Nombre' }}</h1>
+          
+          <div class='info-block'>
+            <h3 style='margin-bottom:10px; color:#475569; font-size:1em;'>📊 DESCRIPCIÓN Y DETALLES</h3>
+            <div class='info-row'><div class='info-label'>Fecha Pérdida:</div><div class='info-val'>{{ m.fecha if m.fecha else 'No indicada' }}</div></div>
+            <div class='info-row'><div class='info-label'>Raza:</div><div class='info-val'>{{ m.raza if m.raza else 'No especificada' }}</div></div>
+            <div class='info-row'><div class='info-label'>Edad:</div><div class='info-val'>{{ m.edad if m.edad else 'No especificada' }}</div></div>
+            <div class='info-row'><div class='info-label'>Género:</div><div class='info-val'>{{ m.genero if m.genero else 'No especificado' }}</div></div>
+            <div class='info-row'><div class='info-label'>Color:</div><div class='info-val'>{{ m.color if m.color else 'No especificado' }}</div></div>
+            <div class='info-row'><div class='info-label'>Collar:</div><div class='info-val'>{{ m.collar if m.collar else 'No' }}</div></div>
+            <div class='info-row'><div class='info-label'>¿Es Dócil?:</div><div class='info-val'>{{ m.docil if m.docil else 'Desconocido' }}</div></div>
+            
+            <h3 style='margin:20px 0 10px 0; color:#475569; font-size:1em;'>📍 UBICACIÓN DEL EXTRAVÍO</h3>
+            <div class='info-row'><div class='info-label'>Zona/Colonia:</div><div class='info-val' style='font-weight:700; color:#ff6b4a;'>{{ m.zona }}</div></div>
+            <div class='info-row'><div class='info-label'>Dirección:</div><div class='info-val'>{{ m.direccion if m.direccion else 'No especificada' }}</div></div>
+            <div class='info-row'><div class='info-label'>Entre Calles:</div><div class='info-val'>{{ m.calles if m.calles else 'No especificadas' }}</div></div>
+            <div class='info-row'><div class='info-label'>Ciudad/Estado:</div><div class='info-val'>{{ m.ciudad }}, {{ m.estado }} {% if m.cp %}(CP: {{ m.cp }}){% endif %}</div></div>
+
+            <h3 style='margin:20px 0 10px 0; color:#475569; font-size:1em;'>👤 DATOS DE CONTACTO</h3>
+            <div class='info-row'><div class='info-label'>Dueño:</div><div class='info-val'>{{ m.dueno if m.dueno else 'Anónimo' }}</div></div>
+            <div class='info-row' style='border-bottom:none;'><div class='info-label'>Teléfono:</div><div class='info-val' style='font-weight:bold; color:var(--blue);'>{{ m.contacto }}</div></div>
+          </div>
+
+          <div class='info-block' style='margin-top:-5px;'>
+            <h4 style='font-size:0.85em; color:var(--gray); margin-bottom:4px;'>INFORMACIÓN ADICIONAL / COMENTARIOS</h4>
+            <p style='line-height:1.5; font-size:0.95em;'>{{ m.descripcion if m.descripcion else 'Sin comentarios adicionales.' }}</p>
+          </div>
+          
+          <a href='https://wa.me/{{ m.contacto }}' target='_blank' class='btn-primary' style='background:#25d366; font-size:1.1em;'>
+            💬 Mandar WhatsApp al Dueño
           </a>
         </div>
       </div>
@@ -406,6 +510,7 @@ def ver_mascota(id_mascota):
     return render_template_string(html_detail, m=mascota)
 
 
+# ─── FORMULARIO DE EDICIÓN (ACTUALIZADO CON TODOS LOS CAMPOS) ─────────────────
 @app.route('/mascota/editar/<id_mascota>', methods=['GET', 'POST'])
 def editar_mascota(id_mascota):
     usuario = session.get("telefono")
@@ -417,10 +522,24 @@ def editar_mascota(id_mascota):
 
     if request.method == 'POST':
         update_data = {
-            "nombre": request.form.get("nombre"),
-            "descripcion": request.form.get("descripcion"),
-            "zona": request.form.get("zona"),
-            "contacto": request.form.get("contacto")
+            "nombre":       request.form.get("nombre"),
+            "descripcion":  request.form.get("descripcion"),
+            "zona":         request.form.get("zona"),
+            "contacto":     request.form.get("contacto"),
+            "fecha":        request.form.get("fecha"),
+            "edad":         request.form.get("edad"),
+            "raza":         request.form.get("raza"),
+            "genero":       request.form.get("genero"),
+            "color":        request.form.get("color"),
+            "collar":       request.form.get("collar"),
+            "docil":        request.form.get("docil"),
+            "direccion":    request.form.get("direccion"),
+            "ciudad":       request.form.get("ciudad"),
+            "estado":       request.form.get("estado"),
+            "cp":           request.form.get("cp"),
+            "calles":       request.form.get("calles"),
+            "dueno":        request.form.get("dueno"),
+            "recompensa":   request.form.get("recompensa")
         }
         nueva_foto = request.files.get("imagen_principal")
         if nueva_foto and nueva_foto.filename != '':
@@ -431,16 +550,67 @@ def editar_mascota(id_mascota):
         return redirect(url_for('index'))
 
     html_edit = BASE_CSS + """
-    <div class='auth-wrap'>
-      <div class='auth-box' style='max-width:500px;'>
-        <h1>✏️ Editar Perfil</h1><br>
+    <div class='auth-wrap' style='padding: 50px 16px;'>
+      <div class='auth-box' style='max-width:600px; border-radius:24px;'>
+        <h1 style='font-size:1.5em; margin-bottom:20px;'>✏️ Editar Reporte</h1>
         <form method='POST' enctype='multipart/form-data'>
-          <div class='form-group'><label>Nombre</label><input type='text' name='nombre' value='{{ m.nombre }}' required></div>
-          <div class='form-group'><label>Descripción</label><textarea name='descripcion'>{{ m.descripcion }}</textarea></div>
-          <div class='form-group'><label>Zona</label><input type='text' name='zona' value='{{ m.zona }}' required></div>
-          <div class='form-group'><label>Contacto</label><input type='text' name='contacto' value='{{ m.contacto }}' required></div>
-          <div class='form-group'><label>Cambiar Foto</label><input type='file' name='imagen_principal' accept='image/*'></div>
-          <button type='submit' class='btn-primary'>Guardar Cambios</button>
+          
+          <div class='form-section'>
+            <h4>1. Datos Básicos</h4>
+            <div class='form-grid-2'>
+              <div class='form-group'><label>Nombre</label><input type='text' name='nombre' value='{{ m.nombre }}' required></div>
+              <div class='form-group'><label>Fecha</label><input type='date' name='fecha' value='{{ m.fecha }}'></div>
+            </div>
+            <div class='form-group'><label>Descripción</label><textarea name='descripcion' rows='2'>{{ m.descripcion }}</textarea></div>
+          </div>
+
+          <div class='form-section'>
+            <h4>2. Características Físicas</h4>
+            <div class='form-grid-2'>
+              <div class='form-group'><label>Raza</label><input type='text' name='raza' value='{{ m.raza }}'></div>
+              <div class='form-group'><label>Edad</label><input type='text' name='edad' value='{{ m.edad }}'></div>
+            </div>
+            <div class='form-grid-2'>
+              <div class='form-group'>
+                <label>Género</label>
+                <select name='genero'>
+                  <option value='Macho' {% if m.genero == 'Macho' %}selected{% endif %}>Macho</option>
+                  <option value='Hembra' {% if m.genero == 'Hembra' %}selected{% endif %}>Hembra</option>
+                </select>
+              </div>
+              <div class='form-group'><label>Color</label><input type='text' name='color' value='{{ m.color }}'></div>
+            </div>
+            <div class='form-grid-2'>
+              <div class='form-group'><label>Collar</label><input type='text' name='collar' value='{{ m.collar }}'></div>
+              <div class='form-group'><label>¿Es Dócil?</label><input type='text' name='docil' value='{{ m.docil }}'></div>
+            </div>
+          </div>
+
+          <div class='form-section'>
+            <h4>3. Ubicación</h4>
+            <div class='form-grid-2'>
+              <div class='form-group'><label>Zona/Colonia</label><input type='text' name='zona' value='{{ m.zona }}' required></div>
+              <div class='form-group'><label>Dirección</label><input type='text' name='direccion' value='{{ m.direccion }}'></div>
+            </div>
+            <div class='form-group'><label>Entre Calles</label><input type='text' name='calles' value='{{ m.calles }}'></div>
+            <div class='form-grid-2'>
+              <div class='form-group'><label>Ciudad</label><input type='text' name='ciudad' value='{{ m.ciudad }}'></div>
+              <div class='form-group'><label>Estado</label><input type='text' name='estado' value='{{ m.estado }}'></div>
+            </div>
+          </div>
+
+          <div class='form-section'>
+            <h4>4. Dueño y Recompensa</h4>
+            <div class='form-grid-2'>
+              <div class='form-group'><label>Dueño</label><input type='text' name='dueno' value='{{ m.dueno }}'></div>
+              <div class='form-group'><label>Contacto</label><input type='tel' name='contacto' value='{{ m.contacto }}' required></div>
+            </div>
+            <div class='form-group'><label>Recompensa</label><input type='text' name='recompensa' value='{{ m.recompensa }}'></div>
+          </div>
+
+          <div class='form-group'><label>Actualizar Foto (Opcional)</label><input type='file' name='imagen_principal' accept='image/*'></div>
+          
+          <button type='submit' class='btn-primary'>💾 Guardar Todos los Cambios</button>
           <a href='/' style='display:block;text-align:center;margin-top:15px;color:var(--gray);text-decoration:none;'>Cancelar</a>
         </form>
       </div>
