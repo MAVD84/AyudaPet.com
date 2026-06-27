@@ -1,0 +1,11 @@
+SECRET_KEY=ubican_secret_2024
+ADMIN_TOKEN=ubican123
+USERS_FILE=usuarios.json
+MASCOTAS_FILE=mascotas.json
+MAX_CONTENT_LENGTH=16777216
+
+# LabsMobile
+LABSMOBILE_USER=hola@ubicanid.com
+LABSMOBILE_TOKEN=zuK99as7kNvGDMJtfshF5UnYDEOJa1fA
+LABSMOBILE_SENDER=
+LABSMOBILE_API=https://api.labsmobile.com/json/send
