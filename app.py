@@ -298,6 +298,10 @@ def get_form_value(name):
     return value.strip() if isinstance(value, str) and value.strip() else None
 
 
+def get_checkbox_value(name):
+    return request.form.get(name) == "on"
+
+
 def report_payload(report_id, existing=None):
     required_name = get_form_value("nombre")
     if not required_name:
@@ -332,6 +336,7 @@ def report_payload(report_id, existing=None):
         "calles": get_form_value("calles"),
         "dueno": get_form_value("dueno"),
         "recompensa": get_form_value("recompensa"),
+        "encontrado": get_checkbox_value("encontrado"),
     }
 
 
@@ -752,6 +757,7 @@ TEMPLATES = {
     }
     .pet-card:hover { transform: translateY(-2px); transition: transform .16s ease; }
     .pet-media {
+      position: relative;
       aspect-ratio: 4 / 3;
       width: 100%;
       background:
@@ -797,10 +803,18 @@ TEMPLATES = {
       font-weight: 800;
       font-size: .78rem;
     }
+    .badge.lost { background: #fff2ef; color: var(--brand-dark); }
     .badge.found { background: #e9f7f0; color: var(--green); }
+    .photo-badge {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      box-shadow: 0 10px 24px rgba(20,32,48,.16);
+    }
     .form-wrap { max-width: 900px; margin: 0 auto; }
     .detail-wrap { display: grid; grid-template-columns: minmax(0, .9fr) minmax(320px, 1.1fr); gap: 18px; align-items: start; }
     .detail-photo {
+      position: relative;
       overflow: hidden;
       min-height: 340px;
       display: grid;
@@ -1020,9 +1034,10 @@ TEMPLATES = {
             {% else %}
               {{ (pet.nombre or "?")[:1].upper() }}
             {% endif %}
+            <span class="badge photo-badge {% if pet.encontrado %}found{% else %}lost{% endif %}">{{ "Localizado" if pet.encontrado else "Perdido" }}</span>
           </div>
           <div class="pet-body">
-            <span class="badge {% if pet.encontrado %}found{% endif %}">{{ "Encontrado" if pet.encontrado else "En busqueda" }}</span>
+            <span class="badge {% if pet.encontrado %}found{% else %}lost{% endif %}">{{ "Localizado" if pet.encontrado else "Perdido" }}</span>
             <h3>{{ pet.nombre }}</h3>
             <p class="meta">
               {% if pet.zona %}<strong>Zona:</strong> {{ pet.zona }}<br>{% endif %}
@@ -1048,9 +1063,10 @@ TEMPLATES = {
       {% else %}
         {{ (mascota.nombre or "?")[:1].upper() }}
       {% endif %}
+      <span class="badge photo-badge {% if mascota.encontrado %}found{% else %}lost{% endif %}">{{ "Localizado" if mascota.encontrado else "Perdido" }}</span>
     </div>
     <article class="panel detail-info">
-      <span class="badge {% if mascota.encontrado %}found{% endif %}">{{ "Encontrado" if mascota.encontrado else "En busqueda" }}</span>
+      <span class="badge {% if mascota.encontrado %}found{% else %}lost{% endif %}">{{ "Localizado" if mascota.encontrado else "Perdido" }}</span>
       <h1>{{ mascota.nombre }}</h1>
       {% if mascota.descripcion %}<p class="meta">{{ mascota.descripcion }}</p>{% endif %}
       {% if is_owner %}
@@ -1220,6 +1236,10 @@ TEMPLATES = {
         <div class="field"><label for="color">Color</label><input id="color" name="color" value="{{ mascota.color or '' }}"></div>
         <div class="field"><label for="collar">Collar</label><input id="collar" name="collar" value="{{ mascota.collar or '' }}"></div>
         <div class="field"><label for="docil">Comportamiento</label><input id="docil" name="docil" value="{{ mascota.docil or '' }}" placeholder="Docil, nervioso, asustado"></div>
+        <div class="field">
+          <label>Estado del reporte</label>
+          <label class="check"><input type="checkbox" name="encontrado" {% if mascota.encontrado %}checked{% endif %}> Localizado</label>
+        </div>
         <div class="field"><label for="principal">Foto principal</label><input id="principal" name="principal" type="file" accept="image/*"></div>
         <div class="field full">
           <label>Fotos secundarias</label>
