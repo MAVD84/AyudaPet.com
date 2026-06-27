@@ -275,13 +275,18 @@ def get_user(phone):
 
 def save_user(phone, password, nombre=None):
     existing = get_user(phone)
+    if existing:
+        update_user_password(phone, password)
+        if nombre:
+            update_user_profile(phone, nombre=nombre)
+        return get_user(phone)
+
     payload = {
         "telefono": phone,
         "password_hash": generate_password_hash(password),
         "activo": True,
+        "creado": int(time.time()),
     }
-    if not existing:
-        payload["creado"] = int(time.time())
     if nombre:
         payload["nombre"] = nombre
     return upsert_row("usuarios", payload, "telefono")
@@ -307,7 +312,10 @@ def update_user_password(phone, password):
         payload={"password_hash": generate_password_hash(password)},
         params={"telefono": f"eq.{phone}"},
     )
-    return rows[0] if isinstance(rows, list) and rows else None
+    updated = rows[0] if isinstance(rows, list) and rows else None
+    if not updated:
+        raise AppError("No se pudo actualizar la contrasena.")
+    return updated
 
 
 def list_mascotas():
@@ -536,9 +544,18 @@ def set_password():
             flash("La contrasena debe tener al menos 8 caracteres.", "error")
             return redirect(url_for("set_password"))
 
-        save_user(verified_tel, password, nombre)
+        existing_user = get_user(verified_tel)
+        try:
+            save_user(verified_tel, password, nombre)
+        except AppError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("set_password"))
         session.pop("pending_tel", None)
         session.pop("verified_tel", None)
+        if existing_user:
+            session.clear()
+            flash("Contrasena restablecida. Inicia sesion con tu nueva contrasena.", "success")
+            return redirect(url_for("login"))
         session["tel"] = verified_tel
         flash("Cuenta lista. Ya puedes publicar reportes.", "success")
         return redirect(url_for("reportar"))
@@ -613,9 +630,14 @@ def cambiar_password():
         flash("La confirmacion no coincide.", "error")
         return redirect(url_for("perfil"))
 
-    update_user_password(phone, new_password)
-    flash("Contrasena actualizada.", "success")
-    return redirect(url_for("perfil"))
+    try:
+        update_user_password(phone, new_password)
+    except AppError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("perfil"))
+    session.clear()
+    flash("Contrasena actualizada. Inicia sesion de nuevo.", "success")
+    return redirect(url_for("login"))
 
 
 @app.route("/reportar", methods=["GET", "POST"])
