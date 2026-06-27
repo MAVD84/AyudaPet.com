@@ -875,7 +875,7 @@ TEMPLATES = {
     <form class="form-panel" method="post">
       <p class="eyebrow" style="color: var(--brand);">Registro seguro</p>
       <h1>Crea tu cuenta</h1>
-      <p class="meta">Solo aceptamos numeros mexicanos de 10 digitos. No uses prefijo de Estados Unidos.</p>
+      <p class="meta">Solo aceptamos numeros mexicanos de 10 digitos.</p>
       <div class="form-grid">
         <div class="field full">
           <label for="tel">Telefono mexicano</label>
@@ -883,7 +883,6 @@ TEMPLATES = {
             <span class="phone-prefix"><span aria-hidden="true">🇲🇽</span><span>+52</span></span>
             <input id="tel" name="tel" inputmode="numeric" autocomplete="tel" placeholder="(656) 778-7712" maxlength="14" pattern="\\(?[0-9]{3}\\)?[\\s-]?[0-9]{3}-?[0-9]{4}" data-phone-input required>
           </div>
-          <span class="hint">Ejemplo: (656) 778-7712. Se enviara como numero mexicano +52.</span>
         </div>
       </div>
       <div class="actions"><button class="btn primary" type="submit">Enviar codigo</button></div>
@@ -947,7 +946,7 @@ TEMPLATES = {
             <span class="phone-prefix"><span aria-hidden="true">🇲🇽</span><span>+52</span></span>
             <input id="tel" name="tel" inputmode="numeric" autocomplete="tel" placeholder="(656) 778-7712" maxlength="14" pattern="\\(?[0-9]{3}\\)?[\\s-]?[0-9]{3}-?[0-9]{4}" data-phone-input required>
           </div>
-          <span class="hint">Usa el numero mexicano registrado, sin +1.</span>
+          <span class="hint">Usa el numero mexicano con el que creaste tu cuenta.</span>
         </div>
         <div class="field">
           <label for="pwd">Contrasena</label>
