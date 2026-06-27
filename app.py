@@ -537,14 +537,14 @@ def set_password():
         flash("Verifica tu telefono antes de crear la cuenta.", "warning")
         return redirect(url_for("registro"))
 
+    existing_user = get_user(verified_tel)
     if request.method == "POST":
         password = request.form.get("pwd") or ""
-        nombre = get_form_value("nombre")
+        nombre = get_form_value("nombre") if not existing_user else None
         if len(password) < 8:
             flash("La contrasena debe tener al menos 8 caracteres.", "error")
             return redirect(url_for("set_password"))
 
-        existing_user = get_user(verified_tel)
         try:
             save_user(verified_tel, password, nombre)
         except AppError as exc:
@@ -560,7 +560,7 @@ def set_password():
         flash("Cuenta lista. Ya puedes publicar reportes.", "success")
         return redirect(url_for("reportar"))
 
-    return render_template("set_password.html", phone=verified_tel)
+    return render_template("set_password.html", phone=verified_tel, recovering=bool(existing_user))
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -1463,19 +1463,21 @@ TEMPLATES = {
   <section class="form-wrap">
     <form class="form-panel" method="post">
       <p class="eyebrow" style="color: var(--brand);">Cuenta</p>
-      <h1>Protege tu acceso</h1>
+      <h1>{{ "Restablecer contrasena" if recovering else "Protege tu acceso" }}</h1>
       <p class="meta">Telefono verificado: {{ phone }}</p>
       <div class="form-grid">
+        {% if not recovering %}
+          <div class="field">
+            <label for="nombre">Nombre</label>
+            <input id="nombre" name="nombre" autocomplete="name" placeholder="Tu nombre">
+          </div>
+        {% endif %}
         <div class="field">
-          <label for="nombre">Nombre</label>
-          <input id="nombre" name="nombre" autocomplete="name" placeholder="Tu nombre">
-        </div>
-        <div class="field">
-          <label for="pwd">Contrasena</label>
+          <label for="pwd">{{ "Nueva contrasena" if recovering else "Contrasena" }}</label>
           <input id="pwd" name="pwd" type="password" autocomplete="new-password" minlength="8" required>
         </div>
       </div>
-      <div class="actions"><button class="btn primary" type="submit">Guardar cuenta</button></div>
+      <div class="actions"><button class="btn primary" type="submit">{{ "Guardar contrasena" if recovering else "Guardar cuenta" }}</button></div>
     </form>
   </section>
 {% endblock %}
