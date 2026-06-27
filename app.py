@@ -108,7 +108,11 @@ def delete_rows(table, params):
 
 
 def normalize_phone(raw_phone):
-    phone = (raw_phone or "").strip().replace(" ", "").replace("-", "")
+    phone = re.sub(r"\D", "", raw_phone or "")
+    if phone.startswith("52") and len(phone) == 12:
+        phone = phone[2:]
+    if phone.startswith("1") and len(phone) == 11:
+        phone = phone[1:]
     if not PHONE_RE.match(phone):
         return None
     return phone
@@ -662,6 +666,23 @@ TEMPLATES = {
     {% block content %}{% endblock %}
   </main>
   <footer>UBICAN ID &copy; {{ year }}</footer>
+  <script>
+    function formatLocalPhone(value) {
+      const digits = value.replace(/\\D/g, "").slice(0, 10);
+      if (digits.length <= 3) return digits;
+      if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+      return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+    }
+
+    document.querySelectorAll("[data-phone-input]").forEach((input) => {
+      input.addEventListener("input", () => {
+        input.value = formatLocalPhone(input.value);
+      });
+      input.form?.addEventListener("submit", () => {
+        input.value = input.value.replace(/\\D/g, "").slice(0, 10);
+      });
+    });
+  </script>
 </body>
 </html>
 """,
@@ -730,7 +751,7 @@ TEMPLATES = {
       <div class="form-grid">
         <div class="field full">
           <label for="tel">Telefono</label>
-          <input id="tel" name="tel" inputmode="tel" autocomplete="tel" placeholder="+521XXXXXXXXXX" required>
+          <input id="tel" name="tel" inputmode="numeric" autocomplete="tel" placeholder="(656) 778-7712" maxlength="14" pattern="\\(?[0-9]{3}\\)?[\\s-]?[0-9]{3}-?[0-9]{4}" data-phone-input required>
         </div>
       </div>
       <div class="actions"><button class="btn primary" type="submit">Enviar codigo</button></div>
@@ -790,7 +811,7 @@ TEMPLATES = {
       <div class="form-grid">
         <div class="field">
           <label for="tel">Telefono</label>
-          <input id="tel" name="tel" inputmode="tel" autocomplete="tel" required>
+          <input id="tel" name="tel" inputmode="numeric" autocomplete="tel" placeholder="(656) 778-7712" maxlength="14" pattern="\\(?[0-9]{3}\\)?[\\s-]?[0-9]{3}-?[0-9]{4}" data-phone-input required>
         </div>
         <div class="field">
           <label for="pwd">Contrasena</label>
