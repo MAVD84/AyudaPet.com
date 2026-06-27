@@ -154,11 +154,16 @@ body { font-family:system-ui,-apple-system,sans-serif; background:var(--bg); col
 .navbar-brand { font-size:1.2em; font-weight:800; text-decoration:none; color:inherit; }
 .navbar-brand span { background:var(--grad); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
 .nav-user { font-size:0.85em; color:var(--gray); display:flex; align-items:center; gap:12px; }
-.nav-user a { color:var(--danger); font-weight:600; text-decoration:none; }
-.auth-wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px 16px; }
-.auth-box { background:var(--card); border-radius:28px; border:1px solid #e2e8f0; padding:36px 32px; width:100%; max-width:520px; box-shadow:0 8px 24px -8px rgba(0,0,0,.08); }
+.nav-user a { color:var(--blue); font-weight:600; text-decoration:none; }
+.auth-wrap { min-height:80vh; display:flex; align-items:center; justify-content:center; padding:24px 16px; }
+.auth-box { background:var(--card); border-radius:28px; border:1px solid #e2e8f0; padding:36px 32px; width:100%; max-width:440px; box-shadow:0 8px 24px -8px rgba(0,0,0,.08); }
 
-/* Grid de Formulario Modular */
+/* Input de Teléfono con prefijo fijo */
+.phone-input-wrapper { display: flex; align-items: center; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; overflow: hidden; }
+.phone-prefix { padding: 11px 0 11px 14px; font-weight: 700; color: var(--gray); font-size: 0.95em; user-select: none; }
+.phone-input-wrapper input { border: none !important; background: transparent !important; padding-left: 6px !important; }
+.phone-input-wrapper:focus-within { border-color: #ff9f43; background: #fff; }
+
 .form-section { border-bottom: 1px dashed #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; }
 .form-section h4 { color: #475569; margin-bottom: 12px; font-size: 0.95em; text-transform: uppercase; letter-spacing: 0.5px; }
 .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -171,8 +176,9 @@ body { font-family:system-ui,-apple-system,sans-serif; background:var(--bg); col
 
 .btn-primary { background:var(--grad); color:white; border:none; width:100%; padding:14px; border-radius:12px; font-weight:700; font-size:1em; cursor:pointer; min-height:48px; text-decoration:none; display:inline-block; text-align:center;}
 .alert-error { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; padding:12px; border-radius:12px; margin-bottom:15px;}
-.otp-inputs { display:flex; gap:8px; justify-content:center; }
-.otp-inputs input { width:45px; height:45px; text-align:center; font-size:1.4em; font-weight:700; border:2px solid #cbd5e1; border-radius:12px; }
+.otp-container { display:flex; gap:8px; justify-content:center; margin: 20px 0; }
+.otp-container input { width:45px; height:45px; text-align:center; font-size:1.4em; font-weight:700; border:2px solid #cbd5e1; border-radius:12px; background:#f8fafc; }
+.otp-container input:focus { border-color:#ff9f43; background: #fff; outline:none; }
 .main-container { max-width:1100px; margin:40px auto; padding:0 24px; }
 .grid-feed { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:24px; margin-top:24px; }
 
@@ -211,86 +217,199 @@ body { font-family:system-ui,-apple-system,sans-serif; background:var(--bg); col
 </style>
 """
 
-# ─── RUTAS DE AUTENTICACIÓN (LÓGICA INTERNA) ──────────────────────────────────
-@app.route('/registro', methods=['GET','POST'])
+# ─── SECCIÓN DE REGISTRO Y LOGIN (CON FORMATEO +52 AUTOMÁTICO) ───────────────
+
+@app.route('/registro', methods=['GET', 'POST'])
 def registro():
     error = ""
     if request.method == 'POST':
-        telefono = request.form.get("telefono","").strip()
-        if not telefono: error = "Ingresa tu número de WhatsApp."
-        elif db_get_usuario(telefono): error = "Este número ya está registrado."
+        raw_tel = request.form.get("telefono", "").strip().replace(" ", "").replace("-", "")
+        if len(raw_tel) != 10 or not raw_tel.isdigit():
+            error = "Ingresa un número válido a 10 dígitos (ej. 6567787712)."
         else:
-            codigo = generar_otp()
-            db_guardar_otp(telefono, codigo)
-            ok, _ = enviar_sms_otp(telefono, codigo)
-            if ok: return redirect(url_for('verificar_registro', tel=telefono))
-            error = "No se pudo enviar el SMS."
-    return render_template_string(BASE_CSS + "<div class='auth-wrap'><div class='auth-box'><h1>🐾 Crear cuenta</h1>{% if error %}<div class='alert-error'>{{ error }}</div>{% endif %}<form method='POST'><div class='form-group'><label>WhatsApp</label><input type='tel' name='telefono' placeholder='Ej. 526561234567'></div><button class='btn-primary' type='submit'>Enviar SMS →</button></form></div></div>", error=error)
+            telefono = f"+52{raw_tel}"
+            if db_get_usuario(telefono):
+                error = "Este número ya está registrado. Intenta iniciar sesión."
+            else:
+                codigo = generar_otp()
+                db_guardar_otp(telefono, codigo)
+                ok, _ = enviar_sms_otp(telefono, codigo)
+                if ok:
+                    return redirect(url_for('verificar_registro', tel=telefono))
+                error = "Ocurrió un error al enviar el SMS."
+            
+    html_registro = BASE_CSS + """
+    <div class='navbar'>
+      <a href='/' class='navbar-brand'>🐾 Ubican<span>ID</span></a>
+      <div class='nav-user'><a href='/login'>Ya tengo cuenta</a></div>
+    </div>
+    <div class='auth-wrap'>
+      <div class='auth-box'>
+        <h1 style='font-size:1.6em; font-weight:800; margin-bottom:8px;'>Crear cuenta</h1>
+        <p style='color:var(--gray); font-size:0.9em; margin-bottom:24px;'>Te enviaremos un código de verificación vía SMS.</p>
+        {% if error %}<div class='alert-error'>{{ error }}</div>{% endif %}
+        <form method='POST'>
+          <div class='form-group'>
+            <label>Número Celular / WhatsApp</label>
+            <div class='phone-input-wrapper'>
+              <span class='phone-prefix'>+52</span>
+              <input type='tel' name='telefono' placeholder='6567787712' maxlength='10' pattern='[0-9]{10}' required autofocus>
+            </div>
+          </div>
+          <button class='btn-primary' type='submit' style='width:100%; margin-top:20px;'>Enviar SMS →</button>
+        </form>
+      </div>
+    </div>"""
+    return render_template_string(html_registro, error=error)
 
-@app.route('/registro/verificar', methods=['GET','POST'])
+@app.route('/registro/verificar', methods=['GET', 'POST'])
 def verificar_registro():
-    telefono = request.args.get("tel","")
+    telefono = request.args.get("tel", "")
     error = ""
     if request.method == 'POST':
-        codigo = "".join([request.form.get(f"d{i}","") for i in range(1,7)])
+        codigo = "".join([request.form.get(f"d{i}", "") for i in range(1, 7)])
         ok, msg = db_verificar_otp(telefono, codigo)
         if ok:
             db_save_usuario(telefono, "")
             session["pending_password_phone"] = telefono
             return redirect(url_for('crear_password'))
         error = msg
-    return render_template_string(BASE_CSS + "<div class='auth-wrap'><div class='auth-box'><h1>✅ Verifica</h1>{% if error %}<div class='alert-error'>{{ error }}</div>{% endif %}<form method='POST'><div class='otp-inputs'>{% for i in range(1, 7) %}<input type='text' name='d{{i}}' maxlength='1'>{% endfor %}</div><button class='btn-primary' type='submit' style='margin-top:20px'>Verificar →</button></form></div></div>", error=error)
 
-@app.route('/crear-password', methods=['GET','POST'])
+    html_verificar = BASE_CSS + """
+    <div class='navbar'>
+      <a href='/' class='navbar-brand'>🐾 Ubican<span>ID</span></a>
+    </div>
+    <div class='auth-wrap'>
+      <div class='auth-box' style='text-align:center;'>
+        <h1 style='font-size:1.6em; font-weight:800; margin-bottom:8px;'>Código de Seguridad</h1>
+        <p style='color:var(--gray); font-size:0.9em; margin-bottom:15px;'>Enviado al <strong>{{ tel }}</strong></p>
+        {% if error %}<div class='alert-error'>{{ error }}</div>{% endif %}
+        <form method='POST'>
+          <div class='otp-container'>
+            {% for i in range(1, 7) %}
+              <input type='text' name='d{{i}}' maxlength='1' required onkeyup='if(this.value.length==1) { this.nextElementSibling ? this.nextElementSibling.focus() : null }'>
+            {% endfor %}
+          </div>
+          <button class='btn-primary' type='submit' style='width:100%; margin-top:10px;'>Validar Código →</button>
+        </form>
+      </div>
+    </div>"""
+    return render_template_string(html_verificar, error=error, tel=telefono)
+
+@app.route('/crear-password', methods=['GET', 'POST'])
 def crear_password():
     telefono = session.get("pending_password_phone")
     if not telefono: return redirect(url_for('registro'))
     error = ""
     if request.method == 'POST':
-        pwd1 = request.form.get("password","")
-        if len(pwd1) < 6: error = "Mínimo 6 caracteres."
+        pwd1 = request.form.get("password", "")
+        if len(pwd1) < 6: 
+            error = "Mínimo 6 caracteres."
         else:
             db_save_usuario(telefono, hash_password(pwd1))
             session.pop("pending_password_phone", None)
             session["telefono"] = telefono
             return redirect(url_for('index'))
-    return render_template_string(BASE_CSS + "<div class='auth-wrap'><div class='auth-box'><h1>🔑 Contraseña</h1>{% if error %}<div class='alert-error'>{{ error }}</div>{% endif %}<form method='POST'><div class='form-group'><input type='password' name='password' placeholder='••••••••'></div><button class='btn-primary' type='submit'>Guardar →</button></form></div></div>", error=error)
 
-@app.route('/login', methods=['GET','POST'])
+    html_password = BASE_CSS + """
+    <div class='navbar'>
+      <a href='/' class='navbar-brand'>🐾 Ubican<span>ID</span></a>
+    </div>
+    <div class='auth-wrap'>
+      <div class='auth-box'>
+        <h1 style='font-size:1.5em; font-weight:800; margin-bottom:8px;'>Crea tu contraseña</h1>
+        <p style='color:var(--gray); font-size:0.9em; margin-bottom:24px;'>Úsala para acceder rápido sin esperar códigos.</p>
+        {% if error %}<div class='alert-error'>{{ error }}</div>{% endif %}
+        <form method='POST'>
+          <div class='form-group'>
+            <label>Contraseña</label>
+            <input type='password' name='password' placeholder='Mínimo 6 dígitos' required>
+          </div>
+          <button class='btn-primary' type='submit' style='width:100%; margin-top:10px;'>Finalizar e Ingresar 🎉</button>
+        </form>
+      </div>
+    </div>"""
+    return render_template_string(html_password, error=error)
+
+@app.route('/login', methods=['GET', 'POST'])
 def login():
     error = ""
     if request.method == 'POST':
-        telefono = request.form.get("telefono","").strip()
-        if db_get_usuario(telefono):
-            if user_has_password(telefono): return redirect(url_for('login_password', tel=telefono))
-            else:
-                codigo = generar_otp()
-                db_guardar_otp(telefono, codigo)
-                enviar_sms_otp(telefono, codigo)
-                return redirect(url_for('verificar_login_otp', tel=telefono))
-        error = "No registrado."
-    return render_template_string(BASE_CSS + "<div class='auth-wrap'><div class='auth-box'><h1>🔐 Entrar</h1>{% if error %}<div class='alert-error'>{{ error }}</div>{% endif %}<form method='POST'><div class='form-group'><input type='tel' name='telefono' placeholder='WhatsApp'></div><button class='btn-primary' type='submit'>Continuar</button></form></div></div>", error=error)
+        raw_tel = request.form.get("telefono", "").strip().replace(" ", "").replace("-", "")
+        if len(raw_tel) != 10 or not raw_tel.isdigit():
+            error = "Ingresa tu número a 10 dígitos."
+        else:
+            telefono = f"+52{raw_tel}"
+            if db_get_usuario(telefono):
+                if user_has_password(telefono): 
+                    return redirect(url_for('login_password', tel=telefono))
+                else:
+                    codigo = generar_otp()
+                    db_guardar_otp(telefono, codigo)
+                    enviar_sms_otp(telefono, codigo)
+                    return redirect(url_for('verificar_registro', tel=telefono))
+            error = "Este número no está registrado."
 
-@app.route('/login/password', methods=['GET','POST'])
+    html_login = BASE_CSS + """
+    <div class='navbar'>
+      <a href='/' class='navbar-brand'>🐾 Ubican<span>ID</span></a>
+      <div class='nav-user'><a href='/registro'>Crear Cuenta</a></div>
+    </div>
+    <div class='auth-wrap'>
+      <div class='auth-box'>
+        <h1 style='font-size:1.6em; font-weight:800; margin-bottom:24px;'>Inicia Sesión</h1>
+        {% if error %}<div class='alert-error'>{{ error }}</div>{% endif %}
+        <form method='POST'>
+          <div class='form-group'>
+            <label>Tu número celular</label>
+            <div class='phone-input-wrapper'>
+              <span class='phone-prefix'>+52</span>
+              <input type='tel' name='telefono' placeholder='6567787712' maxlength='10' pattern='[0-9]{10}' required autofocus>
+            </div>
+          </div>
+          <button class='btn-primary' type='submit' style='width:100%; margin-top:20px;'>Continuar</button>
+        </form>
+      </div>
+    </div>"""
+    return render_template_string(html_login, error=error)
+
+@app.route('/login/password', methods=['GET', 'POST'])
 def login_password():
-    telefono = request.args.get("tel","")
+    telefono = request.args.get("tel", "")
     error = ""
     if request.method == 'POST':
-        password = request.form.get("password","")
+        password = request.form.get("password", "")
         u = db_get_usuario(telefono)
-        if u and verify_password(password, u.get("password_hash","")):
+        if u and verify_password(password, u.get("password_hash", "")):
             session["telefono"] = telefono
             return redirect(url_for('index'))
-        error = "Incorrecta."
-    return render_template_string(BASE_CSS + "<div class='auth-wrap'><div class='auth-box'><h1>Contraseña</h1>{% if error %}<div class='alert-error'>{{ error }}</div>{% endif %}<form method='POST'><div class='form-group'><input type='password' name='password'></div><button class='btn-primary' type='submit'>Entrar</button></form></div></div>", error=error)
+        error = "Contraseña incorrecta."
+
+    html_pwd_login = BASE_CSS + """
+    <div class='navbar'>
+      <a href='/' class='navbar-brand'>🐾 Ubican<span>ID</span></a>
+    </div>
+    <div class='auth-wrap'>
+      <div class='auth-box'>
+        <h1 style='font-size:1.5em; font-weight:800; margin-bottom:24px;'>Ingresa tu Contraseña</h1>
+        {% if error %}<div class='alert-error'>{{ error }}</div>{% endif %}
+        <form method='POST'>
+          <div class='form-group'>
+            <label>Contraseña para {{ telefono }}</label>
+            <input type='password' name='password' required autofocus>
+          </div>
+          <button class='btn-primary' type='submit' style='width:100%; margin-top:10px;'>Entrar</button>
+        </form>
+      </div>
+    </div>"""
+    return render_template_string(html_pwd_login, error=error)
 
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('index'))
 
-
-# ─── NÚCLEO CRUD DE MASCOTAS (CON TODOS LOS CAMPOS DE LA DB) ──────────────────
+# ─── NÚCLEO CRUD DE MASCOTAS (TODOS LOS CAMPOS) ──────────────────────────────
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -333,7 +452,7 @@ def index():
     <div class='navbar'>
       <a href='/' class='navbar-brand'>🐾 Ubican<span>ID</span></a>
       <div class='nav-user'>
-        {% if usuario %}<span>📱 {{ usuario }}</span> | <a href='/logout'>Salir</a>{% else %}<a href='/login'>Entrar / Registrarse</a>{% endif %}
+        {% if usuario %}<span>📱 {{ usuario }}</span> | <a href='/logout' style='color:var(--danger);'>Salir</a>{% else %}<a href='/login'>Entrar / Registrarse</a>{% endif %}
       </div>
     </div>
     <div class='main-container'>
@@ -348,14 +467,14 @@ def index():
               <div class='form-group'><label>Nombre de la mascota</label><input type='text' name='nombre' required></div>
               <div class='form-group'><label>Fecha de Extravío</label><input type='date' name='fecha'></div>
             </div>
-            <div class='form-group'><label>Descripción / Señas Particulares</label><textarea name='descripcion' rows='2' placeholder='Ej: Mancha blanca en ojo derecho, cicatriz...'></textarea></div>
+            <div class='form-group'><label>Descripción / Señas Particulares</label><textarea name='descripcion' rows='2' placeholder='Ej: Mancha blanca en ojo izquierdo...'></textarea></div>
           </div>
 
           <div class='form-section'>
             <h4>2. Características Físicas</h4>
             <div class='form-grid-2'>
-              <div class='form-group'><label>Raza</label><input type='text' name='raza' placeholder='Ej: Husky, Mestizo'></div>
-              <div class='form-group'><label>Edad aproximada</label><input type='text' name='edad' placeholder='Ej: 2 años'></div>
+              <div class='form-group'><label>Raza</label><input type='text' name='raza' placeholder='Husky, Mestizo...'></div>
+              <div class='form-group'><label>Edad aproximada</label><input type='text' name='edad' placeholder='2 años...'></div>
             </div>
             <div class='form-grid-2'>
               <div class='form-group'>
@@ -366,16 +485,16 @@ def index():
                   <option value='Hembra'>Hembra</option>
                 </select>
               </div>
-              <div class='form-group'><label>Color de pelaje</label><input type='text' name='color' placeholder='Ej: Negro con blanco'></div>
+              <div class='form-group'><label>Color de pelaje</label><input type='text' name='color'></div>
             </div>
             <div class='form-grid-2'>
-              <div class='form-group'><label>¿Lleva collar? (Color / Tipo)</label><input type='text' name='collar' placeholder='Ej: Rojo con placa'></div>
+              <div class='form-group'><label>¿Lleva collar?</label><input type='text' name='collar'></div>
               <div class='form-group'>
-                <label>¿Es dócil con extraños?</label>
+                <label>¿Es dócil?</label>
                 <select name='docil'>
-                  <option value='Sí'>Sí, es muy dócil</option>
-                  <option value='No'>No, es miedoso/agresivo</option>
-                  <option value='Regular'>Regular / Desconfiado</option>
+                  <option value='Sí'>Sí</option>
+                  <option value='No'>No</option>
+                  <option value='Regular'>Regular</option>
                 </select>
               </div>
             </div>
@@ -384,11 +503,11 @@ def index():
           <div class='form-section'>
             <h4>3. ¿Dónde se perdió?</h4>
             <div class='form-grid-2'>
-              <div class='form-group'><label>Zona o Colonia (Obligatorio)</label><input type='text' name='zona' placeholder='Ej: Las Misiones' required></div>
-              <div class='form-group'><label>Dirección aproximada</label><input type='text' name='direccion' placeholder='Ej: Av. Tecnológico 1230'></div>
+              <div class='form-group'><label>Zona o Colonia (Obligatorio)</label><input type='text' name='zona' required></div>
+              <div class='form-group'><label>Dirección aproximada</label><input type='text' name='direccion'></div>
             </div>
             <div class='form-grid-2'>
-              <div class='form-group'><label>Entre qué calles</label><input type='text' name='calles' placeholder='Ej: Entre Calle 1 y Calle 2'></div>
+              <div class='form-group'><label>Entre qué calles</label><input type='text' name='calles'></div>
               <div class='form-group'><label>Código Postal</label><input type='text' name='cp'></div>
             </div>
             <div class='form-grid-2'>
@@ -401,13 +520,12 @@ def index():
             <h4>4. Contacto y Recompensa</h4>
             <div class='form-grid-2'>
               <div class='form-group'><label>Nombre del Dueño</label><input type='text' name='dueno'></div>
-              <div class='form-group'><label>Teléfono de Contacto (Obligatorio)</label><input type='tel' name='contacto' placeholder='Ej: 6561234567' required></div>
+              <div class='form-group'><label>Teléfono de Contacto (Obligatorio)</label><input type='tel' name='contacto' required></div>
             </div>
-            <div class='form-group'><label>Monto de Recompensa (Opcional)</label><input type='text' name='recompensa' placeholder='Ej: $5,000 MXN o Dejar en blanco'></div>
+            <div class='form-group'><label>Monto de Recompensa (Opcional)</label><input type='text' name='recompensa'></div>
           </div>
 
           <div class='form-group'><label>Foto de la Mascota</label><input type='file' name='imagen_principal' accept='image/*'></div>
-          
           <button type='submit' class='btn-primary' style='margin-top:10px;'>🚀 Publicar Reporte de Búsqueda</button>
         </form>
       </div>
@@ -443,8 +561,6 @@ def index():
     </div>"""
     return render_template_string(html_index, mascotas=mascotas_perdidas, usuario=usuario, es_admin=es_admin)
 
-
-# ─── VISTA DETALLADA COMPLETA (MUESTRA ABSOLUTAMENTE TODO) ────────────────────
 @app.route('/mascota/<id_mascota>')
 def ver_mascota(id_mascota):
     mascota = db_get_mascota_por_id(id_mascota)
@@ -454,14 +570,14 @@ def ver_mascota(id_mascota):
     html_detail = BASE_CSS + """
     <div class='navbar'>
       <a href='/' class='navbar-brand'>🐾 Ubican<span>ID</span></a>
-      <div class='nav-user'><a href='/' style='color:var(--blue); text-decoration:none; font-weight:700;'>← Volver a la Lista</a></div>
+      <div class='nav-user'><a href='/'>← Volver a la Lista</a></div>
     </div>
     
     <div class='main-container'>
       <div class='detail-layout'>
         <div>
           {% if m.principal %}
-            <img class='detail-img' src='{{ m.principal }}' alt='{{ m.nombre }}'>
+            <img class='detail-img' src='{{ m.principal }}'>
           {% else %}
             <div class='detail-img' style='display:flex; align-items:center; justify-content:center; color:var(--gray); font-weight:bold;'>Sin foto disponible</div>
           {% endif %}
@@ -509,8 +625,6 @@ def ver_mascota(id_mascota):
     </div>"""
     return render_template_string(html_detail, m=mascota)
 
-
-# ─── FORMULARIO DE EDICIÓN (ACTUALIZADO CON TODOS LOS CAMPOS) ─────────────────
 @app.route('/mascota/editar/<id_mascota>', methods=['GET', 'POST'])
 def editar_mascota(id_mascota):
     usuario = session.get("telefono")
@@ -567,8 +681,8 @@ def editar_mascota(id_mascota):
           <div class='form-section'>
             <h4>2. Características Físicas</h4>
             <div class='form-grid-2'>
-              <div class='form-group'><label>Raza</label><input type='text' name='raza' value='{{ m.raza }}'></div>
-              <div class='form-group'><label>Edad</label><input type='text' name='edad' value='{{ m.edad }}'></div>
+              <div class='form-group'><label>Raza</label><input type='text' name='raza' value='{{ m.raza if m.raza else "" }}'></div>
+              <div class='form-group'><label>Edad</label><input type='text' name='edad' value='{{ m.edad if m.edad else "" }}'></div>
             </div>
             <div class='form-grid-2'>
               <div class='form-group'>
@@ -578,11 +692,11 @@ def editar_mascota(id_mascota):
                   <option value='Hembra' {% if m.genero == 'Hembra' %}selected{% endif %}>Hembra</option>
                 </select>
               </div>
-              <div class='form-group'><label>Color</label><input type='text' name='color' value='{{ m.color }}'></div>
+              <div class='form-group'><label>Color</label><input type='text' name='color' value='{{ m.color if m.color else "" }}'></div>
             </div>
             <div class='form-grid-2'>
-              <div class='form-group'><label>Collar</label><input type='text' name='collar' value='{{ m.collar }}'></div>
-              <div class='form-group'><label>¿Es Dócil?</label><input type='text' name='docil' value='{{ m.docil }}'></div>
+              <div class='form-group'><label>Collar</label><input type='text' name='collar' value='{{ m.collar if m.collar else "" }}'></div>
+              <div class='form-group'><label>¿Es Dócil?</label><input type='text' name='docil' value='{{ m.docil if m.docil else "" }}'></div>
             </div>
           </div>
 
@@ -590,9 +704,9 @@ def editar_mascota(id_mascota):
             <h4>3. Ubicación</h4>
             <div class='form-grid-2'>
               <div class='form-group'><label>Zona/Colonia</label><input type='text' name='zona' value='{{ m.zona }}' required></div>
-              <div class='form-group'><label>Dirección</label><input type='text' name='direccion' value='{{ m.direccion }}'></div>
+              <div class='form-group'><label>Dirección</label><input type='text' name='direccion' value='{{ m.direccion if m.direccion else "" }}'></div>
             </div>
-            <div class='form-group'><label>Entre Calles</label><input type='text' name='calles' value='{{ m.calles }}'></div>
+            <div class='form-group'><label>Entre Calles</label><input type='text' name='calles' value='{{ m.calles if m.calles else "" }}'></div>
             <div class='form-grid-2'>
               <div class='form-group'><label>Ciudad</label><input type='text' name='ciudad' value='{{ m.ciudad }}'></div>
               <div class='form-group'><label>Estado</label><input type='text' name='estado' value='{{ m.estado }}'></div>
@@ -602,10 +716,10 @@ def editar_mascota(id_mascota):
           <div class='form-section'>
             <h4>4. Dueño y Recompensa</h4>
             <div class='form-grid-2'>
-              <div class='form-group'><label>Dueño</label><input type='text' name='dueno' value='{{ m.dueno }}'></div>
+              <div class='form-group'><label>Dueño</label><input type='text' name='dueno' value='{{ m.dueno if m.dueno else "" }}'></div>
               <div class='form-group'><label>Contacto</label><input type='tel' name='contacto' value='{{ m.contacto }}' required></div>
             </div>
-            <div class='form-group'><label>Recompensa</label><input type='text' name='recompensa' value='{{ m.recompensa }}'></div>
+            <div class='form-group'><label>Recompensa</label><input type='text' name='recompensa' value='{{ m.recompensa if m.recompensa else "" }}'></div>
           </div>
 
           <div class='form-group'><label>Actualizar Foto (Opcional)</label><input type='file' name='imagen_principal' accept='image/*'></div>
