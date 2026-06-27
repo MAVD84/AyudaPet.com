@@ -1637,7 +1637,14 @@ TEMPLATES = {
         <div class="field"><label for="dueno">Dueno</label><input id="dueno" name="dueno" value="{{ mascota.dueno or '' }}"></div>
         <div class="field"><label for="recompensa">Recompensa</label><input id="recompensa" name="recompensa" value="{{ mascota.recompensa or '' }}"></div>
       </div>
-      <div class="actions"><button class="btn primary" type="submit">{{ "Guardar cambios" if editing else "Publicar reporte" }}</button></div>
+      <div class="actions">
+        <button class="btn primary" type="submit">{{ "Guardar cambios" if editing else "Publicar reporte" }}</button>
+        {% if editing %}
+          <a class="btn" href="{{ url_for('detalle_mascota', report_id=mascota.id) }}">Cancelar</a>
+        {% else %}
+          <a class="btn" href="{{ url_for('index') }}">Cancelar</a>
+        {% endif %}
+      </div>
     </form>
   </section>
 {% endblock %}
