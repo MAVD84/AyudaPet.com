@@ -160,8 +160,16 @@ def send_sms(phone, code):
     try:
         response = requests.post(api_url, json=payload, auth=(user, token), timeout=12)
         response.raise_for_status()
+        result = response.json() if response.content else {}
+        provider_code = str(result.get("code", ""))
+        if provider_code and provider_code not in {"0", "200", "201"}:
+            logger.error("LabsMobile rechazo el SMS a %s. Respuesta: %s", sms_phone, response.text[:500])
+            return False
         logger.info("SMS enviado a %s via LabsMobile. Respuesta: %s", sms_phone, response.text[:500])
         return True
+    except ValueError:
+        logger.exception("LabsMobile respondio con JSON invalido: %s", response.text[:500])
+        return False
     except requests.RequestException as exc:
         detail = getattr(exc.response, "text", "") if getattr(exc, "response", None) else ""
         logger.exception("No se pudo enviar el SMS. Respuesta LabsMobile: %s", detail)
