@@ -468,6 +468,28 @@ TEMPLATES = {
       justify-content: space-between;
       gap: 20px;
     }
+    .menu-toggle {
+      width: 42px;
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      display: inline-grid;
+      place-items: center;
+      cursor: pointer;
+    }
+    .menu-toggle span,
+    .menu-toggle span::before,
+    .menu-toggle span::after {
+      width: 19px;
+      height: 2px;
+      display: block;
+      background: var(--ink);
+      content: "";
+      border-radius: 99px;
+    }
+    .menu-toggle span::before { transform: translateY(-6px); }
+    .menu-toggle span::after { transform: translateY(4px); }
     .brand { display: flex; align-items: center; gap: 12px; font-weight: 900; letter-spacing: .02em; }
     .mark {
       width: 38px;
@@ -480,7 +502,66 @@ TEMPLATES = {
       font-weight: 900;
       box-shadow: 0 10px 24px rgba(232,80,53,.25);
     }
-    .navlinks { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+    .nav-spacer { width: 42px; }
+    .menu-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      background: rgba(10, 16, 24, .42);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .18s ease;
+    }
+    .side-menu {
+      position: fixed;
+      inset: 0 auto 0 0;
+      z-index: 40;
+      width: min(330px, 88vw);
+      background: #fff;
+      border-right: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      transform: translateX(-100%);
+      transition: transform .2s ease;
+      display: flex;
+      flex-direction: column;
+    }
+    body.menu-open .menu-backdrop { opacity: 1; pointer-events: auto; }
+    body.menu-open .side-menu { transform: translateX(0); }
+    .menu-head {
+      min-height: 72px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .menu-close {
+      width: 38px;
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      font-size: 1.4rem;
+      cursor: pointer;
+    }
+    .menu-links {
+      padding: 14px;
+      display: grid;
+      gap: 8px;
+    }
+    .menu-links .btn {
+      width: 100%;
+      justify-content: flex-start;
+      min-height: 48px;
+    }
+    .menu-foot {
+      margin-top: auto;
+      padding: 16px 18px;
+      color: var(--muted);
+      border-top: 1px solid var(--line);
+      font-size: .9rem;
+    }
     .shell { max-width: 1180px; margin: 0 auto; padding: 28px 22px 48px; }
     .hero {
       display: grid;
@@ -596,6 +677,34 @@ TEMPLATES = {
       outline: 3px solid rgba(23,107,135,.16);
       border-color: var(--blue);
     }
+    .phone-box {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: center;
+      border: 1px solid #cfd9e4;
+      border-radius: 8px;
+      background: #fff;
+      overflow: hidden;
+    }
+    .phone-prefix {
+      min-height: 44px;
+      padding: 0 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border-right: 1px solid var(--line);
+      background: #f8fafc;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+    .phone-box input {
+      border: 0;
+      border-radius: 0;
+    }
+    .phone-box:focus-within {
+      outline: 3px solid rgba(23,107,135,.16);
+      border-color: var(--blue);
+    }
     .checks { display: flex; flex-wrap: wrap; gap: 10px; }
     .check {
       display: inline-flex;
@@ -632,27 +741,36 @@ TEMPLATES = {
     @media (max-width: 840px) {
       .hero, .grid, .form-grid { grid-template-columns: 1fr; }
       .stats { grid-template-columns: 1fr; }
-      .nav { align-items: flex-start; flex-direction: column; padding: 16px 22px; }
-      .navlinks { justify-content: flex-start; }
+      .nav { padding: 0 16px; }
     }
   </style>
 </head>
 <body>
   <header class="topbar">
     <nav class="nav">
+      <button class="menu-toggle" type="button" data-menu-open aria-label="Abrir menu"><span></span></button>
       <a class="brand" href="{{ url_for('index') }}"><span class="mark">U</span><span>UBICAN ID</span></a>
-      <div class="navlinks">
-        <a class="btn ghost" href="{{ url_for('index') }}">Reportes</a>
-        {% if current_user %}
-          <a class="btn primary" href="{{ url_for('reportar') }}">Reportar</a>
-          <a class="btn ghost" href="{{ url_for('logout') }}">Salir</a>
-        {% else %}
-          <a class="btn ghost" href="{{ url_for('login') }}">Entrar</a>
-          <a class="btn primary" href="{{ url_for('registro') }}">Crear cuenta</a>
-        {% endif %}
-      </div>
+      <span class="nav-spacer" aria-hidden="true"></span>
     </nav>
   </header>
+  <div class="menu-backdrop" data-menu-close></div>
+  <aside class="side-menu" aria-label="Menu principal">
+    <div class="menu-head">
+      <a class="brand" href="{{ url_for('index') }}"><span class="mark">U</span><span>UBICAN ID</span></a>
+      <button class="menu-close" type="button" data-menu-close aria-label="Cerrar menu">&times;</button>
+    </div>
+    <div class="menu-links">
+      <a class="btn ghost" href="{{ url_for('index') }}">Reportes</a>
+      {% if current_user %}
+        <a class="btn primary" href="{{ url_for('reportar') }}">Reportar mascota</a>
+        <a class="btn ghost" href="{{ url_for('logout') }}">Cerrar sesion</a>
+      {% else %}
+        <a class="btn primary" href="{{ url_for('registro') }}">Crear cuenta</a>
+        <a class="btn ghost" href="{{ url_for('login') }}">Entrar</a>
+      {% endif %}
+    </div>
+    <div class="menu-foot">Registro exclusivo con telefono mexicano.</div>
+  </aside>
   <main class="shell">
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -681,6 +799,16 @@ TEMPLATES = {
       input.form?.addEventListener("submit", () => {
         input.value = input.value.replace(/\\D/g, "").slice(0, 10);
       });
+    });
+
+    document.querySelectorAll("[data-menu-open]").forEach((button) => {
+      button.addEventListener("click", () => document.body.classList.add("menu-open"));
+    });
+    document.querySelectorAll("[data-menu-close]").forEach((button) => {
+      button.addEventListener("click", () => document.body.classList.remove("menu-open"));
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") document.body.classList.remove("menu-open");
     });
   </script>
 </body>
@@ -751,7 +879,10 @@ TEMPLATES = {
       <div class="form-grid">
         <div class="field full">
           <label for="tel">Telefono mexicano</label>
-          <input id="tel" name="tel" inputmode="numeric" autocomplete="tel" placeholder="(656) 778-7712" maxlength="14" pattern="\\(?[0-9]{3}\\)?[\\s-]?[0-9]{3}-?[0-9]{4}" data-phone-input required>
+          <div class="phone-box">
+            <span class="phone-prefix"><span aria-hidden="true">🇲🇽</span><span>+52</span></span>
+            <input id="tel" name="tel" inputmode="numeric" autocomplete="tel" placeholder="(656) 778-7712" maxlength="14" pattern="\\(?[0-9]{3}\\)?[\\s-]?[0-9]{3}-?[0-9]{4}" data-phone-input required>
+          </div>
           <span class="hint">Ejemplo: (656) 778-7712. Se enviara como numero mexicano +52.</span>
         </div>
       </div>
@@ -812,7 +943,10 @@ TEMPLATES = {
       <div class="form-grid">
         <div class="field">
           <label for="tel">Telefono mexicano</label>
-          <input id="tel" name="tel" inputmode="numeric" autocomplete="tel" placeholder="(656) 778-7712" maxlength="14" pattern="\\(?[0-9]{3}\\)?[\\s-]?[0-9]{3}-?[0-9]{4}" data-phone-input required>
+          <div class="phone-box">
+            <span class="phone-prefix"><span aria-hidden="true">🇲🇽</span><span>+52</span></span>
+            <input id="tel" name="tel" inputmode="numeric" autocomplete="tel" placeholder="(656) 778-7712" maxlength="14" pattern="\\(?[0-9]{3}\\)?[\\s-]?[0-9]{3}-?[0-9]{4}" data-phone-input required>
+          </div>
           <span class="hint">Usa el numero mexicano registrado, sin +1.</span>
         </div>
         <div class="field">
