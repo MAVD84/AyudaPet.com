@@ -897,12 +897,13 @@ TEMPLATES = {
     .form-panel { padding: clamp(20px, 4vw, 34px); }
     .form-panel h1 { color: var(--ink); font-size: clamp(1.8rem, 4vw, 2.7rem); }
     .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
-    .field { display: grid; gap: 7px; }
+    .field { display: grid; gap: 7px; min-width: 0; }
     .field.full { grid-column: 1 / -1; }
     label { font-weight: 800; font-size: .92rem; }
     .hint { color: var(--muted); font-size: .84rem; line-height: 1.4; }
     input, textarea, select {
       width: 100%;
+      min-width: 0;
       border: 1px solid #cfd9e4;
       border-radius: 8px;
       min-height: 44px;
@@ -912,6 +913,7 @@ TEMPLATES = {
       font: inherit;
     }
     textarea { min-height: 118px; resize: vertical; }
+    input[type="date"] { appearance: auto; }
     input:focus, textarea:focus, select:focus {
       outline: 3px solid rgba(23,107,135,.16);
       border-color: var(--blue);
