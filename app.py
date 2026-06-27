@@ -242,6 +242,7 @@ def registro():
 @app.route('/registro/verificar', methods=['GET','POST'])
 def verificar_registro():
     telefono = request.args.get("tel","")
+    reenvio  = request.args.get("reenvio","")  # "ok" | "error" | ""
     error = ""
     if not telefono:
         return redirect(url_for('registro'))
@@ -255,7 +256,6 @@ def verificar_registro():
             nuevo = {"telefono": telefono, "creado": int(time.time()), "password_hash": ""}
             usuarios.append(nuevo)
             save_json(USERS_FILE, usuarios)
-            # Guardar teléfono en sesión temporal para el paso de crear contraseña
             session["pending_password_phone"] = telefono
             return redirect(url_for('crear_password'))
         else:
@@ -267,6 +267,11 @@ def verificar_registro():
         <h1>✅ Verifica tu número</h1>
         <p class='sub'>Ingresa el código de 6 dígitos enviado al <strong>{{ tel }}</strong>.</p>
         {% if error %}<div class='alert alert-error'>{{ error }}</div>{% endif %}
+        {% if reenvio == 'ok' %}
+          <div class='alert alert-success'>✅ Código reenviado. Revisa tus SMS.</div>
+        {% elif reenvio == 'error' %}
+          <div class='alert alert-error'>⚠️ No se pudo reenviar el SMS. Intenta de nuevo.</div>
+        {% endif %}
         <form method='POST' id='otpForm'>
           <div class='otp-inputs'>
             <input type='text' name='d1' id='d1' maxlength='1' inputmode='numeric'>
@@ -293,7 +298,7 @@ def verificar_registro():
       });
       inputs[0].focus();
     </script>"""
-    return render_template_string(html, tel=telefono, error=error)
+    return render_template_string(html, tel=telefono, error=error, reenvio=reenvio)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # REGISTRO — paso 3: crear contraseña
@@ -345,11 +350,13 @@ def crear_password():
 @app.route('/registro/reenviar')
 def reenviar_otp_registro():
     telefono = request.args.get("tel","")
-    if telefono:
-        codigo = generar_otp()
-        guardar_otp(telefono, codigo)
-        enviar_sms_otp(telefono, codigo)
-    return redirect(url_for('verificar_registro', tel=telefono))
+    if not telefono:
+        return redirect(url_for('registro'))
+    codigo = generar_otp()
+    guardar_otp(telefono, codigo)
+    ok, _ = enviar_sms_otp(telefono, codigo)
+    estado = "ok" if ok else "error"
+    return redirect(url_for('verificar_registro', tel=telefono, reenvio=estado))
 
 # ══════════════════════════════════════════════════════════════════════════════
 # LOGIN — inteligente: contraseña si ya tiene, OTP si no
@@ -481,6 +488,7 @@ def verificar_login_otp():
 
     titulo = "🔄 Recuperar acceso" if es_reset else "✅ Verifica tu número"
     sub = f"Código enviado al <strong>{telefono}</strong>."
+    reenvio = request.args.get("reenvio","")  # "ok" | "error" | ""
 
     html = BASE_CSS + """
     <div class='auth-wrap'>
@@ -488,6 +496,11 @@ def verificar_login_otp():
         <h1>{{ titulo }}</h1>
         <p class='sub'>{{ sub|safe }}</p>
         {% if error %}<div class='alert alert-error'>{{ error }}</div>{% endif %}
+        {% if reenvio == 'ok' %}
+          <div class='alert alert-success'>✅ Código reenviado. Revisa tus SMS.</div>
+        {% elif reenvio == 'error' %}
+          <div class='alert alert-error'>⚠️ No se pudo reenviar el SMS. Intenta de nuevo.</div>
+        {% endif %}
         <form method='POST' id='otpForm'>
           <div class='otp-inputs'>
             <input type='text' name='d1' id='d1' maxlength='1' inputmode='numeric'>
@@ -516,7 +529,8 @@ def verificar_login_otp():
       inputs[0].focus();
     </script>"""
     return render_template_string(html, tel=telefono, error=error,
-                                  titulo=titulo, sub=sub, reset="1" if es_reset else "0")
+                                  titulo=titulo, sub=sub, reset="1" if es_reset else "0",
+                                  reenvio=reenvio)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # LOGIN — cambiar contraseña (después de OTP de recuperación)
@@ -569,11 +583,13 @@ def cambiar_password():
 def reenviar_otp_login():
     telefono = request.args.get("tel","")
     reset    = request.args.get("reset","0")
-    if telefono:
-        codigo = generar_otp()
-        guardar_otp(telefono, codigo)
-        enviar_sms_otp(telefono, codigo)
-    return redirect(url_for('verificar_login_otp', tel=telefono, reset=reset))
+    if not telefono:
+        return redirect(url_for('login'))
+    codigo = generar_otp()
+    guardar_otp(telefono, codigo)
+    ok, _ = enviar_sms_otp(telefono, codigo)
+    estado = "ok" if ok else "error"
+    return redirect(url_for('verificar_login_otp', tel=telefono, reset=reset, reenvio=estado))
 
 # ══════════════════════════════════════════════════════════════════════════════
 # LOGOUT
