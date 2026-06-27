@@ -814,8 +814,12 @@ TEMPLATES = {
     .form-wrap { max-width: 900px; margin: 0 auto; }
     .detail-wrap { display: grid; grid-template-columns: minmax(0, .9fr) minmax(320px, 1.1fr); gap: 18px; align-items: start; }
     .detail-photo {
-      position: relative;
       overflow: hidden;
+      min-height: 340px;
+      padding: 0;
+    }
+    .detail-media {
+      position: relative;
       min-height: 340px;
       display: grid;
       place-items: center;
@@ -826,7 +830,7 @@ TEMPLATES = {
         linear-gradient(135deg, rgba(232,80,53,.18), rgba(23,107,135,.18)),
         #edf3f7;
     }
-    .detail-photo img { width: 100%; height: 100%; min-height: 340px; object-fit: cover; display: block; }
+    .detail-media img { width: 100%; height: 100%; min-height: 340px; object-fit: cover; display: block; }
     .detail-info { padding: clamp(20px, 4vw, 32px); }
     .info-list { display: grid; gap: 10px; margin-top: 18px; }
     .info-row { padding: 12px 0; border-bottom: 1px solid var(--line); display: grid; gap: 3px; }
@@ -1037,7 +1041,6 @@ TEMPLATES = {
             <span class="badge photo-badge {% if pet.encontrado %}found{% else %}lost{% endif %}">{{ "Localizado" if pet.encontrado else "Perdido" }}</span>
           </div>
           <div class="pet-body">
-            <span class="badge {% if pet.encontrado %}found{% else %}lost{% endif %}">{{ "Localizado" if pet.encontrado else "Perdido" }}</span>
             <h3>{{ pet.nombre }}</h3>
             <p class="meta">
               {% if pet.zona %}<strong>Zona:</strong> {{ pet.zona }}<br>{% endif %}
@@ -1058,15 +1061,16 @@ TEMPLATES = {
 {% block content %}
   <section class="detail-wrap">
     <div class="panel detail-photo">
-      {% if mascota.principal %}
-        <img src="{{ mascota.principal }}" alt="{{ mascota.nombre }}">
-      {% else %}
-        {{ (mascota.nombre or "?")[:1].upper() }}
-      {% endif %}
-      <span class="badge photo-badge {% if mascota.encontrado %}found{% else %}lost{% endif %}">{{ "Localizado" if mascota.encontrado else "Perdido" }}</span>
+      <div class="detail-media">
+        {% if mascota.principal %}
+          <img src="{{ mascota.principal }}" alt="{{ mascota.nombre }}">
+        {% else %}
+          {{ (mascota.nombre or "?")[:1].upper() }}
+        {% endif %}
+        <span class="badge photo-badge {% if mascota.encontrado %}found{% else %}lost{% endif %}">{{ "Localizado" if mascota.encontrado else "Perdido" }}</span>
+      </div>
     </div>
     <article class="panel detail-info">
-      <span class="badge {% if mascota.encontrado %}found{% else %}lost{% endif %}">{{ "Localizado" if mascota.encontrado else "Perdido" }}</span>
       <h1>{{ mascota.nombre }}</h1>
       {% if mascota.descripcion %}<p class="meta">{{ mascota.descripcion }}</p>{% endif %}
       {% if is_owner %}
