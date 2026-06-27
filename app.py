@@ -37,6 +37,7 @@ SHOW_OTP_IN_DEV = os.getenv("SHOW_OTP_IN_DEV", "").lower() in {"1", "true", "yes
 OTP_TTL_SECONDS = int(os.getenv("OTP_TTL_SECONDS", "300"))
 
 PHONE_RE = re.compile(r"^\+?[0-9]{10,15}$")
+MX_PHONE_RE = re.compile(r"^[2-9][0-9]{9}$")
 
 
 class AppError(RuntimeError):
@@ -111,9 +112,7 @@ def normalize_phone(raw_phone):
     phone = re.sub(r"\D", "", raw_phone or "")
     if phone.startswith("52") and len(phone) == 12:
         phone = phone[2:]
-    if phone.startswith("1") and len(phone) == 11:
-        phone = phone[1:]
-    if not PHONE_RE.match(phone):
+    if not MX_PHONE_RE.match(phone):
         return None
     return phone
 
@@ -323,7 +322,7 @@ def registro():
     if request.method == "POST":
         phone = normalize_phone(request.form.get("tel"))
         if not phone:
-            flash("Escribe un telefono valido con 10 a 15 digitos.", "error")
+            flash("Ingresa un numero celular mexicano valido de 10 digitos.", "error")
             return redirect(url_for("registro"))
 
         sent, dev_code = create_otp(phone)
@@ -394,7 +393,7 @@ def login():
             flash("Sesion iniciada.", "success")
             next_url = request.args.get("next") or url_for("index")
             return redirect(next_url)
-        flash("Telefono o contrasena incorrectos.", "error")
+        flash("Telefono mexicano o contrasena incorrectos.", "error")
 
     return render_template("login.html")
 
@@ -581,6 +580,7 @@ TEMPLATES = {
     .field { display: grid; gap: 7px; }
     .field.full { grid-column: 1 / -1; }
     label { font-weight: 800; font-size: .92rem; }
+    .hint { color: var(--muted); font-size: .84rem; line-height: 1.4; }
     input, textarea, select {
       width: 100%;
       border: 1px solid #cfd9e4;
@@ -747,11 +747,12 @@ TEMPLATES = {
     <form class="form-panel" method="post">
       <p class="eyebrow" style="color: var(--brand);">Registro seguro</p>
       <h1>Crea tu cuenta</h1>
-      <p class="meta">Usaremos tu telefono para verificar identidad antes de publicar reportes.</p>
+      <p class="meta">Solo aceptamos numeros mexicanos de 10 digitos. No uses prefijo de Estados Unidos.</p>
       <div class="form-grid">
         <div class="field full">
-          <label for="tel">Telefono</label>
+          <label for="tel">Telefono mexicano</label>
           <input id="tel" name="tel" inputmode="numeric" autocomplete="tel" placeholder="(656) 778-7712" maxlength="14" pattern="\\(?[0-9]{3}\\)?[\\s-]?[0-9]{3}-?[0-9]{4}" data-phone-input required>
+          <span class="hint">Ejemplo: (656) 778-7712. Se enviara como numero mexicano +52.</span>
         </div>
       </div>
       <div class="actions"><button class="btn primary" type="submit">Enviar codigo</button></div>
@@ -810,8 +811,9 @@ TEMPLATES = {
       <h1>Entra a UBICAN ID</h1>
       <div class="form-grid">
         <div class="field">
-          <label for="tel">Telefono</label>
+          <label for="tel">Telefono mexicano</label>
           <input id="tel" name="tel" inputmode="numeric" autocomplete="tel" placeholder="(656) 778-7712" maxlength="14" pattern="\\(?[0-9]{3}\\)?[\\s-]?[0-9]{3}-?[0-9]{4}" data-phone-input required>
+          <span class="hint">Usa el numero mexicano registrado, sin +1.</span>
         </div>
         <div class="field">
           <label for="pwd">Contrasena</label>
