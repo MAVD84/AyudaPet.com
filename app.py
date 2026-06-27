@@ -492,15 +492,13 @@ TEMPLATES = {
     .menu-toggle span::after { transform: translateY(4px); }
     .brand { display: flex; align-items: center; gap: 12px; font-weight: 900; letter-spacing: .02em; }
     .mark {
-      width: 38px;
-      height: 38px;
-      border-radius: 8px;
-      display: grid;
-      place-items: center;
-      color: #fff;
-      background: var(--brand);
-      font-weight: 900;
-      box-shadow: 0 10px 24px rgba(232,80,53,.25);
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      display: block;
+      object-fit: cover;
+      border: 2px solid #fff;
+      box-shadow: 0 10px 24px rgba(20,32,48,.18);
     }
     .nav-spacer { width: 42px; }
     .menu-backdrop {
@@ -749,14 +747,14 @@ TEMPLATES = {
   <header class="topbar">
     <nav class="nav">
       <button class="menu-toggle" type="button" data-menu-open aria-label="Abrir menu"><span></span></button>
-      <a class="brand" href="{{ url_for('index') }}"><span class="mark">U</span><span>UBICAN ID</span></a>
+      <a class="brand" href="{{ url_for('index') }}"><img class="mark" src="{{ url_for('static', filename='logo.jpg') }}" alt="UBICAN ID"><span>UBICAN ID</span></a>
       <span class="nav-spacer" aria-hidden="true"></span>
     </nav>
   </header>
   <div class="menu-backdrop" data-menu-close></div>
   <aside class="side-menu" aria-label="Menu principal">
     <div class="menu-head">
-      <a class="brand" href="{{ url_for('index') }}"><span class="mark">U</span><span>UBICAN ID</span></a>
+      <a class="brand" href="{{ url_for('index') }}"><img class="mark" src="{{ url_for('static', filename='logo.jpg') }}" alt="UBICAN ID"><span>UBICAN ID</span></a>
       <button class="menu-close" type="button" data-menu-close aria-label="Cerrar menu">&times;</button>
     </div>
     <div class="menu-links">
