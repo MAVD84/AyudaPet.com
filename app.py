@@ -160,7 +160,7 @@ def send_sms(phone, code):
     try:
         response = requests.post(api_url, json=payload, auth=(user, token), timeout=12)
         response.raise_for_status()
-        logger.info("SMS enviado a %s via LabsMobile.", sms_phone)
+        logger.info("SMS enviado a %s via LabsMobile. Respuesta: %s", sms_phone, response.text[:500])
         return True
     except requests.RequestException as exc:
         detail = getattr(exc.response, "text", "") if getattr(exc, "response", None) else ""
@@ -176,7 +176,8 @@ def create_otp(phone):
         "telefono",
     )
     sent = send_sms(phone, code)
-    return code if SHOW_OTP_IN_DEV or not sent else None
+    dev_code = code if SHOW_OTP_IN_DEV else None
+    return sent, dev_code
 
 
 def verify_otp(phone, code):
@@ -313,12 +314,15 @@ def registro():
             flash("Escribe un telefono valido con 10 a 15 digitos.", "error")
             return redirect(url_for("registro"))
 
-        dev_code = create_otp(phone)
+        sent, dev_code = create_otp(phone)
         session["pending_tel"] = phone
         if dev_code:
             flash(f"Codigo de prueba: {dev_code}", "info")
-        else:
+        elif sent:
             flash("Te enviamos un codigo por SMS.", "success")
+        else:
+            flash("No se pudo enviar el SMS. Revisa los logs de Coolify para ver la respuesta de LabsMobile.", "error")
+            return redirect(url_for("registro"))
         return redirect(url_for("verificar"))
 
     return render_template("registro.html")
