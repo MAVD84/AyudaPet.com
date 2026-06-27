@@ -298,22 +298,20 @@ def get_form_value(name):
     return value.strip() if isinstance(value, str) and value.strip() else None
 
 
-def create_report():
+def report_payload(report_id, existing=None):
     required_name = get_form_value("nombre")
     if not required_name:
         raise AppError("El nombre de la mascota es obligatorio.")
 
-    report_id = uuid.uuid4().hex
-    principal = upload_image(request.files.get("principal"), report_id, "principal")
-    secundarias = []
+    existing = existing or {}
+    principal = upload_image(request.files.get("principal"), report_id, "principal") or existing.get("principal")
+    secundarias = list(existing.get("secundarias") or [])
     for index, image in enumerate(request.files.getlist("secundarias"), start=1):
         uploaded = upload_image(image, report_id, f"secundaria-{index}")
         if uploaded:
             secundarias.append(uploaded)
 
-    payload = {
-        "id": report_id,
-        "reportado_por": current_user_phone(),
+    return {
         "nombre": required_name,
         "descripcion": get_form_value("descripcion"),
         "zona": get_form_value("zona"),
@@ -335,8 +333,30 @@ def create_report():
         "dueno": get_form_value("dueno"),
         "recompensa": get_form_value("recompensa"),
     }
+
+
+def create_report():
+    report_id = uuid.uuid4().hex
+    payload = report_payload(report_id)
+    payload["id"] = report_id
+    payload["reportado_por"] = current_user_phone()
     rows = db_request("mascotas", method="POST", payload=payload)
     return rows[0] if isinstance(rows, list) and rows else None
+
+
+def update_report(report_id, mascota):
+    payload = report_payload(report_id, mascota)
+    rows = db_request(
+        "mascotas",
+        method="PATCH",
+        payload=payload,
+        params={"id": f"eq.{report_id}", "reportado_por": f"eq.{current_user_phone()}"},
+    )
+    return rows[0] if isinstance(rows, list) and rows else None
+
+
+def user_owns_report(mascota):
+    return bool(mascota and current_user_phone() and mascota.get("reportado_por") == current_user_phone())
 
 
 @app.context_processor
@@ -378,7 +398,7 @@ def detalle_mascota(report_id):
     mascota = get_mascota(report_id)
     if not mascota:
         return render_template("error.html", title="Reporte no encontrado", message="El reporte solicitado no existe."), 404
-    return render_template("detalle.html", mascota=mascota)
+    return render_template("detalle.html", mascota=mascota, is_owner=user_owns_report(mascota))
 
 
 @app.route("/registro", methods=["GET", "POST"])
@@ -481,7 +501,42 @@ def reportar():
         flash("Reporte publicado correctamente.", "success")
         return redirect(url_for("index"))
 
-    return render_template("reportar.html")
+    return render_template("reportar.html", mascota={}, editing=False)
+
+
+@app.route("/mascotas/<report_id>/editar", methods=["GET", "POST"])
+@login_required
+def editar_mascota(report_id):
+    mascota = get_mascota(report_id)
+    if not mascota:
+        return render_template("error.html", title="Reporte no encontrado", message="El reporte solicitado no existe."), 404
+    if not user_owns_report(mascota):
+        return render_template("error.html", title="Sin permiso", message="Solo puedes editar tus propios reportes."), 403
+
+    if request.method == "POST":
+        try:
+            update_report(report_id, mascota)
+        except AppError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("editar_mascota", report_id=report_id))
+        flash("Reporte actualizado correctamente.", "success")
+        return redirect(url_for("detalle_mascota", report_id=report_id))
+
+    return render_template("reportar.html", mascota=mascota, editing=True)
+
+
+@app.route("/mascotas/<report_id>/eliminar", methods=["POST"])
+@login_required
+def eliminar_mascota(report_id):
+    mascota = get_mascota(report_id)
+    if not mascota:
+        return render_template("error.html", title="Reporte no encontrado", message="El reporte solicitado no existe."), 404
+    if not user_owns_report(mascota):
+        return render_template("error.html", title="Sin permiso", message="Solo puedes eliminar tus propios reportes."), 403
+
+    delete_rows("mascotas", {"id": f"eq.{report_id}", "reportado_por": f"eq.{current_user_phone()}"})
+    flash("Reporte eliminado.", "success")
+    return redirect(url_for("index"))
 
 
 TEMPLATES = {
@@ -979,6 +1034,14 @@ TEMPLATES = {
       <span class="badge {% if mascota.encontrado %}found{% endif %}">{{ "Encontrado" if mascota.encontrado else "En busqueda" }}</span>
       <h1>{{ mascota.nombre }}</h1>
       {% if mascota.descripcion %}<p class="meta">{{ mascota.descripcion }}</p>{% endif %}
+      {% if is_owner %}
+        <div class="actions">
+          <a class="btn primary" href="{{ url_for('editar_mascota', report_id=mascota.id) }}">Editar</a>
+          <form method="post" action="{{ url_for('eliminar_mascota', report_id=mascota.id) }}" onsubmit="return confirm('Eliminar este reporte?');">
+            <button class="btn" type="submit">Eliminar</button>
+          </form>
+        </div>
+      {% endif %}
 
       {% if mascota.secundarias %}
         <div class="gallery">
@@ -1114,30 +1177,30 @@ TEMPLATES = {
 {% extends "base.html" %}
 {% block content %}
   <section class="form-wrap">
-    <form class="form-panel" method="post">
+    <form class="form-panel" method="post" enctype="multipart/form-data">
       <p class="eyebrow" style="color: var(--brand);">Nuevo reporte</p>
-      <h1>Datos de la mascota</h1>
+      <h1>{{ "Editar reporte" if editing else "Datos de la mascota" }}</h1>
       <div class="form-grid">
         <div class="field">
           <label for="nombre">Nombre o identificador</label>
-          <input id="nombre" name="nombre" required>
+          <input id="nombre" name="nombre" value="{{ mascota.nombre or '' }}" required>
         </div>
         <div class="field">
           <label for="contacto">Contacto publico</label>
-          <input id="contacto" name="contacto" placeholder="Telefono, WhatsApp o correo">
+          <input id="contacto" name="contacto" value="{{ mascota.contacto or '' }}" placeholder="Telefono, WhatsApp o correo">
         </div>
         <div class="field full">
           <label for="descripcion">Descripcion</label>
-          <textarea id="descripcion" name="descripcion" placeholder="Senales particulares, temperamento, ultima vez visto"></textarea>
+          <textarea id="descripcion" name="descripcion" placeholder="Senales particulares, temperamento, ultima vez visto">{{ mascota.descripcion or '' }}</textarea>
         </div>
-        <div class="field"><label for="zona">Zona</label><input id="zona" name="zona"></div>
-        <div class="field"><label for="fecha">Fecha</label><input id="fecha" name="fecha" type="date"></div>
-        <div class="field"><label for="edad">Edad</label><input id="edad" name="edad"></div>
-        <div class="field"><label for="raza">Raza</label><input id="raza" name="raza"></div>
-        <div class="field"><label for="genero">Genero</label><select id="genero" name="genero"><option value="">Seleccionar</option><option>Macho</option><option>Hembra</option><option>No se sabe</option></select></div>
-        <div class="field"><label for="color">Color</label><input id="color" name="color"></div>
-        <div class="field"><label for="collar">Collar</label><input id="collar" name="collar"></div>
-        <div class="field"><label for="docil">Comportamiento</label><input id="docil" name="docil" placeholder="Docil, nervioso, asustado"></div>
+        <div class="field"><label for="zona">Zona</label><input id="zona" name="zona" value="{{ mascota.zona or '' }}"></div>
+        <div class="field"><label for="fecha">Fecha</label><input id="fecha" name="fecha" type="date" value="{{ mascota.fecha or '' }}"></div>
+        <div class="field"><label for="edad">Edad</label><input id="edad" name="edad" value="{{ mascota.edad or '' }}"></div>
+        <div class="field"><label for="raza">Raza</label><input id="raza" name="raza" value="{{ mascota.raza or '' }}"></div>
+        <div class="field"><label for="genero">Genero</label><select id="genero" name="genero"><option value="">Seleccionar</option><option {% if mascota.genero == "Macho" %}selected{% endif %}>Macho</option><option {% if mascota.genero == "Hembra" %}selected{% endif %}>Hembra</option><option {% if mascota.genero == "No se sabe" %}selected{% endif %}>No se sabe</option></select></div>
+        <div class="field"><label for="color">Color</label><input id="color" name="color" value="{{ mascota.color or '' }}"></div>
+        <div class="field"><label for="collar">Collar</label><input id="collar" name="collar" value="{{ mascota.collar or '' }}"></div>
+        <div class="field"><label for="docil">Comportamiento</label><input id="docil" name="docil" value="{{ mascota.docil or '' }}" placeholder="Docil, nervioso, asustado"></div>
         <div class="field"><label for="principal">Foto principal</label><input id="principal" name="principal" type="file" accept="image/*"></div>
         <div class="field full">
           <label>Fotos secundarias</label>
@@ -1145,15 +1208,15 @@ TEMPLATES = {
             <input name="secundarias" type="file" accept="image/*" multiple>
           </div>
         </div>
-        <div class="field full"><label for="direccion">Direccion o referencia</label><input id="direccion" name="direccion"></div>
-        <div class="field"><label for="ciudad">Ciudad</label><input id="ciudad" name="ciudad"></div>
-        <div class="field"><label for="estado">Estado</label><input id="estado" name="estado"></div>
-        <div class="field"><label for="cp">Codigo postal</label><input id="cp" name="cp" inputmode="numeric"></div>
-        <div class="field"><label for="calles">Entre calles</label><input id="calles" name="calles"></div>
-        <div class="field"><label for="dueno">Dueno</label><input id="dueno" name="dueno"></div>
-        <div class="field"><label for="recompensa">Recompensa</label><input id="recompensa" name="recompensa"></div>
+        <div class="field full"><label for="direccion">Direccion o referencia</label><input id="direccion" name="direccion" value="{{ mascota.direccion or '' }}"></div>
+        <div class="field"><label for="ciudad">Ciudad</label><input id="ciudad" name="ciudad" value="{{ mascota.ciudad or '' }}"></div>
+        <div class="field"><label for="estado">Estado</label><input id="estado" name="estado" value="{{ mascota.estado or '' }}"></div>
+        <div class="field"><label for="cp">Codigo postal</label><input id="cp" name="cp" inputmode="numeric" value="{{ mascota.cp or '' }}"></div>
+        <div class="field"><label for="calles">Entre calles</label><input id="calles" name="calles" value="{{ mascota.calles or '' }}"></div>
+        <div class="field"><label for="dueno">Dueno</label><input id="dueno" name="dueno" value="{{ mascota.dueno or '' }}"></div>
+        <div class="field"><label for="recompensa">Recompensa</label><input id="recompensa" name="recompensa" value="{{ mascota.recompensa or '' }}"></div>
       </div>
-      <div class="actions"><button class="btn primary" type="submit">Publicar reporte</button></div>
+      <div class="actions"><button class="btn primary" type="submit">{{ "Guardar cambios" if editing else "Publicar reporte" }}</button></div>
     </form>
   </section>
 {% endblock %}
