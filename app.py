@@ -377,7 +377,6 @@ def report_payload(report_id, existing=None):
     return {
         "nombre": required_name,
         "descripcion": get_form_value("descripcion"),
-        "zona": get_form_value("zona"),
         "contacto": get_form_value("contacto"),
         "principal": principal,
         "secundarias": secundarias,
@@ -1303,7 +1302,7 @@ TEMPLATES = {
         <div class="stat"><strong>{{ stats.activos }}</strong><span>activos</span></div>
         <div class="stat"><strong>{{ stats.encontrados }}</strong><span>resueltos</span></div>
       </div>
-      <p class="meta" style="margin-top:18px;">Los reportes mas recientes aparecen primero para facilitar busquedas por zona, ciudad y contacto.</p>
+      <p class="meta" style="margin-top:18px;">Los reportes mas recientes aparecen primero para facilitar busquedas por direccion, ciudad y contacto.</p>
     </aside>
   </section>
 
@@ -1329,7 +1328,7 @@ TEMPLATES = {
           <div class="pet-body">
             <h3>{{ pet.nombre }}</h3>
             <p class="meta">
-              {% if pet.zona %}<strong>Zona:</strong> {{ pet.zona }}<br>{% endif %}
+              {% if pet.direccion %}<strong>Direccion:</strong> {{ pet.direccion }}<br>{% endif %}
               {% if pet.ciudad or pet.estado %}<strong>Ubicacion:</strong> {{ pet.ciudad or "" }}{% if pet.ciudad and pet.estado %}, {% endif %}{{ pet.estado or "" }}{% endif %}
             </p>
             {% if pet.descripcion %}<p class="pet-summary">{{ pet.descripcion }}</p>{% endif %}
@@ -1634,7 +1633,6 @@ TEMPLATES = {
           <label for="descripcion">Descripcion</label>
           <textarea id="descripcion" name="descripcion" placeholder="Senales particulares, temperamento, ultima vez visto">{{ mascota.descripcion or '' }}</textarea>
         </div>
-        <div class="field"><label for="zona">Zona</label><input id="zona" name="zona" value="{{ mascota.zona or '' }}"></div>
         <div class="field"><label for="fecha">Fecha</label><input id="fecha" name="fecha" type="date" value="{{ mascota.fecha or '' }}"></div>
         <div class="field"><label for="edad">Edad</label><input id="edad" name="edad" value="{{ mascota.edad or '' }}"></div>
         <div class="field"><label for="raza">Raza</label><input id="raza" name="raza" value="{{ mascota.raza or '' }}"></div>
@@ -1653,7 +1651,7 @@ TEMPLATES = {
             <input name="secundarias" type="file" accept="image/*" multiple>
           </div>
         </div>
-        <div class="field full"><label for="direccion">Direccion o referencia</label><input id="direccion" name="direccion" value="{{ mascota.direccion or '' }}"></div>
+        <div class="field full"><label for="direccion">Direccion de extravio</label><input id="direccion" name="direccion" value="{{ mascota.direccion or '' }}"></div>
         <div class="field"><label for="ciudad">Ciudad</label><input id="ciudad" name="ciudad" value="{{ mascota.ciudad or '' }}"></div>
         <div class="field"><label for="estado">Estado</label><input id="estado" name="estado" value="{{ mascota.estado or '' }}"></div>
         <div class="field"><label for="cp">Codigo postal</label><input id="cp" name="cp" inputmode="numeric" value="{{ mascota.cp or '' }}"></div>
