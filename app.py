@@ -424,11 +424,15 @@ def user_owns_report(mascota):
 
 @app.context_processor
 def inject_globals():
+    def is_active(endpoint):
+        return request.endpoint == endpoint
+
     return {
         "current_user": current_user_phone(),
         "year": time.localtime().tm_year,
         "phone_digits": phone_digits,
         "whatsapp_digits": whatsapp_digits,
+        "is_active": is_active,
     }
 
 
@@ -822,6 +826,11 @@ TEMPLATES = {
       justify-content: flex-start;
       min-height: 48px;
     }
+    .menu-links .btn.active {
+      background: var(--brand);
+      color: #fff;
+      border-color: var(--brand);
+    }
     .menu-foot {
       margin-top: auto;
       padding: 16px 18px;
@@ -1195,14 +1204,15 @@ TEMPLATES = {
       <button class="menu-close" type="button" data-menu-close aria-label="Cerrar menu">&times;</button>
     </div>
     <div class="menu-links">
-      <a class="btn ghost" href="{{ url_for('index') }}">Reportes</a>
       {% if current_user %}
-        <a class="btn ghost" href="{{ url_for('perfil') }}">Mi perfil</a>
-        <a class="btn primary" href="{{ url_for('reportar') }}">Reportar mascota</a>
+        <a class="btn ghost {% if is_active('perfil') %}active{% endif %}" href="{{ url_for('perfil') }}">Mi perfil</a>
+        <a class="btn ghost {% if is_active('reportar') %}active{% endif %}" href="{{ url_for('reportar') }}">Reportar mascota</a>
+        <a class="btn ghost {% if is_active('index') %}active{% endif %}" href="{{ url_for('index') }}">Reportes</a>
         <a class="btn ghost" href="{{ url_for('logout') }}">Cerrar sesion</a>
       {% else %}
-        <a class="btn primary" href="{{ url_for('registro') }}">Crear cuenta</a>
-        <a class="btn ghost" href="{{ url_for('login') }}">Entrar</a>
+        <a class="btn ghost {% if is_active('login') %}active{% endif %}" href="{{ url_for('login') }}">Entrar</a>
+        <a class="btn ghost {% if is_active('registro') %}active{% endif %}" href="{{ url_for('registro') }}">Crear cuenta</a>
+        <a class="btn ghost {% if is_active('index') %}active{% endif %}" href="{{ url_for('index') }}">Reportes</a>
       {% endif %}
     </div>
     <div class="menu-foot">Registro exclusivo con telefono mexicano.</div>
