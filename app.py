@@ -743,11 +743,17 @@ TEMPLATES = {
     }
     .section-head h2 { margin: 0; font-size: 1.35rem; }
     .section-head p { margin: 5px 0 0; color: var(--muted); }
-    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-    .pet-card { overflow: hidden; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+    .pet-card {
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      color: inherit;
+    }
     .pet-card:hover { transform: translateY(-2px); transition: transform .16s ease; }
     .pet-media {
-      height: 150px;
+      aspect-ratio: 4 / 3;
+      width: 100%;
       background:
         linear-gradient(135deg, rgba(232,80,53,.20), rgba(23,107,135,.20)),
         #edf3f7;
@@ -763,8 +769,22 @@ TEMPLATES = {
       object-fit: cover;
       display: block;
     }
-    .pet-body { padding: 16px; }
-    .pet-body h3 { margin: 0 0 8px; font-size: 1.1rem; }
+    .pet-body {
+      padding: 16px;
+      border-top: 1px solid var(--line);
+      display: grid;
+      gap: 10px;
+      align-content: start;
+    }
+    .pet-body h3 { margin: 0; font-size: 1.15rem; }
+    .pet-summary {
+      margin: 0;
+      color: var(--muted);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
     .meta { color: var(--muted); line-height: 1.45; font-size: .95rem; }
     .badge {
       display: inline-flex;
@@ -1006,10 +1026,9 @@ TEMPLATES = {
             <h3>{{ pet.nombre }}</h3>
             <p class="meta">
               {% if pet.zona %}<strong>Zona:</strong> {{ pet.zona }}<br>{% endif %}
-              {% if pet.ciudad or pet.estado %}<strong>Ubicacion:</strong> {{ pet.ciudad or "" }}{% if pet.ciudad and pet.estado %}, {% endif %}{{ pet.estado or "" }}<br>{% endif %}
-              {% if pet.contacto %}<strong>Contacto:</strong> {{ pet.contacto }}{% endif %}
+              {% if pet.ciudad or pet.estado %}<strong>Ubicacion:</strong> {{ pet.ciudad or "" }}{% if pet.ciudad and pet.estado %}, {% endif %}{{ pet.estado or "" }}{% endif %}
             </p>
-            {% if pet.descripcion %}<p>{{ pet.descripcion }}</p>{% endif %}
+            {% if pet.descripcion %}<p class="pet-summary">{{ pet.descripcion }}</p>{% endif %}
           </div>
         </a>
       {% endfor %}
