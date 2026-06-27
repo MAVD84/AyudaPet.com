@@ -274,14 +274,40 @@ def get_user(phone):
 
 
 def save_user(phone, password, nombre=None):
+    existing = get_user(phone)
     payload = {
         "telefono": phone,
-        "creado": int(time.time()),
         "password_hash": generate_password_hash(password),
-        "nombre": nombre,
         "activo": True,
     }
+    if not existing:
+        payload["creado"] = int(time.time())
+    if nombre:
+        payload["nombre"] = nombre
     return upsert_row("usuarios", payload, "telefono")
+
+
+def update_user_profile(phone, nombre=None, foto=None):
+    payload = {"nombre": nombre}
+    if foto:
+        payload["foto"] = foto
+    rows = db_request(
+        "usuarios",
+        method="PATCH",
+        payload=payload,
+        params={"telefono": f"eq.{phone}"},
+    )
+    return rows[0] if isinstance(rows, list) and rows else None
+
+
+def update_user_password(phone, password):
+    rows = db_request(
+        "usuarios",
+        method="PATCH",
+        payload={"password_hash": generate_password_hash(password)},
+        params={"telefono": f"eq.{phone}"},
+    )
+    return rows[0] if isinstance(rows, list) and rows else None
 
 
 def list_mascotas():
@@ -291,6 +317,17 @@ def list_mascotas():
             "select": "*",
             "order": "creado_at.desc",
             "limit": "80",
+        },
+    )
+
+
+def list_user_reports(phone):
+    return select_rows(
+        "mascotas",
+        {
+            "reportado_por": f"eq.{phone}",
+            "select": "*",
+            "order": "creado_at.desc",
         },
     )
 
@@ -462,6 +499,29 @@ def verificar():
     return render_template("verificar.html", phone=pending_tel)
 
 
+@app.route("/recuperar", methods=["GET", "POST"])
+def recuperar():
+    if request.method == "POST":
+        phone = normalize_phone(request.form.get("tel"))
+        user = get_user(phone) if phone else None
+        if not user:
+            flash("No encontramos una cuenta con ese telefono.", "error")
+            return redirect(url_for("recuperar"))
+
+        sent, dev_code = create_otp(phone)
+        session["pending_tel"] = phone
+        if dev_code:
+            flash(f"Codigo de prueba: {dev_code}", "info")
+        elif sent:
+            flash("Te enviamos un codigo por SMS.", "success")
+        else:
+            flash("No se pudo enviar el SMS. Revisa los logs de Coolify para ver la respuesta de LabsMobile.", "error")
+            return redirect(url_for("recuperar"))
+        return redirect(url_for("verificar"))
+
+    return render_template("recuperar.html")
+
+
 @app.route("/set_password", methods=["GET", "POST"])
 def set_password():
     verified_tel = session.get("verified_tel")
@@ -508,6 +568,54 @@ def logout():
     session.clear()
     flash("Sesion cerrada.", "info")
     return redirect(url_for("index"))
+
+
+@app.route("/perfil", methods=["GET", "POST"])
+@login_required
+def perfil():
+    phone = current_user_phone()
+    user = get_user(phone)
+    if not user:
+        session.clear()
+        flash("Tu sesion expiro. Inicia sesion de nuevo.", "warning")
+        return redirect(url_for("login"))
+
+    if request.method == "POST":
+        try:
+            foto = upload_image(request.files.get("foto"), phone, "perfil") if request.files.get("foto") else None
+            update_user_profile(phone, nombre=get_form_value("nombre"), foto=foto)
+        except AppError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("perfil"))
+        flash("Perfil actualizado.", "success")
+        return redirect(url_for("perfil"))
+
+    reportes = list_user_reports(phone)
+    return render_template("perfil.html", user=user, reportes=reportes)
+
+
+@app.route("/perfil/password", methods=["POST"])
+@login_required
+def cambiar_password():
+    phone = current_user_phone()
+    user = get_user(phone)
+    current_password = request.form.get("current_password") or ""
+    new_password = request.form.get("new_password") or ""
+    confirm_password = request.form.get("confirm_password") or ""
+
+    if not user or not check_password_hash(user.get("password_hash", ""), current_password):
+        flash("La contrasena actual no es correcta.", "error")
+        return redirect(url_for("perfil"))
+    if len(new_password) < 8:
+        flash("La nueva contrasena debe tener al menos 8 caracteres.", "error")
+        return redirect(url_for("perfil"))
+    if new_password != confirm_password:
+        flash("La confirmacion no coincide.", "error")
+        return redirect(url_for("perfil"))
+
+    update_user_password(phone, new_password)
+    flash("Contrasena actualizada.", "success")
+    return redirect(url_for("perfil"))
 
 
 @app.route("/reportar", methods=["GET", "POST"])
@@ -861,6 +969,46 @@ TEMPLATES = {
     }
     .gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
     .gallery img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
+    .profile-layout { display: grid; grid-template-columns: minmax(280px, .85fr) minmax(0, 1.15fr); gap: 18px; align-items: start; }
+    .avatar {
+      width: 112px;
+      height: 112px;
+      border-radius: 999px;
+      object-fit: cover;
+      border: 4px solid #fff;
+      box-shadow: var(--shadow);
+      background: #edf3f7;
+      display: grid;
+      place-items: center;
+      color: var(--blue);
+      font-size: 2.4rem;
+      font-weight: 900;
+      overflow: hidden;
+    }
+    .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .profile-card { padding: clamp(20px, 4vw, 32px); }
+    .mini-list { display: grid; gap: 10px; margin-top: 16px; }
+    .mini-report {
+      display: grid;
+      grid-template-columns: 72px 1fr;
+      gap: 12px;
+      align-items: center;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+    .mini-report img, .mini-thumb {
+      width: 72px;
+      height: 72px;
+      object-fit: cover;
+      border-radius: 8px;
+      background: #edf3f7;
+      display: grid;
+      place-items: center;
+      color: var(--blue);
+      font-weight: 900;
+    }
     .zoomable { cursor: zoom-in; }
     .lightbox {
       position: fixed;
@@ -1004,6 +1152,7 @@ TEMPLATES = {
     @media (max-width: 840px) {
       .hero, .grid, .form-grid { grid-template-columns: 1fr; }
       .detail-wrap { grid-template-columns: 1fr; }
+      .profile-layout { grid-template-columns: 1fr; }
       .contact-actions { grid-template-columns: 1fr; }
       .stats { grid-template-columns: 1fr; }
       .nav { padding: 0 16px; }
@@ -1027,6 +1176,7 @@ TEMPLATES = {
     <div class="menu-links">
       <a class="btn ghost" href="{{ url_for('index') }}">Reportes</a>
       {% if current_user %}
+        <a class="btn ghost" href="{{ url_for('perfil') }}">Mi perfil</a>
         <a class="btn primary" href="{{ url_for('reportar') }}">Reportar mascota</a>
         <a class="btn ghost" href="{{ url_for('logout') }}">Cerrar sesion</a>
       {% else %}
@@ -1332,8 +1482,111 @@ TEMPLATES = {
       <div class="actions">
         <button class="btn primary" type="submit">Entrar</button>
         <a class="btn" href="{{ url_for('registro') }}">Crear cuenta</a>
+        <a class="btn ghost" href="{{ url_for('recuperar') }}">Restablecer contrasena</a>
       </div>
     </form>
+  </section>
+{% endblock %}
+""",
+    "recuperar.html": """
+{% extends "base.html" %}
+{% block content %}
+  <section class="form-wrap">
+    <form class="form-panel" method="post">
+      <p class="eyebrow" style="color: var(--brand);">Recuperacion</p>
+      <h1>Restablecer contrasena</h1>
+      <p class="meta">Enviaremos un codigo al telefono registrado.</p>
+      <div class="form-grid">
+        <div class="field full">
+          <label for="tel">Telefono mexicano</label>
+          <div class="phone-box">
+            <span class="phone-prefix"><span aria-hidden="true">🇲🇽</span><span>+52</span></span>
+            <input id="tel" name="tel" inputmode="numeric" autocomplete="tel" placeholder="(656) 778-7712" maxlength="14" pattern="\\(?[0-9]{3}\\)?[\\s-]?[0-9]{3}-?[0-9]{4}" data-phone-input required>
+          </div>
+        </div>
+      </div>
+      <div class="actions"><button class="btn primary" type="submit">Enviar codigo</button></div>
+    </form>
+  </section>
+{% endblock %}
+""",
+    "perfil.html": """
+{% extends "base.html" %}
+{% block content %}
+  <section class="profile-layout">
+    <div class="panel profile-card">
+      <p class="eyebrow" style="color: var(--brand);">Cuenta</p>
+      <div class="avatar">
+        {% if user.foto %}
+          <img src="{{ user.foto }}" alt="{{ user.nombre or 'Perfil' }}">
+        {% else %}
+          {{ (user.nombre or user.telefono or "U")[:1].upper() }}
+        {% endif %}
+      </div>
+      <h1>{{ user.nombre or "Mi perfil" }}</h1>
+      <p class="meta"><strong>Telefono registrado:</strong><br>{{ user.telefono }}</p>
+
+      <form method="post" enctype="multipart/form-data" class="form-grid">
+        <div class="field full">
+          <label for="nombre">Nombre</label>
+          <input id="nombre" name="nombre" value="{{ user.nombre or '' }}">
+        </div>
+        <div class="field full">
+          <label for="foto">Foto de perfil</label>
+          <input id="foto" name="foto" type="file" accept="image/*">
+        </div>
+        <div class="actions"><button class="btn primary" type="submit">Guardar perfil</button></div>
+      </form>
+    </div>
+
+    <div class="panel profile-card">
+      <p class="eyebrow" style="color: var(--brand);">Seguridad</p>
+      <h1>Cambiar contrasena</h1>
+      <form method="post" action="{{ url_for('cambiar_password') }}" class="form-grid">
+        <div class="field full">
+          <label for="current_password">Contrasena actual</label>
+          <input id="current_password" name="current_password" type="password" autocomplete="current-password" required>
+        </div>
+        <div class="field">
+          <label for="new_password">Nueva contrasena</label>
+          <input id="new_password" name="new_password" type="password" autocomplete="new-password" minlength="8" required>
+        </div>
+        <div class="field">
+          <label for="confirm_password">Confirmar contrasena</label>
+          <input id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" minlength="8" required>
+        </div>
+        <div class="actions"><button class="btn primary" type="submit">Actualizar contrasena</button></div>
+      </form>
+    </div>
+  </section>
+
+  <section class="panel profile-card" style="margin-top:18px;">
+    <div class="section-head" style="margin-top:0;">
+      <div>
+        <h2>Mis reportes</h2>
+        <p>Reportes publicados con tu numero registrado.</p>
+      </div>
+      <a class="btn primary" href="{{ url_for('reportar') }}">Nuevo reporte</a>
+    </div>
+    {% if reportes %}
+      <div class="mini-list">
+        {% for pet in reportes %}
+          <a class="mini-report" href="{{ url_for('detalle_mascota', report_id=pet.id) }}">
+            {% if pet.principal %}
+              <img src="{{ pet.principal }}" alt="{{ pet.nombre }}">
+            {% else %}
+              <span class="mini-thumb">{{ (pet.nombre or "?")[:1].upper() }}</span>
+            {% endif %}
+            <span>
+              <strong>{{ pet.nombre }}</strong><br>
+              <span class="meta">{{ "Localizado" if pet.encontrado else "Perdido" }}{% if pet.ciudad %} · {{ pet.ciudad }}{% endif %}</span>
+            </span>
+          </a>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty">Todavia no tienes reportes publicados.</div>
+    {% endif %}
   </section>
 {% endblock %}
 """,
