@@ -861,6 +861,39 @@ TEMPLATES = {
     }
     .gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
     .gallery img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
+    .zoomable { cursor: zoom-in; }
+    .lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(6, 10, 16, .88);
+    }
+    .lightbox.open { display: flex; }
+    .lightbox img {
+      max-width: min(1100px, 94vw);
+      max-height: 88vh;
+      object-fit: contain;
+      border-radius: 8px;
+      box-shadow: 0 24px 80px rgba(0,0,0,.42);
+      background: #111;
+    }
+    .lightbox-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 42px;
+      height: 42px;
+      border: 1px solid rgba(255,255,255,.25);
+      border-radius: 8px;
+      background: rgba(255,255,255,.12);
+      color: #fff;
+      font-size: 1.6rem;
+      cursor: pointer;
+    }
     .form-panel { padding: clamp(20px, 4vw, 34px); }
     .form-panel h1 { color: var(--ink); font-size: clamp(1.8rem, 4vw, 2.7rem); }
     .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
@@ -992,6 +1025,10 @@ TEMPLATES = {
     {% block content %}{% endblock %}
   </main>
   <footer>UBICAN ID &copy; {{ year }}</footer>
+  <div class="lightbox" data-lightbox aria-hidden="true">
+    <button class="lightbox-close" type="button" data-lightbox-close aria-label="Cerrar imagen">&times;</button>
+    <img src="" alt="">
+  </div>
   <script>
     function formatLocalPhone(value) {
       const digits = value.replace(/\\D/g, "").slice(0, 10);
@@ -1017,6 +1054,34 @@ TEMPLATES = {
     });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") document.body.classList.remove("menu-open");
+    });
+
+    const lightbox = document.querySelector("[data-lightbox]");
+    const lightboxImage = lightbox?.querySelector("img");
+    function closeLightbox() {
+      if (!lightbox || !lightboxImage) return;
+      lightbox.classList.remove("open");
+      lightbox.setAttribute("aria-hidden", "true");
+      lightboxImage.src = "";
+      lightboxImage.alt = "";
+    }
+    document.querySelectorAll("[data-zoom-src]").forEach((image) => {
+      image.addEventListener("click", () => {
+        if (!lightbox || !lightboxImage) return;
+        lightboxImage.src = image.dataset.zoomSrc;
+        lightboxImage.alt = image.alt || "Imagen ampliada";
+        lightbox.classList.add("open");
+        lightbox.setAttribute("aria-hidden", "false");
+      });
+    });
+    document.querySelectorAll("[data-lightbox-close]").forEach((button) => {
+      button.addEventListener("click", closeLightbox);
+    });
+    lightbox?.addEventListener("click", (event) => {
+      if (event.target === lightbox) closeLightbox();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeLightbox();
     });
   </script>
 </body>
@@ -1088,7 +1153,7 @@ TEMPLATES = {
     <div class="panel detail-photo">
       <div class="detail-media">
         {% if mascota.principal %}
-          <img src="{{ mascota.principal }}" alt="{{ mascota.nombre }}">
+          <img class="zoomable" src="{{ mascota.principal }}" alt="{{ mascota.nombre }}" data-zoom-src="{{ mascota.principal }}">
         {% else %}
           {{ (mascota.nombre or "?")[:1].upper() }}
         {% endif %}
@@ -1110,7 +1175,7 @@ TEMPLATES = {
       {% if mascota.secundarias %}
         <div class="gallery">
           {% for image in mascota.secundarias %}
-            <img src="{{ image }}" alt="Foto de {{ mascota.nombre }}">
+            <img class="zoomable" src="{{ image }}" alt="Foto de {{ mascota.nombre }}" data-zoom-src="{{ image }}">
           {% endfor %}
         </div>
       {% endif %}
