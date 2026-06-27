@@ -161,6 +161,20 @@ def phone_for_sms(phone):
     return digits
 
 
+def phone_digits(raw_phone):
+    digits = re.sub(r"\D", "", raw_phone or "")
+    if len(digits) == 10:
+        return digits
+    if digits.startswith("52") and len(digits) == 12:
+        return digits[2:]
+    return digits
+
+
+def whatsapp_digits(raw_phone):
+    digits = phone_digits(raw_phone)
+    return phone_for_sms(digits) if len(digits) == 10 else digits
+
+
 def current_user_phone():
     return session.get("tel")
 
@@ -369,6 +383,8 @@ def inject_globals():
     return {
         "current_user": current_user_phone(),
         "year": time.localtime().tm_year,
+        "phone_digits": phone_digits,
+        "whatsapp_digits": whatsapp_digits,
     }
 
 
@@ -835,6 +851,14 @@ TEMPLATES = {
     .info-list { display: grid; gap: 10px; margin-top: 18px; }
     .info-row { padding: 12px 0; border-bottom: 1px solid var(--line); display: grid; gap: 3px; }
     .info-row strong { font-size: .82rem; text-transform: uppercase; color: var(--muted); }
+    .contact-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+    .btn.whatsapp { background: #25d366; color: #fff; }
+    .wa-icon {
+      width: 20px;
+      height: 20px;
+      display: inline-block;
+      flex: 0 0 auto;
+    }
     .gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
     .gallery img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
     .form-panel { padding: clamp(20px, 4vw, 34px); }
@@ -923,6 +947,7 @@ TEMPLATES = {
     @media (max-width: 840px) {
       .hero, .grid, .form-grid { grid-template-columns: 1fr; }
       .detail-wrap { grid-template-columns: 1fr; }
+      .contact-actions { grid-template-columns: 1fr; }
       .stats { grid-template-columns: 1fr; }
       .nav { padding: 0 16px; }
     }
@@ -1092,21 +1117,19 @@ TEMPLATES = {
 
       <div class="info-list">
         {% for label, value in [
-          ("Zona", mascota.zona),
-          ("Contacto", mascota.contacto),
-          ("Fecha", mascota.fecha),
+          ("Fecha de extravio", mascota.fecha),
+          ("Direccion de extravio", mascota.direccion),
+          ("Entre calles", mascota.calles),
+          ("Ciudad", mascota.ciudad),
+          ("Estado", mascota.estado),
+          ("Codigo postal", mascota.cp),
           ("Edad", mascota.edad),
           ("Raza", mascota.raza),
           ("Genero", mascota.genero),
           ("Color", mascota.color),
           ("Collar", mascota.collar),
-          ("Comportamiento", mascota.docil),
-          ("Direccion", mascota.direccion),
-          ("Ciudad", mascota.ciudad),
-          ("Estado", mascota.estado),
-          ("Codigo postal", mascota.cp),
-          ("Entre calles", mascota.calles),
-          ("Dueno", mascota.dueno),
+          ("Docil", mascota.docil),
+          ("Dueño", mascota.dueno),
           ("Recompensa", mascota.recompensa)
         ] %}
           {% if value %}
@@ -1114,6 +1137,19 @@ TEMPLATES = {
           {% endif %}
         {% endfor %}
       </div>
+      {% set call_phone = phone_digits(mascota.contacto) %}
+      {% set wa_phone = whatsapp_digits(mascota.contacto) %}
+      {% if call_phone %}
+        <div class="contact-actions">
+          <a class="btn primary" href="tel:{{ call_phone }}">Llamar</a>
+          <a class="btn whatsapp" href="https://wa.me/{{ wa_phone }}" target="_blank" rel="noopener">
+            <svg class="wa-icon" viewBox="0 0 32 32" aria-hidden="true">
+              <path fill="currentColor" d="M16.04 3.2c-7.02 0-12.72 5.7-12.72 12.72 0 2.24.58 4.43 1.69 6.36L3.2 28.8l6.68-1.75a12.7 12.7 0 0 0 6.16 1.57c7.02 0 12.72-5.7 12.72-12.72S23.06 3.2 16.04 3.2Zm0 23.26c-1.93 0-3.82-.52-5.47-1.5l-.39-.23-3.96 1.04 1.06-3.86-.25-.4a10.48 10.48 0 0 1-1.6-5.6c0-5.86 4.76-10.62 10.61-10.62 2.84 0 5.5 1.1 7.5 3.11a10.55 10.55 0 0 1 3.11 7.5c0 5.85-4.76 10.56-10.61 10.56Zm5.82-7.94c-.32-.16-1.88-.93-2.17-1.03-.29-.11-.5-.16-.71.16-.21.32-.82 1.03-1 1.24-.18.21-.37.24-.69.08-.32-.16-1.35-.5-2.57-1.59-.95-.85-1.6-1.9-1.79-2.22-.18-.32-.02-.49.14-.65.14-.14.32-.37.48-.55.16-.18.21-.32.32-.53.11-.21.05-.4-.03-.55-.08-.16-.71-1.72-.97-2.35-.26-.62-.52-.53-.71-.54h-.61c-.21 0-.55.08-.84.4-.29.32-1.1 1.08-1.1 2.64s1.13 3.06 1.29 3.27c.16.21 2.23 3.41 5.4 4.78.75.32 1.34.52 1.8.66.76.24 1.45.21 1.99.13.61-.09 1.88-.77 2.14-1.51.26-.74.26-1.37.18-1.51-.08-.13-.29-.21-.61-.37Z"/>
+            </svg>
+            WhatsApp
+          </a>
+        </div>
+      {% endif %}
       <div class="actions"><a class="btn" href="{{ url_for('index') }}">Volver a reportes</a></div>
     </article>
   </section>
