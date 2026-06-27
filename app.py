@@ -114,6 +114,14 @@ def normalize_phone(raw_phone):
     return phone
 
 
+def phone_for_sms(phone):
+    digits = re.sub(r"\D", "", phone or "")
+    default_country = os.getenv("LABSMOBILE_DEFAULT_COUNTRY_CODE", "52")
+    if len(digits) == 10 and default_country:
+        digits = f"{default_country}{digits}"
+    return digits
+
+
 def current_user_phone():
     return session.get("tel")
 
@@ -133,23 +141,30 @@ def send_sms(phone, code):
     api_url = os.getenv("LABSMOBILE_API")
     user = os.getenv("LABSMOBILE_USER")
     token = os.getenv("LABSMOBILE_TOKEN")
-    sender = os.getenv("LABSMOBILE_SENDER", "UBICAN ID")
+    sender = os.getenv("LABSMOBILE_SENDER", "UBICANID")
 
     if not all([api_url, user, token]):
         logger.warning("SMS no enviado: faltan variables de LabsMobile.")
         return False
 
+    sms_phone = phone_for_sms(phone)
+    if not sms_phone:
+        logger.warning("SMS no enviado: telefono invalido para LabsMobile.")
+        return False
+
     payload = {
         "message": f"Tu codigo UBICAN ID es {code}. Expira en 5 minutos.",
         "tpoa": sender,
-        "recipient": [{"msisdn": phone}],
+        "recipient": [{"msisdn": sms_phone}],
     }
     try:
         response = requests.post(api_url, json=payload, auth=(user, token), timeout=12)
         response.raise_for_status()
+        logger.info("SMS enviado a %s via LabsMobile.", sms_phone)
         return True
-    except requests.RequestException:
-        logger.exception("No se pudo enviar el SMS.")
+    except requests.RequestException as exc:
+        detail = getattr(exc.response, "text", "") if getattr(exc, "response", None) else ""
+        logger.exception("No se pudo enviar el SMS. Respuesta LabsMobile: %s", detail)
         return False
 
 

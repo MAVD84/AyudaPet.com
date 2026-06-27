@@ -14,7 +14,7 @@ Variables principales:
 - `SUPABASE_URL`: URL del proyecto Supabase.
 - `SUPABASE_SERVICE_ROLE_KEY`: key solo para el servidor Flask.
 - `SHOW_OTP_IN_DEV`: usa `true` solo en desarrollo para ver codigos OTP en pantalla.
-- `LABSMOBILE_*`: credenciales para envio de SMS.
+- `LABSMOBILE_*`: credenciales para envio de SMS. `LABSMOBILE_DEFAULT_COUNTRY_CODE=52` convierte telefonos mexicanos de 10 digitos a formato internacional.
 
 ## Desarrollo local
 
