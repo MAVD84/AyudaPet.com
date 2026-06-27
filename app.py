@@ -367,8 +367,11 @@ def report_payload(report_id, existing=None):
         raise AppError("El nombre de la mascota es obligatorio.")
 
     existing = existing or {}
-    principal = upload_image(request.files.get("principal"), report_id, "principal") or existing.get("principal")
-    secundarias = list(existing.get("secundarias") or [])
+    remove_principal = request.form.get("remove_principal") == "on"
+    remove_secondary = set(request.form.getlist("remove_secundarias"))
+    principal = None if remove_principal else existing.get("principal")
+    principal = upload_image(request.files.get("principal"), report_id, "principal") or principal
+    secundarias = [image for image in list(existing.get("secundarias") or []) if image not in remove_secondary]
     for index, image in enumerate(request.files.getlist("secundarias"), start=1):
         uploaded = upload_image(image, report_id, f"secundaria-{index}")
         if uploaded:
@@ -1039,6 +1042,23 @@ TEMPLATES = {
       color: var(--blue);
       font-weight: 900;
     }
+    .edit-images { display: grid; gap: 12px; }
+    .edit-image-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+    .edit-image-item {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px;
+      background: #fbfdff;
+      display: grid;
+      gap: 8px;
+    }
+    .edit-image-item img {
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: cover;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+    }
     .zoomable { cursor: zoom-in; }
     .lightbox {
       position: fixed;
@@ -1654,9 +1674,30 @@ TEMPLATES = {
           <label>Estado del reporte</label>
           <label class="check"><input type="checkbox" name="encontrado" {% if mascota.encontrado %}checked{% endif %}> Localizado</label>
         </div>
-        <div class="field"><label for="principal">Foto principal</label><input id="principal" name="principal" type="file" accept="image/*"></div>
+        <div class="field full">
+          <label for="principal">Foto principal</label>
+          {% if editing and mascota.principal %}
+            <div class="edit-images">
+              <div class="edit-image-item" style="max-width:180px;">
+                <img src="{{ mascota.principal }}" alt="Foto principal actual">
+                <label class="check"><input type="checkbox" name="remove_principal"> Eliminar foto principal</label>
+              </div>
+            </div>
+          {% endif %}
+          <input id="principal" name="principal" type="file" accept="image/*">
+        </div>
         <div class="field full">
           <label>Fotos secundarias</label>
+          {% if editing and mascota.secundarias %}
+            <div class="edit-image-grid">
+              {% for image in mascota.secundarias %}
+                <div class="edit-image-item">
+                  <img src="{{ image }}" alt="Foto secundaria actual">
+                  <label class="check"><input type="checkbox" name="remove_secundarias" value="{{ image }}"> Eliminar</label>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
           <div class="checks">
             <input name="secundarias" type="file" accept="image/*" multiple>
           </div>
