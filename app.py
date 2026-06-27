@@ -1,5 +1,6 @@
 import hmac
 import logging
+import mimetypes
 import os
 import re
 import secrets
@@ -33,11 +34,13 @@ logger = logging.getLogger(__name__)
 
 SUPABASE_URL = (os.getenv("SUPABASE_URL") or "").rstrip("/")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_ANON_KEY")
+SUPABASE_STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "mascotas")
 SHOW_OTP_IN_DEV = os.getenv("SHOW_OTP_IN_DEV", "").lower() in {"1", "true", "yes"}
 OTP_TTL_SECONDS = int(os.getenv("OTP_TTL_SECONDS", "300"))
 
 PHONE_RE = re.compile(r"^\+?[0-9]{10,15}$")
 MX_PHONE_RE = re.compile(r"^[2-9][0-9]{9}$")
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
 
 class AppError(RuntimeError):
@@ -106,6 +109,39 @@ def upsert_row(table, payload, on_conflict):
 
 def delete_rows(table, params):
     return db_request(table, method="DELETE", params=params, prefer="return=minimal")
+
+
+def storage_url(path):
+    return f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_STORAGE_BUCKET}/{path}"
+
+
+def public_storage_url(path):
+    return f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_STORAGE_BUCKET}/{path}"
+
+
+def upload_image(file_storage, report_id, label):
+    if not file_storage or not file_storage.filename:
+        return None
+
+    content_type = file_storage.mimetype or mimetypes.guess_type(file_storage.filename)[0]
+    if content_type not in ALLOWED_IMAGE_TYPES:
+        raise AppError("Solo puedes subir imagenes JPG, PNG, WEBP o GIF.")
+
+    extension = mimetypes.guess_extension(content_type) or ".jpg"
+    path = f"reportes/{report_id}/{label}-{uuid.uuid4().hex}{extension}"
+    headers = supabase_headers("return=minimal")
+    headers["Content-Type"] = content_type
+    headers["x-upsert"] = "true"
+
+    try:
+        response = requests.post(storage_url(path), data=file_storage.stream, headers=headers, timeout=30)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        detail = getattr(exc.response, "text", "") if getattr(exc, "response", None) else ""
+        logger.exception("No se pudo subir imagen a Supabase Storage: %s", detail)
+        raise AppError("No se pudo subir la imagen. Intenta de nuevo.") from exc
+
+    return public_storage_url(path)
 
 
 def normalize_phone(raw_phone):
@@ -245,6 +281,18 @@ def list_mascotas():
     )
 
 
+def get_mascota(report_id):
+    rows = select_rows(
+        "mascotas",
+        {
+            "id": f"eq.{report_id}",
+            "select": "*",
+            "limit": "1",
+        },
+    )
+    return rows[0] if rows else None
+
+
 def get_form_value(name):
     value = request.form.get(name)
     return value.strip() if isinstance(value, str) and value.strip() else None
@@ -255,15 +303,23 @@ def create_report():
     if not required_name:
         raise AppError("El nombre de la mascota es obligatorio.")
 
+    report_id = uuid.uuid4().hex
+    principal = upload_image(request.files.get("principal"), report_id, "principal")
+    secundarias = []
+    for index, image in enumerate(request.files.getlist("secundarias"), start=1):
+        uploaded = upload_image(image, report_id, f"secundaria-{index}")
+        if uploaded:
+            secundarias.append(uploaded)
+
     payload = {
-        "id": uuid.uuid4().hex,
+        "id": report_id,
         "reportado_por": current_user_phone(),
         "nombre": required_name,
         "descripcion": get_form_value("descripcion"),
         "zona": get_form_value("zona"),
         "contacto": get_form_value("contacto"),
-        "principal": get_form_value("principal"),
-        "secundarias": [item for item in request.form.getlist("secundarias") if item],
+        "principal": principal,
+        "secundarias": secundarias,
         "fecha": get_form_value("fecha"),
         "edad": get_form_value("edad"),
         "raza": get_form_value("raza"),
@@ -315,6 +371,14 @@ def index():
         "encontrados": len([m for m in mascotas if m.get("encontrado")]),
     }
     return render_template("index.html", mascotas=mascotas, stats=stats)
+
+
+@app.route("/mascotas/<report_id>")
+def detalle_mascota(report_id):
+    mascota = get_mascota(report_id)
+    if not mascota:
+        return render_template("error.html", title="Reporte no encontrado", message="El reporte solicitado no existe."), 404
+    return render_template("detalle.html", mascota=mascota)
 
 
 @app.route("/registro", methods=["GET", "POST"])
@@ -626,6 +690,7 @@ TEMPLATES = {
     .section-head p { margin: 5px 0 0; color: var(--muted); }
     .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
     .pet-card { overflow: hidden; }
+    .pet-card:hover { transform: translateY(-2px); transition: transform .16s ease; }
     .pet-media {
       height: 150px;
       background:
@@ -636,6 +701,12 @@ TEMPLATES = {
       font-size: 2rem;
       font-weight: 900;
       color: var(--blue);
+    }
+    .pet-media img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
     }
     .pet-body { padding: 16px; }
     .pet-body h3 { margin: 0 0 8px; font-size: 1.1rem; }
@@ -653,6 +724,26 @@ TEMPLATES = {
     }
     .badge.found { background: #e9f7f0; color: var(--green); }
     .form-wrap { max-width: 900px; margin: 0 auto; }
+    .detail-wrap { display: grid; grid-template-columns: minmax(0, .9fr) minmax(320px, 1.1fr); gap: 18px; align-items: start; }
+    .detail-photo {
+      overflow: hidden;
+      min-height: 340px;
+      display: grid;
+      place-items: center;
+      color: var(--blue);
+      font-size: 3rem;
+      font-weight: 900;
+      background:
+        linear-gradient(135deg, rgba(232,80,53,.18), rgba(23,107,135,.18)),
+        #edf3f7;
+    }
+    .detail-photo img { width: 100%; height: 100%; min-height: 340px; object-fit: cover; display: block; }
+    .detail-info { padding: clamp(20px, 4vw, 32px); }
+    .info-list { display: grid; gap: 10px; margin-top: 18px; }
+    .info-row { padding: 12px 0; border-bottom: 1px solid var(--line); display: grid; gap: 3px; }
+    .info-row strong { font-size: .82rem; text-transform: uppercase; color: var(--muted); }
+    .gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
+    .gallery img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
     .form-panel { padding: clamp(20px, 4vw, 34px); }
     .form-panel h1 { color: var(--ink); font-size: clamp(1.8rem, 4vw, 2.7rem); }
     .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
@@ -738,6 +829,7 @@ TEMPLATES = {
     footer { color: var(--muted); text-align: center; padding: 20px; }
     @media (max-width: 840px) {
       .hero, .grid, .form-grid { grid-template-columns: 1fr; }
+      .detail-wrap { grid-template-columns: 1fr; }
       .stats { grid-template-columns: 1fr; }
       .nav { padding: 0 16px; }
     }
@@ -846,8 +938,14 @@ TEMPLATES = {
   {% if mascotas %}
     <section class="grid">
       {% for pet in mascotas %}
-        <article class="pet-card">
-          <div class="pet-media">{{ (pet.nombre or "?")[:1].upper() }}</div>
+        <a class="pet-card" href="{{ url_for('detalle_mascota', report_id=pet.id) }}">
+          <div class="pet-media">
+            {% if pet.principal %}
+              <img src="{{ pet.principal }}" alt="{{ pet.nombre }}">
+            {% else %}
+              {{ (pet.nombre or "?")[:1].upper() }}
+            {% endif %}
+          </div>
           <div class="pet-body">
             <span class="badge {% if pet.encontrado %}found{% endif %}">{{ "Encontrado" if pet.encontrado else "En busqueda" }}</span>
             <h3>{{ pet.nombre }}</h3>
@@ -858,7 +956,7 @@ TEMPLATES = {
             </p>
             {% if pet.descripcion %}<p>{{ pet.descripcion }}</p>{% endif %}
           </div>
-        </article>
+        </a>
       {% endfor %}
     </section>
   {% else %}
@@ -866,11 +964,64 @@ TEMPLATES = {
   {% endif %}
 {% endblock %}
 """,
+    "detalle.html": """
+{% extends "base.html" %}
+{% block content %}
+  <section class="detail-wrap">
+    <div class="panel detail-photo">
+      {% if mascota.principal %}
+        <img src="{{ mascota.principal }}" alt="{{ mascota.nombre }}">
+      {% else %}
+        {{ (mascota.nombre or "?")[:1].upper() }}
+      {% endif %}
+    </div>
+    <article class="panel detail-info">
+      <span class="badge {% if mascota.encontrado %}found{% endif %}">{{ "Encontrado" if mascota.encontrado else "En busqueda" }}</span>
+      <h1>{{ mascota.nombre }}</h1>
+      {% if mascota.descripcion %}<p class="meta">{{ mascota.descripcion }}</p>{% endif %}
+
+      {% if mascota.secundarias %}
+        <div class="gallery">
+          {% for image in mascota.secundarias %}
+            <img src="{{ image }}" alt="Foto de {{ mascota.nombre }}">
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <div class="info-list">
+        {% for label, value in [
+          ("Zona", mascota.zona),
+          ("Contacto", mascota.contacto),
+          ("Fecha", mascota.fecha),
+          ("Edad", mascota.edad),
+          ("Raza", mascota.raza),
+          ("Genero", mascota.genero),
+          ("Color", mascota.color),
+          ("Collar", mascota.collar),
+          ("Comportamiento", mascota.docil),
+          ("Direccion", mascota.direccion),
+          ("Ciudad", mascota.ciudad),
+          ("Estado", mascota.estado),
+          ("Codigo postal", mascota.cp),
+          ("Entre calles", mascota.calles),
+          ("Dueno", mascota.dueno),
+          ("Recompensa", mascota.recompensa)
+        ] %}
+          {% if value %}
+            <div class="info-row"><strong>{{ label }}</strong><span>{{ value }}</span></div>
+          {% endif %}
+        {% endfor %}
+      </div>
+      <div class="actions"><a class="btn" href="{{ url_for('index') }}">Volver a reportes</a></div>
+    </article>
+  </section>
+{% endblock %}
+""",
     "registro.html": """
 {% extends "base.html" %}
 {% block content %}
   <section class="form-wrap">
-    <form class="form-panel" method="post">
+    <form class="form-panel" method="post" enctype="multipart/form-data">
       <p class="eyebrow" style="color: var(--brand);">Registro seguro</p>
       <h1>Crea tu cuenta</h1>
       <p class="meta">Solo aceptamos numeros mexicanos de 10 digitos.</p>
@@ -987,12 +1138,11 @@ TEMPLATES = {
         <div class="field"><label for="color">Color</label><input id="color" name="color"></div>
         <div class="field"><label for="collar">Collar</label><input id="collar" name="collar"></div>
         <div class="field"><label for="docil">Comportamiento</label><input id="docil" name="docil" placeholder="Docil, nervioso, asustado"></div>
-        <div class="field"><label for="principal">Foto principal</label><input id="principal" name="principal" placeholder="URL de imagen"></div>
+        <div class="field"><label for="principal">Foto principal</label><input id="principal" name="principal" type="file" accept="image/*"></div>
         <div class="field full">
           <label>Fotos secundarias</label>
           <div class="checks">
-            <input name="secundarias" placeholder="URL secundaria 1">
-            <input name="secundarias" placeholder="URL secundaria 2">
+            <input name="secundarias" type="file" accept="image/*" multiple>
           </div>
         </div>
         <div class="field full"><label for="direccion">Direccion o referencia</label><input id="direccion" name="direccion"></div>
