@@ -980,12 +980,13 @@ TEMPLATES = {
     .detail-wrap { display: grid; grid-template-columns: minmax(0, .9fr) minmax(min(320px, 100%), 1.1fr); gap: 18px; align-items: start; }
     .detail-photo {
       overflow: hidden;
-      min-height: 340px;
       padding: 0;
+      aspect-ratio: 1;
     }
     .detail-media {
       position: relative;
-      min-height: 340px;
+      height: 100%;
+      aspect-ratio: 1;
       display: grid;
       place-items: center;
       color: var(--blue);
@@ -995,7 +996,7 @@ TEMPLATES = {
         linear-gradient(135deg, rgba(232,80,53,.18), rgba(23,107,135,.18)),
         #edf3f7;
     }
-    .detail-media img { width: 100%; height: 100%; min-height: 340px; object-fit: cover; display: block; }
+    .detail-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .detail-info { padding: clamp(20px, 4vw, 32px); }
     .info-list { display: grid; gap: 10px; margin-top: 18px; }
     .info-row { padding: 12px 0; border-bottom: 1px solid var(--line); display: grid; gap: 3px; }
@@ -1248,8 +1249,6 @@ TEMPLATES = {
       .hero-main { min-height: 260px; }
       .actions .btn, .contact-actions .btn { width: 100%; }
       .form-panel, .profile-card, .panel { padding: 16px; }
-      .detail-photo { min-height: 260px; }
-      .detail-media, .detail-media img { min-height: 260px; }
     }
     @media (min-width: 1024px) {
       .nav, .shell { max-width: 1440px; }
@@ -1292,7 +1291,6 @@ TEMPLATES = {
         grid-template-columns: minmax(380px, 500px) minmax(0, 1fr);
         gap: 22px;
       }
-      .detail-media, .detail-media img { min-height: 460px; }
       .detail-info { padding: 34px; }
       .profile-layout {
         grid-template-columns: 420px minmax(0, 1fr);
@@ -1387,8 +1385,10 @@ TEMPLATES = {
       lightboxImage.alt = "";
     }
     document.querySelectorAll("[data-zoom-src]").forEach((image) => {
-      image.addEventListener("click", () => {
+      image.addEventListener("click", (event) => {
         if (!lightbox || !lightboxImage) return;
+        event.preventDefault();
+        event.stopPropagation();
         lightboxImage.src = image.dataset.zoomSrc;
         lightboxImage.alt = image.alt || "Imagen ampliada";
         lightbox.classList.add("open");
@@ -1445,7 +1445,7 @@ TEMPLATES = {
         <a class="pet-card" href="{{ url_for('detalle_mascota', report_id=pet.id) }}">
           <div class="pet-media">
             {% if pet.principal %}
-              <img src="{{ pet.principal }}" alt="{{ pet.nombre }}">
+              <img class="zoomable" src="{{ pet.principal }}" alt="{{ pet.nombre }}" data-zoom-src="{{ pet.principal }}">
             {% else %}
               {{ (pet.nombre or "?")[:1].upper() }}
             {% endif %}
