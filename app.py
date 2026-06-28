@@ -478,12 +478,28 @@ def not_found(_error):
 @app.route("/")
 def index():
     mascotas = list_mascotas()
+    query = (request.args.get("q") or "").strip()
+    estado = (request.args.get("estado") or "todos").strip().lower()
     stats = {
         "total": len(mascotas),
         "activos": len([m for m in mascotas if not m.get("encontrado")]),
         "encontrados": len([m for m in mascotas if m.get("encontrado")]),
     }
-    return render_template("index.html", mascotas=mascotas, stats=stats)
+    if estado == "perdidos":
+        mascotas = [m for m in mascotas if not m.get("encontrado")]
+    elif estado == "localizados":
+        mascotas = [m for m in mascotas if m.get("encontrado")]
+
+    if query:
+        needle = query.casefold()
+        search_fields = ("nombre", "descripcion", "direccion", "calles", "ciudad", "estado", "cp", "contacto")
+        mascotas = [
+            m for m in mascotas
+            if any(needle in str(m.get(field) or "").casefold() for field in search_fields)
+        ]
+
+    filters = {"q": query, "estado": estado, "resultados": len(mascotas)}
+    return render_template("index.html", mascotas=mascotas, stats=stats, filters=filters)
 
 
 @app.route("/mascotas/<report_id>")
@@ -918,6 +934,38 @@ TEMPLATES = {
     .stat { padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: #fbfdff; }
     .stat strong { display: block; font-size: 1.8rem; }
     .stat span { color: var(--muted); font-size: .9rem; }
+    .stats-dropdown summary {
+      list-style: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      cursor: pointer;
+      font-weight: 900;
+    }
+    .stats-dropdown summary::-webkit-details-marker { display: none; }
+    .stats-dropdown summary::after { content: "+"; color: var(--muted); font-size: 1.25rem; }
+    .stats-dropdown[open] summary::after { content: "-"; }
+    .search-panel { margin: 0 0 24px; }
+    .search-form {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 190px auto;
+      gap: 10px;
+      align-items: end;
+    }
+    .search-form .field { display: grid; gap: 7px; }
+    .search-form label { font-weight: 800; color: var(--muted); font-size: .82rem; text-transform: uppercase; }
+    .search-form input, .search-form select {
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0 12px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+    }
+    .filter-meta { margin: 12px 0 0; color: var(--muted); }
     .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; }
     .actions form { display: flex; min-width: 132px; }
     .actions form .btn { width: 100%; }
@@ -1317,6 +1365,7 @@ TEMPLATES = {
       .profile-layout { grid-template-columns: 1fr; }
       .contact-actions { grid-template-columns: 1fr; }
       .split-info { column-gap: 14px; }
+      .search-form { grid-template-columns: 1fr; }
       .actions { flex-direction: column; align-items: stretch; }
       .actions .btn, .actions form { width: 100%; }
       .stats { grid-template-columns: 1fr; }
@@ -1540,14 +1589,35 @@ TEMPLATES = {
       </div>
     </div>
     <aside class="panel">
-      <span class="badge">Panel activo</span>
-      <div class="stats">
-        <div class="stat"><strong>{{ stats.total }}</strong><span>reportes</span></div>
-        <div class="stat"><strong>{{ stats.activos }}</strong><span>activos</span></div>
-        <div class="stat"><strong>{{ stats.encontrados }}</strong><span>resueltos</span></div>
-      </div>
-      <p class="meta" style="margin-top:18px;">Los reportes mas recientes aparecen primero para facilitar busquedas por direccion, ciudad y contacto.</p>
+      <details class="stats-dropdown">
+        <summary><span class="badge">Panel activo</span><span>{{ stats.activos }} activos</span></summary>
+        <div class="stats">
+          <div class="stat"><strong>{{ stats.total }}</strong><span>reportes</span></div>
+          <div class="stat"><strong>{{ stats.activos }}</strong><span>activos</span></div>
+          <div class="stat"><strong>{{ stats.encontrados }}</strong><span>resueltos</span></div>
+        </div>
+        <p class="meta" style="margin-top:18px;">Los reportes mas recientes aparecen primero para facilitar busquedas por direccion, ciudad y contacto.</p>
+      </details>
     </aside>
+  </section>
+
+  <section class="panel search-panel">
+    <form class="search-form" method="get" action="{{ url_for('index') }}">
+      <div class="field">
+        <label for="q">Buscar</label>
+        <input id="q" name="q" value="{{ filters.q }}" placeholder="Nombre, direccion, ciudad o contacto">
+      </div>
+      <div class="field">
+        <label for="estado">Filtro</label>
+        <select id="estado" name="estado">
+          <option value="todos" {% if filters.estado == "todos" %}selected{% endif %}>Todos</option>
+          <option value="perdidos" {% if filters.estado == "perdidos" %}selected{% endif %}>Perdidos</option>
+          <option value="localizados" {% if filters.estado == "localizados" %}selected{% endif %}>Localizados</option>
+        </select>
+      </div>
+      <button class="btn primary" type="submit">Buscar</button>
+    </form>
+    <p class="filter-meta">{{ filters.resultados }} resultado{{ "" if filters.resultados == 1 else "s" }}{% if filters.q %} para "{{ filters.q }}"{% endif %}</p>
   </section>
 
   <div class="section-head">
