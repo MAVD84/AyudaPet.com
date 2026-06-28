@@ -1072,6 +1072,14 @@ TEMPLATES = {
     .info-list { display: grid; gap: 0; margin-top: 22px; border-top: 1px solid var(--line); }
     .info-row { padding: 12px 0; border-bottom: 1px solid var(--line); display: grid; gap: 3px; }
     .info-row strong { font-size: .82rem; text-transform: uppercase; color: var(--muted); }
+    .traits-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0 18px;
+      margin-top: 18px;
+      border-top: 1px solid var(--line);
+    }
+    .traits-grid .info-row { min-width: 0; }
     .contact-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
     .btn.whatsapp { background: #25d366; color: #fff; }
     .wa-icon {
@@ -1307,6 +1315,7 @@ TEMPLATES = {
       .detail-wrap { grid-template-columns: 1fr; }
       .profile-layout { grid-template-columns: 1fr; }
       .contact-actions { grid-template-columns: 1fr; }
+      .traits-grid { column-gap: 14px; }
       .actions { flex-direction: column; align-items: stretch; }
       .actions .btn, .actions form { width: 100%; }
       .stats { grid-template-columns: 1fr; }
@@ -1326,6 +1335,7 @@ TEMPLATES = {
       .view-cue svg { width: 15px; height: 15px; }
       .hero-main { min-height: 260px; }
       .contact-actions .btn { width: 100%; }
+      .traits-grid { column-gap: 10px; }
       .form-panel, .profile-card, .panel { padding: 16px; }
     }
     @media (min-width: 1024px) {
@@ -1622,14 +1632,22 @@ TEMPLATES = {
           ("Ciudad", mascota.ciudad),
           ("Estado", mascota.estado),
           ("Codigo postal", mascota.cp),
+          ("Dueño", mascota.dueno),
+          ("Recompensa", mascota.recompensa)
+        ] %}
+          {% if value %}
+            <div class="info-row"><strong>{{ label }}</strong><span>{{ value }}</span></div>
+          {% endif %}
+        {% endfor %}
+      </div>
+      <div class="traits-grid">
+        {% for label, value in [
           ("Edad", mascota.edad),
           ("Raza", mascota.raza),
           ("Genero", mascota.genero),
           ("Color", mascota.color),
           ("Collar", mascota.collar),
-          ("Docil", mascota.docil),
-          ("Dueño", mascota.dueno),
-          ("Recompensa", mascota.recompensa)
+          ("Docil", mascota.docil)
         ] %}
           {% if value %}
             <div class="info-row"><strong>{{ label }}</strong><span>{{ value }}</span></div>
