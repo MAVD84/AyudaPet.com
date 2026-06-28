@@ -1235,6 +1235,8 @@ TEMPLATES = {
       .detail-wrap { grid-template-columns: 1fr; }
       .profile-layout { grid-template-columns: 1fr; }
       .contact-actions { grid-template-columns: 1fr; }
+      .actions { flex-direction: column; align-items: stretch; }
+      .actions .btn, .actions form { width: 100%; }
       .stats { grid-template-columns: 1fr; }
       .nav { padding: 0 16px; }
     }
@@ -1249,7 +1251,7 @@ TEMPLATES = {
       .pet-summary { -webkit-line-clamp: 1; }
       .photo-badge { top: 7px; right: 7px; min-height: 24px; padding: 0 8px; font-size: .68rem; }
       .hero-main { min-height: 260px; }
-      .actions .btn, .contact-actions .btn { width: 100%; }
+      .contact-actions .btn { width: 100%; }
       .form-panel, .profile-card, .panel { padding: 16px; }
     }
     @media (min-width: 1024px) {
