@@ -980,7 +980,7 @@ TEMPLATES = {
     }
     .form-wrap { max-width: 900px; margin: 0 auto; }
     .detail-wrap { display: grid; grid-template-columns: minmax(0, .9fr) minmax(min(320px, 100%), 1.1fr); gap: 18px; align-items: start; }
-    .detail-photo {
+    .panel.detail-photo {
       overflow: hidden;
       padding: 0;
       aspect-ratio: 1;
@@ -998,7 +998,7 @@ TEMPLATES = {
         linear-gradient(135deg, rgba(232,80,53,.18), rgba(23,107,135,.18)),
         #edf3f7;
     }
-    .detail-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .detail-media img { width: 100%; height: 100%; object-fit: contain; display: block; background: #edf3f7; }
     .detail-info { padding: clamp(20px, 4vw, 32px); }
     .info-list { display: grid; gap: 10px; margin-top: 18px; }
     .info-row { padding: 12px 0; border-bottom: 1px solid var(--line); display: grid; gap: 3px; }
