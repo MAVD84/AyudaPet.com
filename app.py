@@ -913,14 +913,16 @@ TEMPLATES = {
     .pet-card {
       overflow: hidden;
       display: grid;
-      grid-template-rows: auto 1fr;
+      grid-template-columns: 120px minmax(0, 1fr);
+      min-height: 150px;
       color: inherit;
     }
     .pet-card:hover { transform: translateY(-2px); transition: transform .16s ease; }
     .pet-media {
       position: relative;
-      aspect-ratio: 4 / 3;
       width: 100%;
+      height: 100%;
+      min-height: 150px;
       background:
         linear-gradient(135deg, rgba(232,80,53,.20), rgba(23,107,135,.20)),
         #edf3f7;
@@ -938,10 +940,11 @@ TEMPLATES = {
     }
     .pet-body {
       padding: 16px;
-      border-top: 1px solid var(--line);
+      border-left: 1px solid var(--line);
       display: grid;
       gap: 10px;
       align-content: start;
+      min-width: 0;
     }
     .pet-body h3 { margin: 0; font-size: 1.15rem; }
     .pet-summary {
@@ -1235,6 +1238,12 @@ TEMPLATES = {
       .brand { gap: 8px; font-size: .95rem; }
       .mark { width: 38px; height: 38px; }
       .menu-toggle, .nav-spacer { width: 38px; height: 38px; }
+      .pet-card { grid-template-columns: 104px minmax(0, 1fr); min-height: 136px; }
+      .pet-media { min-height: 136px; font-size: 1.55rem; }
+      .pet-body { padding: 12px; gap: 7px; }
+      .pet-body h3 { font-size: 1rem; }
+      .pet-summary { -webkit-line-clamp: 1; }
+      .photo-badge { top: 7px; right: 7px; min-height: 24px; padding: 0 8px; font-size: .68rem; }
       .hero-main { min-height: 260px; }
       .actions .btn, .contact-actions .btn { width: 100%; }
       .form-panel, .profile-card, .panel { padding: 16px; }
@@ -1262,17 +1271,12 @@ TEMPLATES = {
       }
       .pet-card {
         grid-template-columns: 220px minmax(0, 1fr);
-        grid-template-rows: none;
         min-height: 220px;
       }
       .pet-media {
-        aspect-ratio: auto;
-        height: 100%;
         min-height: 220px;
       }
       .pet-body {
-        border-top: 0;
-        border-left: 1px solid var(--line);
         min-height: 220px;
         padding: 20px;
       }
