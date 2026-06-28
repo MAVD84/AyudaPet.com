@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from flask import (
     Flask,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -421,6 +422,26 @@ def update_report(report_id, mascota):
     return rows[0] if isinstance(rows, list) and rows else None
 
 
+def remove_report_image(report_id, mascota, target, image_url=None):
+    if target == "principal":
+        payload = {"principal": None}
+    elif target == "secundaria":
+        current_images = list(mascota.get("secundarias") or [])
+        if not image_url or image_url not in current_images:
+            raise AppError("La imagen ya no existe en este reporte.")
+        payload = {"secundarias": [image for image in current_images if image != image_url]}
+    else:
+        raise AppError("Imagen no valida.")
+
+    rows = db_request(
+        "mascotas",
+        method="PATCH",
+        payload=payload,
+        params={"id": f"eq.{report_id}", "reportado_por": f"eq.{current_user_phone()}"},
+    )
+    return rows[0] if isinstance(rows, list) and rows else None
+
+
 def user_owns_report(mascota):
     return bool(mascota and current_user_phone() and mascota.get("reportado_por") == current_user_phone())
 
@@ -694,6 +715,23 @@ def eliminar_mascota(report_id):
     delete_rows("mascotas", {"id": f"eq.{report_id}", "reportado_por": f"eq.{current_user_phone()}"})
     flash("Reporte eliminado.", "success")
     return redirect(url_for("index"))
+
+
+@app.route("/mascotas/<report_id>/imagenes/eliminar", methods=["POST"])
+@login_required
+def eliminar_imagen_mascota(report_id):
+    mascota = get_mascota(report_id)
+    if not mascota:
+        return jsonify({"ok": False, "message": "Reporte no encontrado."}), 404
+    if not user_owns_report(mascota):
+        return jsonify({"ok": False, "message": "Sin permiso."}), 403
+
+    data = request.get_json(silent=True) or request.form
+    try:
+        remove_report_image(report_id, mascota, data.get("target"), data.get("image"))
+    except AppError as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 400
+    return jsonify({"ok": True})
 
 
 TEMPLATES = {
@@ -1081,10 +1119,12 @@ TEMPLATES = {
       color: var(--blue);
       font-weight: 900;
     }
-    .edit-images { display: grid; gap: 12px; }
-    .edit-image-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+    .edit-images { display: flex; flex-wrap: wrap; gap: 10px; }
+    .edit-image-grid { display: flex; flex-wrap: wrap; gap: 10px; }
     .edit-image-item {
       position: relative;
+      width: 104px;
+      height: 104px;
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 0;
@@ -1092,9 +1132,10 @@ TEMPLATES = {
       display: grid;
       overflow: hidden;
     }
+    .edit-image-item.removing { display: none; }
     .edit-image-item img {
       width: 100%;
-      aspect-ratio: 1;
+      height: 100%;
       object-fit: cover;
       display: block;
     }
@@ -1439,6 +1480,33 @@ TEMPLATES = {
     });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") closeLightbox();
+    });
+
+    document.querySelectorAll("[data-remove-image]").forEach((button) => {
+      button.addEventListener("click", async (event) => {
+        event.preventDefault();
+        const input = button.querySelector("input");
+        const item = button.closest(".edit-image-item");
+        if (input) input.checked = true;
+        item?.classList.add("removing");
+
+        if (!button.dataset.removeUrl) return;
+        try {
+          const response = await fetch(button.dataset.removeUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              target: button.dataset.removeTarget,
+              image: button.dataset.removeImageUrl || null,
+            }),
+          });
+          if (!response.ok) throw new Error("remove failed");
+        } catch (error) {
+          if (input) input.checked = false;
+          item?.classList.remove("removing");
+          alert("No se pudo eliminar la imagen. Intenta de nuevo.");
+        }
+      });
     });
   </script>
 </body>
@@ -1816,9 +1884,9 @@ TEMPLATES = {
           <label for="principal">Foto principal</label>
           {% if editing and mascota.principal %}
             <div class="edit-images">
-              <div class="edit-image-item" style="max-width:180px;">
+              <div class="edit-image-item">
                 <img src="{{ mascota.principal }}" alt="Foto principal actual">
-                <label class="remove-image-check" title="Quitar"><input type="checkbox" name="remove_principal"><span>&times;</span></label>
+                <label class="remove-image-check" title="Quitar" data-remove-image data-remove-url="{{ url_for('eliminar_imagen_mascota', report_id=mascota.id) }}" data-remove-target="principal"><input type="checkbox" name="remove_principal"><span>&times;</span></label>
               </div>
             </div>
           {% endif %}
@@ -1831,7 +1899,7 @@ TEMPLATES = {
               {% for image in mascota.secundarias %}
                 <div class="edit-image-item">
                   <img src="{{ image }}" alt="Foto secundaria actual">
-                  <label class="remove-image-check" title="Quitar"><input type="checkbox" name="remove_secundarias" value="{{ image }}"><span>&times;</span></label>
+                  <label class="remove-image-check" title="Quitar" data-remove-image data-remove-url="{{ url_for('eliminar_imagen_mascota', report_id=mascota.id) }}" data-remove-target="secundaria" data-remove-image-url="{{ image }}"><input type="checkbox" name="remove_secundarias" value="{{ image }}"><span>&times;</span></label>
                 </div>
               {% endfor %}
             </div>
