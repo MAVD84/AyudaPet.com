@@ -1909,29 +1909,6 @@ TEMPLATES = {
       <p class="eyebrow" style="color: var(--brand);">Nuevo reporte</p>
       <h1>{{ "Editar reporte" if editing else "Datos de la mascota" }}</h1>
       <div class="form-grid">
-        <div class="field">
-          <label for="nombre">Nombre o identificador</label>
-          <input id="nombre" name="nombre" value="{{ mascota.nombre or '' }}" required>
-        </div>
-        <div class="field">
-          <label for="contacto">Contacto publico</label>
-          <input id="contacto" name="contacto" value="{{ mascota.contacto or '' }}" placeholder="Telefono, WhatsApp o correo">
-        </div>
-        <div class="field full">
-          <label for="descripcion">Descripcion</label>
-          <textarea id="descripcion" name="descripcion" placeholder="Senales particulares, temperamento, ultima vez visto">{{ mascota.descripcion or '' }}</textarea>
-        </div>
-        <div class="field"><label for="fecha">Fecha</label><input id="fecha" name="fecha" type="date" value="{{ mascota.fecha or '' }}"></div>
-        <div class="field"><label for="edad">Edad</label><input id="edad" name="edad" value="{{ mascota.edad or '' }}"></div>
-        <div class="field"><label for="raza">Raza</label><input id="raza" name="raza" value="{{ mascota.raza or '' }}"></div>
-        <div class="field"><label for="genero">Genero</label><select id="genero" name="genero"><option value="">Seleccionar</option><option {% if mascota.genero == "Macho" %}selected{% endif %}>Macho</option><option {% if mascota.genero == "Hembra" %}selected{% endif %}>Hembra</option><option {% if mascota.genero == "No se sabe" %}selected{% endif %}>No se sabe</option></select></div>
-        <div class="field"><label for="color">Color</label><input id="color" name="color" value="{{ mascota.color or '' }}"></div>
-        <div class="field"><label for="collar">Collar</label><input id="collar" name="collar" value="{{ mascota.collar or '' }}"></div>
-        <div class="field"><label for="docil">Comportamiento</label><input id="docil" name="docil" value="{{ mascota.docil or '' }}" placeholder="Docil, nervioso, asustado"></div>
-        <div class="field">
-          <label>Estado del reporte</label>
-          <label class="check"><input type="checkbox" name="encontrado" {% if mascota.encontrado %}checked{% endif %}> Localizado</label>
-        </div>
         <div class="field full">
           <label for="principal">Foto principal</label>
           {% if editing and mascota.principal %}
@@ -1960,13 +1937,36 @@ TEMPLATES = {
             <input name="secundarias" type="file" accept="image/*" multiple>
           </div>
         </div>
+        <div class="field"><label for="fecha">Fecha de extravio</label><input id="fecha" name="fecha" type="date" value="{{ mascota.fecha or '' }}"></div>
+        <div class="field">
+          <label for="nombre">Nombre de mascota</label>
+          <input id="nombre" name="nombre" value="{{ mascota.nombre or '' }}" required>
+        </div>
+        <div class="field full">
+          <label for="descripcion">Descripcion</label>
+          <textarea id="descripcion" name="descripcion" placeholder="Senales particulares, temperamento, ultima vez visto">{{ mascota.descripcion or '' }}</textarea>
+        </div>
+        <div class="field"><label for="edad">Edad</label><input id="edad" name="edad" value="{{ mascota.edad or '' }}"></div>
+        <div class="field"><label for="raza">Raza</label><input id="raza" name="raza" value="{{ mascota.raza or '' }}"></div>
+        <div class="field"><label for="genero">Genero</label><select id="genero" name="genero"><option value="">Seleccionar</option><option {% if mascota.genero == "Macho" %}selected{% endif %}>Macho</option><option {% if mascota.genero == "Hembra" %}selected{% endif %}>Hembra</option><option {% if mascota.genero == "No se sabe" %}selected{% endif %}>No se sabe</option></select></div>
+        <div class="field"><label for="color">Color</label><input id="color" name="color" value="{{ mascota.color or '' }}"></div>
+        <div class="field"><label for="collar">Collar</label><input id="collar" name="collar" value="{{ mascota.collar or '' }}"></div>
+        <div class="field"><label for="docil">Docil</label><input id="docil" name="docil" value="{{ mascota.docil or '' }}" placeholder="Docil, nervioso, asustado"></div>
         <div class="field full"><label for="direccion">Direccion de extravio</label><input id="direccion" name="direccion" value="{{ mascota.direccion or '' }}"></div>
+        <div class="field full"><label for="calles">Entre calles</label><input id="calles" name="calles" value="{{ mascota.calles or '' }}"></div>
         <div class="field"><label for="ciudad">Ciudad</label><input id="ciudad" name="ciudad" value="{{ mascota.ciudad or '' }}"></div>
         <div class="field"><label for="estado">Estado</label><input id="estado" name="estado" value="{{ mascota.estado or '' }}"></div>
         <div class="field"><label for="cp">Codigo postal</label><input id="cp" name="cp" inputmode="numeric" value="{{ mascota.cp or '' }}"></div>
-        <div class="field"><label for="calles">Entre calles</label><input id="calles" name="calles" value="{{ mascota.calles or '' }}"></div>
         <div class="field"><label for="dueno">Dueno</label><input id="dueno" name="dueno" value="{{ mascota.dueno or '' }}"></div>
         <div class="field"><label for="recompensa">Recompensa</label><input id="recompensa" name="recompensa" value="{{ mascota.recompensa or '' }}"></div>
+        <div class="field">
+          <label for="contacto">Contacto publico</label>
+          <input id="contacto" name="contacto" value="{{ mascota.contacto or '' }}" placeholder="Telefono, WhatsApp o correo">
+        </div>
+        <div class="field">
+          <label>Estado del reporte</label>
+          <label class="check"><input type="checkbox" name="encontrado" {% if mascota.encontrado %}checked{% endif %}> Localizado</label>
+        </div>
       </div>
       <div class="actions">
         <button class="btn primary" type="submit">{{ "Guardar cambios" if editing else "Publicar reporte" }}</button>
