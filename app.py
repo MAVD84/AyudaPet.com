@@ -914,7 +914,7 @@ TEMPLATES = {
       overflow: hidden;
       display: grid;
       grid-template-columns: 120px minmax(0, 1fr);
-      min-height: 150px;
+      min-height: 120px;
       color: inherit;
     }
     .pet-card:hover { transform: translateY(-2px); transition: transform .16s ease; }
@@ -922,7 +922,8 @@ TEMPLATES = {
       position: relative;
       width: 100%;
       height: 100%;
-      min-height: 150px;
+      min-height: 120px;
+      aspect-ratio: 1;
       background:
         linear-gradient(135deg, rgba(232,80,53,.20), rgba(23,107,135,.20)),
         #edf3f7;
@@ -1238,8 +1239,8 @@ TEMPLATES = {
       .brand { gap: 8px; font-size: .95rem; }
       .mark { width: 38px; height: 38px; }
       .menu-toggle, .nav-spacer { width: 38px; height: 38px; }
-      .pet-card { grid-template-columns: 104px minmax(0, 1fr); min-height: 136px; }
-      .pet-media { min-height: 136px; font-size: 1.55rem; }
+      .pet-card { grid-template-columns: 104px minmax(0, 1fr); min-height: 104px; }
+      .pet-media { min-height: 104px; font-size: 1.55rem; }
       .pet-body { padding: 12px; gap: 7px; }
       .pet-body h3 { font-size: 1rem; }
       .pet-summary { -webkit-line-clamp: 1; }
