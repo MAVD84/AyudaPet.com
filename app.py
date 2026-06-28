@@ -1242,27 +1242,40 @@ TEMPLATES = {
       .detail-media, .detail-media img { min-height: 260px; }
     }
     @media (min-width: 1024px) {
-      .nav, .shell { max-width: 1280px; }
+      .nav, .shell { max-width: 1440px; }
       .shell { padding-top: 34px; }
       .hero {
-        grid-template-columns: minmax(0, 1.45fr) 360px;
+        grid-template-columns: minmax(0, 1.7fr) 340px;
         gap: 20px;
         margin-bottom: 30px;
       }
       .hero-main {
-        min-height: 280px;
+        min-height: 300px;
         padding: 42px;
       }
       .hero-main h1 { max-width: 760px; font-size: clamp(2.8rem, 4vw, 4.1rem); }
       .hero-main p { max-width: 620px; }
       .panel { padding: 24px; }
       .grid {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(520px, 1fr));
         gap: 20px;
       }
-      .pet-card { min-height: 100%; }
-      .pet-media { aspect-ratio: 16 / 11; }
-      .pet-body { min-height: 170px; }
+      .pet-card {
+        grid-template-columns: 220px minmax(0, 1fr);
+        grid-template-rows: none;
+        min-height: 220px;
+      }
+      .pet-media {
+        aspect-ratio: auto;
+        height: 100%;
+        min-height: 220px;
+      }
+      .pet-body {
+        border-top: 0;
+        border-left: 1px solid var(--line);
+        min-height: 220px;
+        padding: 20px;
+      }
       .form-wrap { max-width: 1040px; }
       .form-panel { padding: 34px; }
       .form-grid {
@@ -1283,7 +1296,7 @@ TEMPLATES = {
       .contact-actions { max-width: 460px; }
     }
     @media (min-width: 1024px) and (max-width: 1180px) {
-      .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
