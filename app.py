@@ -1045,11 +1045,13 @@ TEMPLATES = {
       box-shadow: 0 10px 24px rgba(20,32,48,.16);
     }
     .form-wrap { max-width: 900px; margin: 0 auto; }
-    .detail-wrap { display: grid; grid-template-columns: minmax(0, .9fr) minmax(min(320px, 100%), 1.1fr); gap: 18px; align-items: start; }
-    .panel.detail-photo {
+    .detail-wrap { display: grid; grid-template-columns: minmax(0, .9fr) minmax(min(320px, 100%), 1.1fr); gap: 22px; align-items: start; }
+    .detail-photo {
       overflow: hidden;
       padding: 0;
       aspect-ratio: 1;
+      border-radius: 8px;
+      background: #edf3f7;
     }
     .detail-media {
       position: relative;
@@ -1065,8 +1067,9 @@ TEMPLATES = {
         #edf3f7;
     }
     .detail-media img { width: 100%; height: 100%; object-fit: contain; display: block; background: #edf3f7; }
-    .detail-info { padding: clamp(20px, 4vw, 32px); }
-    .info-list { display: grid; gap: 10px; margin-top: 18px; }
+    .detail-info { min-width: 0; }
+    .detail-info h1 { margin-bottom: 12px; }
+    .info-list { display: grid; gap: 0; margin-top: 22px; border-top: 1px solid var(--line); }
     .info-row { padding: 12px 0; border-bottom: 1px solid var(--line); display: grid; gap: 3px; }
     .info-row strong { font-size: .82rem; text-transform: uppercase; color: var(--muted); }
     .contact-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
@@ -1368,7 +1371,7 @@ TEMPLATES = {
         grid-template-columns: minmax(380px, 500px) minmax(0, 1fr);
         gap: 22px;
       }
-      .detail-info { padding: 34px; }
+      .detail-info { padding: 0; }
       .profile-layout {
         grid-template-columns: 420px minmax(0, 1fr);
         gap: 22px;
@@ -1581,7 +1584,7 @@ TEMPLATES = {
 {% extends "base.html" %}
 {% block content %}
   <section class="detail-wrap">
-    <div class="panel detail-photo">
+    <div class="detail-photo">
       <div class="detail-media">
         {% if mascota.principal %}
           <img class="zoomable" src="{{ mascota.principal }}" alt="{{ mascota.nombre }}" data-zoom-src="{{ mascota.principal }}">
@@ -1591,7 +1594,7 @@ TEMPLATES = {
         <span class="badge photo-badge {% if mascota.encontrado %}found{% else %}lost{% endif %}">{{ "Localizado" if mascota.encontrado else "Perdido" }}</span>
       </div>
     </div>
-    <article class="panel detail-info">
+    <article class="detail-info">
       <h1>{{ mascota.nombre }}</h1>
       {% if mascota.descripcion %}<p class="meta">{{ mascota.descripcion }}</p>{% endif %}
       {% if is_owner %}
