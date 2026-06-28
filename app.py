@@ -1241,6 +1241,50 @@ TEMPLATES = {
       .detail-photo { min-height: 260px; }
       .detail-media, .detail-media img { min-height: 260px; }
     }
+    @media (min-width: 1024px) {
+      .nav, .shell { max-width: 1280px; }
+      .shell { padding-top: 34px; }
+      .hero {
+        grid-template-columns: minmax(0, 1.45fr) 360px;
+        gap: 20px;
+        margin-bottom: 30px;
+      }
+      .hero-main {
+        min-height: 280px;
+        padding: 42px;
+      }
+      .hero-main h1 { max-width: 760px; font-size: clamp(2.8rem, 4vw, 4.1rem); }
+      .hero-main p { max-width: 620px; }
+      .panel { padding: 24px; }
+      .grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 20px;
+      }
+      .pet-card { min-height: 100%; }
+      .pet-media { aspect-ratio: 16 / 11; }
+      .pet-body { min-height: 170px; }
+      .form-wrap { max-width: 1040px; }
+      .form-panel { padding: 34px; }
+      .form-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: 18px;
+        row-gap: 16px;
+      }
+      .detail-wrap {
+        grid-template-columns: minmax(380px, 500px) minmax(0, 1fr);
+        gap: 22px;
+      }
+      .detail-media, .detail-media img { min-height: 460px; }
+      .detail-info { padding: 34px; }
+      .profile-layout {
+        grid-template-columns: 420px minmax(0, 1fr);
+        gap: 22px;
+      }
+      .contact-actions { max-width: 460px; }
+    }
+    @media (min-width: 1024px) and (max-width: 1180px) {
+      .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
   </style>
 </head>
 <body>
