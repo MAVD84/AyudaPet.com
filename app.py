@@ -913,6 +913,7 @@ TEMPLATES = {
     .section-head p { margin: 5px 0 0; color: var(--muted); }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 18px; }
     .pet-card {
+      position: relative;
       overflow: hidden;
       display: grid;
       grid-template-columns: 120px minmax(0, 1fr);
@@ -942,12 +943,36 @@ TEMPLATES = {
       display: block;
     }
     .pet-body {
-      padding: 16px;
+      padding: 16px 54px 16px 16px;
       border-left: 1px solid var(--line);
       display: grid;
       gap: 10px;
       align-content: start;
       min-width: 0;
+    }
+    .view-cue {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      background: rgba(255,255,255,.94);
+      color: var(--ink);
+      border: 1px solid rgba(20,32,48,.10);
+      box-shadow: 0 10px 24px rgba(20,32,48,.16);
+      pointer-events: none;
+    }
+    .view-cue svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      stroke-width: 2.2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
     .pet-body h3 { margin: 0; font-size: 1.15rem; }
     .pet-summary {
@@ -1246,10 +1271,12 @@ TEMPLATES = {
       .menu-toggle, .nav-spacer { width: 38px; height: 38px; }
       .pet-card { grid-template-columns: 104px minmax(0, 1fr); min-height: 104px; }
       .pet-media { min-height: 104px; font-size: 1.55rem; }
-      .pet-body { padding: 12px; gap: 7px; }
+      .pet-body { padding: 12px 44px 12px 12px; gap: 7px; }
       .pet-body h3 { font-size: 1rem; }
       .pet-summary { -webkit-line-clamp: 1; }
       .photo-badge { top: 7px; right: 7px; min-height: 24px; padding: 0 8px; font-size: .68rem; }
+      .view-cue { top: 8px; right: 8px; width: 28px; height: 28px; }
+      .view-cue svg { width: 15px; height: 15px; }
       .hero-main { min-height: 260px; }
       .contact-actions .btn { width: 100%; }
       .form-panel, .profile-card, .panel { padding: 16px; }
@@ -1282,7 +1309,7 @@ TEMPLATES = {
       }
       .pet-body {
         min-height: 220px;
-        padding: 20px;
+        padding: 20px 60px 20px 20px;
       }
       .form-wrap { max-width: 1040px; }
       .form-panel { padding: 34px; }
@@ -1463,6 +1490,12 @@ TEMPLATES = {
             </p>
             {% if pet.descripcion %}<p class="pet-summary">{{ pet.descripcion }}</p>{% endif %}
           </div>
+          <span class="view-cue" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"></path>
+              <circle cx="12" cy="12" r="2.8"></circle>
+            </svg>
+          </span>
         </a>
       {% endfor %}
     </section>
