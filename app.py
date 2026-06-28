@@ -1046,6 +1046,7 @@ TEMPLATES = {
     }
     .form-wrap { max-width: 900px; margin: 0 auto; }
     .detail-wrap { display: grid; grid-template-columns: minmax(0, .9fr) minmax(min(320px, 100%), 1.1fr); gap: 22px; align-items: start; }
+    .detail-photos { display: grid; gap: 12px; }
     .detail-photo {
       overflow: hidden;
       padding: 0;
@@ -1594,28 +1595,17 @@ TEMPLATES = {
 {% extends "base.html" %}
 {% block content %}
   <section class="detail-wrap">
-    <div class="detail-photo">
-      <div class="detail-media">
-        {% if mascota.principal %}
-          <img class="zoomable" src="{{ mascota.principal }}" alt="{{ mascota.nombre }}" data-zoom-src="{{ mascota.principal }}">
-        {% else %}
-          {{ (mascota.nombre or "?")[:1].upper() }}
-        {% endif %}
-        <span class="badge photo-badge {% if mascota.encontrado %}found{% else %}lost{% endif %}">{{ "Localizado" if mascota.encontrado else "Perdido" }}</span>
-      </div>
-    </div>
-    <article class="detail-info">
-      <h1>{{ mascota.nombre }}</h1>
-      {% if mascota.descripcion %}<p class="meta">{{ mascota.descripcion }}</p>{% endif %}
-      {% if is_owner %}
-        <div class="actions">
-          <a class="btn primary" href="{{ url_for('editar_mascota', report_id=mascota.id) }}">Editar</a>
-          <form method="post" action="{{ url_for('eliminar_mascota', report_id=mascota.id) }}" onsubmit="return confirm('Eliminar este reporte?');">
-            <button class="btn" type="submit">Eliminar</button>
-          </form>
+    <div class="detail-photos">
+      <div class="detail-photo">
+        <div class="detail-media">
+          {% if mascota.principal %}
+            <img class="zoomable" src="{{ mascota.principal }}" alt="{{ mascota.nombre }}" data-zoom-src="{{ mascota.principal }}">
+          {% else %}
+            {{ (mascota.nombre or "?")[:1].upper() }}
+          {% endif %}
+          <span class="badge photo-badge {% if mascota.encontrado %}found{% else %}lost{% endif %}">{{ "Localizado" if mascota.encontrado else "Perdido" }}</span>
         </div>
-      {% endif %}
-
+      </div>
       {% if mascota.secundarias %}
         <div class="gallery">
           {% for image in mascota.secundarias %}
@@ -1623,10 +1613,45 @@ TEMPLATES = {
           {% endfor %}
         </div>
       {% endif %}
+    </div>
+    <article class="detail-info">
+      {% if is_owner %}
+        <div class="actions" style="margin-top:0;">
+          <a class="btn primary" href="{{ url_for('editar_mascota', report_id=mascota.id) }}">Editar</a>
+          <form method="post" action="{{ url_for('eliminar_mascota', report_id=mascota.id) }}" onsubmit="return confirm('Eliminar este reporte?');">
+            <button class="btn" type="submit">Eliminar</button>
+          </form>
+        </div>
+      {% endif %}
 
       <div class="info-list">
         {% for label, value in [
           ("Fecha de extravio", mascota.fecha),
+          ("Nombre de mascota", mascota.nombre),
+          ("Descripcion", mascota.descripcion)
+        ] %}
+          {% if value %}
+            <div class="info-row"><strong>{{ label }}</strong><span>{{ value }}</span></div>
+          {% endif %}
+        {% endfor %}
+      </div>
+      <div class="split-info">
+        {% for label, value in [
+          ("Edad", mascota.edad),
+          ("Raza", mascota.raza),
+          ("Genero", mascota.genero),
+          ("Color", mascota.color),
+          ("Collar", mascota.collar),
+          ("Docil", mascota.docil)
+        ] %}
+          {% if value %}
+            <div class="info-row"><strong>{{ label }}</strong><span>{{ value }}</span></div>
+          {% endif %}
+        {% endfor %}
+      </div>
+
+      <div class="info-list">
+        {% for label, value in [
           ("Direccion de extravio", mascota.direccion),
           ("Entre calles", mascota.calles)
         ] %}
@@ -1649,20 +1674,6 @@ TEMPLATES = {
         {% if mascota.cp %}
           <div class="info-row"><strong>Codigo postal</strong><span>{{ mascota.cp }}</span></div>
         {% endif %}
-      </div>
-      <div class="split-info">
-        {% for label, value in [
-          ("Edad", mascota.edad),
-          ("Raza", mascota.raza),
-          ("Genero", mascota.genero),
-          ("Color", mascota.color),
-          ("Collar", mascota.collar),
-          ("Docil", mascota.docil)
-        ] %}
-          {% if value %}
-            <div class="info-row"><strong>{{ label }}</strong><span>{{ value }}</span></div>
-          {% endif %}
-        {% endfor %}
       </div>
       <div class="split-info">
         {% for label, value in [
