@@ -881,6 +881,8 @@ TEMPLATES = {
     .stat strong { display: block; font-size: 1.8rem; }
     .stat span { color: var(--muted); font-size: .9rem; }
     .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; }
+    .actions form { display: flex; min-width: 132px; }
+    .actions form .btn { width: 100%; }
     .btn {
       border: 0;
       border-radius: 8px;
