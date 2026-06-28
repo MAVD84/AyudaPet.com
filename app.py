@@ -918,14 +918,15 @@ TEMPLATES = {
       display: grid;
       grid-template-columns: 120px minmax(0, 1fr);
       min-height: 120px;
+      align-items: start;
       color: inherit;
     }
     .pet-card:hover { transform: translateY(-2px); transition: transform .16s ease; }
     .pet-media {
       position: relative;
       width: 100%;
-      height: 100%;
-      min-height: 120px;
+      height: 120px;
+      min-height: 0;
       aspect-ratio: 1;
       background:
         linear-gradient(135deg, rgba(232,80,53,.20), rgba(23,107,135,.20)),
@@ -1270,7 +1271,7 @@ TEMPLATES = {
       .mark { width: 38px; height: 38px; }
       .menu-toggle, .nav-spacer { width: 38px; height: 38px; }
       .pet-card { grid-template-columns: 104px minmax(0, 1fr); min-height: 104px; }
-      .pet-media { min-height: 104px; font-size: 1.55rem; }
+      .pet-media { height: 104px; font-size: 1.55rem; }
       .pet-body { padding: 12px 44px 12px 12px; gap: 7px; }
       .pet-body h3 { font-size: 1rem; }
       .pet-summary { -webkit-line-clamp: 1; }
@@ -1305,7 +1306,7 @@ TEMPLATES = {
         min-height: 220px;
       }
       .pet-media {
-        min-height: 220px;
+        height: 220px;
       }
       .pet-body {
         min-height: 220px;
