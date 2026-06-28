@@ -738,11 +738,12 @@ TEMPLATES = {
       max-width: 1180px;
       margin: 0 auto;
       min-height: 70px;
-      padding: 0 22px;
+      padding: 0 clamp(12px, 4vw, 22px);
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 20px;
+      min-width: 0;
     }
     .menu-toggle {
       width: 42px;
@@ -767,6 +768,7 @@ TEMPLATES = {
     .menu-toggle span::before { transform: translateY(-6px); }
     .menu-toggle span::after { transform: translateY(4px); }
     .brand { display: flex; align-items: center; gap: 12px; font-weight: 900; letter-spacing: .02em; }
+    .brand span { min-width: 0; overflow-wrap: anywhere; }
     .mark {
       width: 44px;
       height: 44px;
@@ -841,10 +843,10 @@ TEMPLATES = {
       border-top: 1px solid var(--line);
       font-size: .9rem;
     }
-    .shell { max-width: 1180px; margin: 0 auto; padding: 28px 22px 48px; }
+    .shell { max-width: 1180px; margin: 0 auto; padding: clamp(16px, 4vw, 28px) clamp(12px, 4vw, 22px) 48px; min-width: 0; }
     .hero {
       display: grid;
-      grid-template-columns: minmax(0, 1.15fr) minmax(260px, .85fr);
+      grid-template-columns: minmax(0, 1.15fr) minmax(min(260px, 100%), .85fr);
       gap: 26px;
       align-items: stretch;
       margin-bottom: 24px;
@@ -892,6 +894,8 @@ TEMPLATES = {
       cursor: pointer;
       background: #e8edf3;
       color: var(--ink);
+      text-align: center;
+      max-width: 100%;
     }
     .btn.primary { color: #fff; background: var(--brand); }
     .btn.primary:hover { background: var(--brand-dark); }
@@ -905,7 +909,7 @@ TEMPLATES = {
     }
     .section-head h2 { margin: 0; font-size: 1.35rem; }
     .section-head p { margin: 5px 0 0; color: var(--muted); }
-    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 18px; }
     .pet-card {
       overflow: hidden;
       display: grid;
@@ -969,7 +973,7 @@ TEMPLATES = {
       box-shadow: 0 10px 24px rgba(20,32,48,.16);
     }
     .form-wrap { max-width: 900px; margin: 0 auto; }
-    .detail-wrap { display: grid; grid-template-columns: minmax(0, .9fr) minmax(320px, 1.1fr); gap: 18px; align-items: start; }
+    .detail-wrap { display: grid; grid-template-columns: minmax(0, .9fr) minmax(min(320px, 100%), 1.1fr); gap: 18px; align-items: start; }
     .detail-photo {
       overflow: hidden;
       min-height: 340px;
@@ -1002,7 +1006,7 @@ TEMPLATES = {
     }
     .gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
     .gallery img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
-    .profile-layout { display: grid; grid-template-columns: minmax(280px, .85fr) minmax(0, 1.15fr); gap: 18px; align-items: start; }
+    .profile-layout { display: grid; grid-template-columns: minmax(min(280px, 100%), .85fr) minmax(0, 1.15fr); gap: 18px; align-items: start; }
     .avatar {
       width: 112px;
       height: 112px;
@@ -1045,20 +1049,38 @@ TEMPLATES = {
     .edit-images { display: grid; gap: 12px; }
     .edit-image-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
     .edit-image-item {
+      position: relative;
       border: 1px solid var(--line);
       border-radius: 8px;
-      padding: 8px;
+      padding: 0;
       background: #fbfdff;
       display: grid;
-      gap: 8px;
+      overflow: hidden;
     }
     .edit-image-item img {
       width: 100%;
       aspect-ratio: 1;
       object-fit: cover;
-      border-radius: 8px;
-      border: 1px solid var(--line);
+      display: block;
     }
+    .remove-image-check {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: rgba(184,56,36,.95);
+      color: #fff;
+      font-weight: 900;
+      box-shadow: 0 10px 24px rgba(20,32,48,.20);
+      cursor: pointer;
+    }
+    .remove-image-check input { position: absolute; opacity: 0; pointer-events: none; }
+    .remove-image-check span { transform: translateY(-1px); }
+    .remove-image-check:has(input:checked) { background: var(--ink); outline: 3px solid rgba(232,80,53,.25); }
     .zoomable { cursor: zoom-in; }
     .lightbox {
       position: fixed;
@@ -1116,6 +1138,7 @@ TEMPLATES = {
       color: var(--ink);
       font: inherit;
     }
+    input[type="file"] { overflow: hidden; text-overflow: ellipsis; }
     textarea { min-height: 118px; resize: vertical; }
     input[type="date"] {
       -webkit-appearance: none;
@@ -1167,6 +1190,7 @@ TEMPLATES = {
       border-color: var(--blue);
     }
     .checks { display: flex; flex-wrap: wrap; gap: 10px; }
+    .checks input { min-width: min(260px, 100%); }
     .check {
       display: inline-flex;
       align-items: center;
@@ -1206,6 +1230,16 @@ TEMPLATES = {
       .contact-actions { grid-template-columns: 1fr; }
       .stats { grid-template-columns: 1fr; }
       .nav { padding: 0 16px; }
+    }
+    @media (max-width: 420px) {
+      .brand { gap: 8px; font-size: .95rem; }
+      .mark { width: 38px; height: 38px; }
+      .menu-toggle, .nav-spacer { width: 38px; height: 38px; }
+      .hero-main { min-height: 260px; }
+      .actions .btn, .contact-actions .btn { width: 100%; }
+      .form-panel, .profile-card, .panel { padding: 16px; }
+      .detail-photo { min-height: 260px; }
+      .detail-media, .detail-media img { min-height: 260px; }
     }
   </style>
 </head>
@@ -1680,7 +1714,7 @@ TEMPLATES = {
             <div class="edit-images">
               <div class="edit-image-item" style="max-width:180px;">
                 <img src="{{ mascota.principal }}" alt="Foto principal actual">
-                <label class="check"><input type="checkbox" name="remove_principal"> Eliminar foto principal</label>
+                <label class="remove-image-check" title="Quitar"><input type="checkbox" name="remove_principal"><span>&times;</span></label>
               </div>
             </div>
           {% endif %}
@@ -1693,7 +1727,7 @@ TEMPLATES = {
               {% for image in mascota.secundarias %}
                 <div class="edit-image-item">
                   <img src="{{ image }}" alt="Foto secundaria actual">
-                  <label class="check"><input type="checkbox" name="remove_secundarias" value="{{ image }}"> Eliminar</label>
+                  <label class="remove-image-check" title="Quitar"><input type="checkbox" name="remove_secundarias" value="{{ image }}"><span>&times;</span></label>
                 </div>
               {% endfor %}
             </div>
