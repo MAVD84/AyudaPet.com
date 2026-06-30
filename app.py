@@ -758,6 +758,23 @@ TEMPLATES = {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ title or "AyudaPet" }}</title>
+  <meta name="description" content="AyudaPet conecta reportes de mascotas perdidas y localizadas para que vuelvan a casa mas rapido.">
+  <link rel="canonical" href="https://ayudapet.com/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="AyudaPet">
+  <meta property="og:title" content="AyudaPet | Mascotas perdidas y localizadas">
+  <meta property="og:description" content="Publica y consulta reportes de mascotas perdidas o localizadas en tu comunidad.">
+  <meta property="og:url" content="https://ayudapet.com/">
+  <meta property="og:image" content="https://ayudapet.com/static/og_image.png">
+  <meta property="og:image:secure_url" content="https://ayudapet.com/static/og_image.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="2048">
+  <meta property="og:image:height" content="1152">
+  <meta property="og:image:alt" content="AyudaPet logo y dominio ayudapet.com">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="AyudaPet | Mascotas perdidas y localizadas">
+  <meta name="twitter:description" content="Publica y consulta reportes de mascotas perdidas o localizadas en tu comunidad.">
+  <meta name="twitter:image" content="https://ayudapet.com/static/og_image.png">
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}">
   <link rel="shortcut icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='logo.png') }}">
