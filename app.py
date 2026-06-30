@@ -1437,9 +1437,12 @@ TEMPLATES = {
         row-gap: 16px;
       }
       .detail-wrap {
-        grid-template-columns: minmax(380px, 500px) minmax(0, 1fr);
-        gap: 22px;
+        grid-template-columns: 360px minmax(0, 1fr);
+        gap: 28px;
+        max-width: 1120px;
+        margin-inline: auto;
       }
+      .detail-photos { max-width: 360px; }
       .detail-info { padding: 0; }
       .profile-layout {
         grid-template-columns: 420px minmax(0, 1fr);
