@@ -195,7 +195,7 @@ def send_sms(phone, code):
     api_url = os.getenv("LABSMOBILE_API")
     user = os.getenv("LABSMOBILE_USER")
     token = os.getenv("LABSMOBILE_TOKEN")
-    sender = os.getenv("LABSMOBILE_SENDER", "UBICANID")
+    sender = os.getenv("LABSMOBILE_SENDER", "AYUDAPET")
 
     if not all([api_url, user, token]):
         logger.warning("SMS no enviado: faltan variables de LabsMobile.")
@@ -207,7 +207,7 @@ def send_sms(phone, code):
         return False
 
     payload = {
-        "message": f"Tu codigo UBICAN ID es {code}. Expira en 5 minutos.",
+        "message": f"Tu codigo AyudaPet es {code}. Expira en 5 minutos. ayudapet.com",
         "tpoa": sender,
         "recipient": [{"msisdn": sms_phone}],
     }
@@ -757,7 +757,7 @@ TEMPLATES = {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ title or "UBICAN ID" }}</title>
+  <title>{{ title or "AyudaPet" }}</title>
   <style>
     :root {
       --ink: #18212f;
@@ -1447,14 +1447,14 @@ TEMPLATES = {
   <header class="topbar">
     <nav class="nav">
       <button class="menu-toggle" type="button" data-menu-open aria-label="Abrir menu"><span></span></button>
-      <a class="brand" href="{{ url_for('index') }}"><img class="mark" src="{{ url_for('static', filename='logo.jpg') }}" alt="UBICAN ID"><span>UBICAN ID</span></a>
+      <a class="brand" href="{{ url_for('index') }}"><img class="mark" src="{{ url_for('static', filename='logo.png') }}" alt="AyudaPet"><span>AyudaPet</span></a>
       <span class="nav-spacer" aria-hidden="true"></span>
     </nav>
   </header>
   <div class="menu-backdrop" data-menu-close></div>
   <aside class="side-menu" aria-label="Menu principal">
     <div class="menu-head">
-      <a class="brand" href="{{ url_for('index') }}"><img class="mark" src="{{ url_for('static', filename='logo.jpg') }}" alt="UBICAN ID"><span>UBICAN ID</span></a>
+      <a class="brand" href="{{ url_for('index') }}"><img class="mark" src="{{ url_for('static', filename='logo.png') }}" alt="AyudaPet"><span>AyudaPet</span></a>
       <button class="menu-close" type="button" data-menu-close aria-label="Cerrar menu">&times;</button>
     </div>
     <div class="menu-links">
@@ -1483,7 +1483,7 @@ TEMPLATES = {
     {% endwith %}
     {% block content %}{% endblock %}
   </main>
-  <footer>UBICAN ID &copy; {{ year }}</footer>
+  <footer>AyudaPet &copy; {{ year }} | ayudapet.com</footer>
   <div class="lightbox" data-lightbox aria-hidden="true">
     <button class="lightbox-close" type="button" data-lightbox-close aria-label="Cerrar imagen">&times;</button>
     <img src="" alt="">
@@ -1845,7 +1845,7 @@ TEMPLATES = {
   <section class="form-wrap">
     <form class="form-panel" method="post">
       <p class="eyebrow" style="color: var(--brand);">Acceso</p>
-      <h1>Entra a UBICAN ID</h1>
+      <h1>Entra a AyudaPet</h1>
       <div class="form-grid">
         <div class="field">
           <label for="tel">Telefono mexicano</label>
