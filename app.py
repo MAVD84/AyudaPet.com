@@ -1258,6 +1258,14 @@ TEMPLATES = {
       gap: 16px;
       margin-top: 20px;
     }
+    .login-form {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: start;
+    }
+    .login-actions {
+      grid-column: 1 / -1;
+      margin-top: 6px;
+    }
     .field { display: grid; gap: 7px; min-width: 0; }
     .field.full { grid-column: 1 / -1; }
     label { font-weight: 800; font-size: .92rem; }
@@ -1361,6 +1369,7 @@ TEMPLATES = {
     footer { color: var(--muted); text-align: center; padding: 20px; }
     @media (max-width: 840px) {
       .hero, .grid, .form-grid { grid-template-columns: 1fr; }
+      .login-form { grid-template-columns: 1fr; }
       .detail-wrap { grid-template-columns: 1fr; }
       .profile-layout { grid-template-columns: 1fr; }
       .contact-actions { grid-template-columns: 1fr; }
@@ -1846,7 +1855,7 @@ TEMPLATES = {
     <form class="form-panel" method="post">
       <p class="eyebrow" style="color: var(--brand);">Acceso</p>
       <h1>Entra a AyudaPet</h1>
-      <div class="form-grid">
+      <div class="form-grid login-form">
         <div class="field">
           <label for="tel">Telefono mexicano</label>
           <div class="phone-box">
@@ -1859,11 +1868,11 @@ TEMPLATES = {
           <label for="pwd">Contrasena</label>
           <input id="pwd" name="pwd" type="password" autocomplete="current-password" required>
         </div>
-      </div>
-      <div class="actions">
-        <button class="btn primary" type="submit">Entrar</button>
-        <a class="btn" href="{{ url_for('registro') }}">Crear cuenta</a>
-        <a class="btn ghost" href="{{ url_for('recuperar') }}">Restablecer contrasena</a>
+        <div class="actions login-actions">
+          <button class="btn primary" type="submit">Entrar</button>
+          <a class="btn" href="{{ url_for('registro') }}">Crear cuenta</a>
+          <a class="btn ghost" href="{{ url_for('recuperar') }}">Restablecer contrasena</a>
+        </div>
       </div>
     </form>
   </section>
