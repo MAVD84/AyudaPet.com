@@ -2179,6 +2179,7 @@ TEMPLATES = {
             input.value = place.formatted_address || place.name || input.value;
             input.dispatchEvent(new Event("input", { bubbles: true }));
             input.dispatchEvent(new Event("change", { bubbles: true }));
+            window.setTimeout(() => input.blur(), 0);
           });
         };
       </script>
