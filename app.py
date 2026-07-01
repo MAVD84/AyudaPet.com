@@ -2195,10 +2195,18 @@ TEMPLATES = {
             types: ["address"],
           });
 
-          const componentValue = (components, type, useShortName = false) => {
-            const part = components.find((item) => item.types.includes(type));
+          const componentValue = (components, types, useShortName = false) => {
+            const typeList = Array.isArray(types) ? types : [types];
+            const part = components.find((item) => typeList.some((type) => item.types.includes(type)));
             if (!part) return "";
             return useShortName ? part.short_name : part.long_name;
+          };
+          const setFieldValue = (id, value) => {
+            const field = document.getElementById(id);
+            if (!field || !value) return;
+            field.value = value;
+            field.dispatchEvent(new Event("input", { bubbles: true }));
+            field.dispatchEvent(new Event("change", { bubbles: true }));
           };
 
           autocomplete.addListener("place_changed", () => {
@@ -2209,18 +2217,19 @@ TEMPLATES = {
               .join(" ");
             input.value = street || place.formatted_address || place.name || input.value;
 
-            const city = componentValue(components, "locality")
-              || componentValue(components, "postal_town")
-              || componentValue(components, "administrative_area_level_2");
+            const city = componentValue(components, [
+              "locality",
+              "postal_town",
+              "sublocality_level_1",
+              "sublocality",
+              "administrative_area_level_2",
+            ]);
             const state = componentValue(components, "administrative_area_level_1");
             const postalCode = componentValue(components, "postal_code", true);
 
-            const cityInput = document.getElementById("ciudad");
-            const stateInput = document.getElementById("estado");
-            const postalInput = document.getElementById("cp");
-            if (city && cityInput) cityInput.value = city;
-            if (state && stateInput) stateInput.value = state;
-            if (postalCode && postalInput) postalInput.value = postalCode;
+            setFieldValue("ciudad", city);
+            setFieldValue("estado", state);
+            setFieldValue("cp", postalCode);
           });
         };
       </script>
