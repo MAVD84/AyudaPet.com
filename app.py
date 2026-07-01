@@ -512,7 +512,7 @@ def detalle_mascota(report_id):
     mascota = get_mascota(report_id)
     if not mascota:
         return render_template("error.html", title="Reporte no encontrado", message="El reporte solicitado no existe."), 404
-    detail_url = url_for("detalle_mascota", report_id=report_id, _external=True)
+    detail_url = url_for("detalle_mascota", report_id=report_id, _external=True, _scheme="https")
     status = "Localizado" if mascota.get("encontrado") else "Perdido"
     pet_name = mascota.get("nombre") or "Mascota"
     location = mascota.get("direccion")
