@@ -358,8 +358,8 @@ function report_payload(string $id, ?array $existing = null): array {
         'collar' => post_value('collar'),
         'docil' => post_value('docil'),
         'direccion' => post_value('direccion'),
-        'calles' => post_value('calles'),
-        'dueno' => post_value('dueno'),
+        'calles' => null,
+        'dueno' => null,
         'recompensa' => post_value('recompensa'),
         'encontrado' => isset($_POST['encontrado']) ? 1 : 0,
     ];
@@ -585,8 +585,8 @@ function view_detalle(array $mascota, bool $isOwner, array $share, ?string $mapU
       <div class="info-list"><?php info_row('Fecha de extravio', $mascota['fecha']); info_row('Nombre de mascota', $mascota['nombre']); info_row('Descripcion', $mascota['descripcion']); ?></div>
       <div class="split-info"><?php foreach ([['Edad','edad'],['Raza','raza'],['Genero','genero'],['Color','color'],['Collar','collar'],['Docil','docil']] as [$label,$key]) info_row($label, $mascota[$key]); ?></div>
       <?php if ($mapUrl): ?><div class="map-frame"><iframe src="<?= e($mapUrl) ?>" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen title="Mapa de direccion de extravio"></iframe></div><?php endif; ?>
-      <div class="info-list"><?php info_row('Direccion de extravio', $mascota['direccion']); info_row('Entre calles', $mascota['calles']); ?></div>
-      <div class="split-info"><?php info_row('Dueno', $mascota['dueno']); info_row('Recompensa', $mascota['recompensa']); ?></div>
+      <div class="info-list"><?php info_row('Direccion de extravio', $mascota['direccion']); ?></div>
+      <div class="split-info"><?php info_row('Recompensa', $mascota['recompensa']); ?></div>
       <?php if ($callPhone): ?><div class="contact-actions"><a class="btn primary" href="tel:<?= e($callPhone) ?>">Llamar</a><a class="btn whatsapp" href="https://wa.me/<?= e($waPhone) ?>" target="_blank" rel="noopener">WhatsApp</a></div><?php endif; ?>
       <div class="share-actions" aria-label="Compartir reporte"><p class="share-title">Comparte:</p><button class="btn primary" type="button" data-native-share-button data-share-title="<?= e($share['text']) ?>" data-share-text="<?= e($share['message']) ?>" data-share-url="<?= e($share['url']) ?>">Compartir</button><button class="btn" type="button" data-copy-url="<?= e($share['url']) ?>">Copiar enlace</button></div>
       <div class="actions"><a class="btn" href="/">Volver a reportes</a></div>
@@ -645,7 +645,7 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
     <div class="field"><label for="genero">Genero</label><select id="genero" name="genero"><option value="">Seleccionar</option><?php foreach (['Macho','Hembra','No se sabe'] as $opt): ?><option <?= ($mascota['genero'] ?? '') === $opt ? 'selected' : '' ?>><?= e($opt) ?></option><?php endforeach; ?></select></div>
     <?php input_field('color','Color',$mascota); input_field('collar','Collar',$mascota); input_field('docil','Docil',$mascota, 'Docil, nervioso, asustado'); ?>
     <div class="field full"><label for="direccion">Direccion de extravio</label><input id="direccion" name="direccion" value="<?= e($mascota['direccion'] ?? '') ?>" autocomplete="off" data-address-autocomplete></div>
-    <?php input_field('calles','Entre calles',$mascota); input_field('dueno','Dueno',$mascota); input_field('recompensa','Recompensa',$mascota); input_field('contacto','Contacto publico',$mascota, 'Telefono, WhatsApp o correo'); ?>
+    <?php input_field('recompensa','Recompensa',$mascota); input_field('contacto','Contacto publico',$mascota, 'Telefono, WhatsApp o correo'); ?>
     <div class="field"><label>Estado del reporte</label><label class="btn ghost"><input type="checkbox" name="encontrado" <?= !empty($mascota['encontrado']) ? 'checked' : '' ?>> Localizado</label></div>
   </div><div class="actions"><button class="btn primary" type="submit"><?= $editing ? 'Guardar cambios' : 'Publicar reporte' ?></button><a class="btn" href="<?= $editing ? '/mascotas/' . e($mascota['id']) : '/' ?>">Cancelar</a></div></form>
   <?php if ($mapsApiKey): ?><script>
@@ -689,7 +689,12 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
         input.value = privateAddress(place);
         input.dispatchEvent(new Event("input", { bubbles: true }));
         input.dispatchEvent(new Event("change", { bubbles: true }));
-        window.setTimeout(() => input.blur(), 0);
+        input.blur();
+        input.setAttribute("readonly", "readonly");
+        document.querySelectorAll(".pac-container").forEach((container) => {
+          container.style.display = "none";
+        });
+        window.setTimeout(() => input.removeAttribute("readonly"), 250);
       });
     };
   </script><script src="https://maps.googleapis.com/maps/api/js?key=<?= urlencode($mapsApiKey) ?>&libraries=places&callback=initAddressAutocomplete" async defer></script><?php endif; ?>
