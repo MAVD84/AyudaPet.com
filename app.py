@@ -7,6 +7,7 @@ import secrets
 import time
 import uuid
 from functools import wraps
+from urllib.parse import quote_plus
 
 import requests
 from dotenv import load_dotenv
@@ -507,7 +508,35 @@ def detalle_mascota(report_id):
     mascota = get_mascota(report_id)
     if not mascota:
         return render_template("error.html", title="Reporte no encontrado", message="El reporte solicitado no existe."), 404
-    return render_template("detalle.html", mascota=mascota, is_owner=user_owns_report(mascota))
+    detail_url = url_for("detalle_mascota", report_id=report_id, _external=True)
+    status = "Localizado" if mascota.get("encontrado") else "Perdido"
+    pet_name = mascota.get("nombre") or "Mascota"
+    location = ", ".join([value for value in [mascota.get("ciudad"), mascota.get("estado")] if value])
+    meta_title = f"{pet_name} - {status} | AyudaPet"
+    meta_description = mascota.get("descripcion") or "Reporte de mascota en AyudaPet."
+    if location:
+        meta_description = f"{meta_description} Ubicacion: {location}."
+    meta_image = mascota.get("principal") or url_for("static", filename="og_image.png", _external=True)
+    share_text = f"{status}: {pet_name} en AyudaPet"
+    share_message = f"{share_text} {detail_url}"
+    share = {
+        "url": detail_url,
+        "text": share_text,
+        "whatsapp": f"https://wa.me/?text={quote_plus(share_message)}",
+        "facebook": f"https://www.facebook.com/sharer/sharer.php?u={quote_plus(detail_url)}",
+        "twitter": f"https://twitter.com/intent/tweet?text={quote_plus(share_text)}&url={quote_plus(detail_url)}",
+    }
+    return render_template(
+        "detalle.html",
+        mascota=mascota,
+        is_owner=user_owns_report(mascota),
+        share=share,
+        title=meta_title,
+        meta_title=meta_title,
+        meta_description=meta_description,
+        meta_url=detail_url,
+        meta_image=meta_image,
+    )
 
 
 @app.route("/registro", methods=["GET", "POST"])
@@ -758,23 +787,27 @@ TEMPLATES = {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ title or "AyudaPet" }}</title>
-  <meta name="description" content="AyudaPet conecta reportes de mascotas perdidas y localizadas para que vuelvan a casa mas rapido.">
-  <link rel="canonical" href="https://ayudapet.com/">
+  {% set page_title = meta_title|default(title|default("AyudaPet")) %}
+  {% set page_description = meta_description|default("AyudaPet conecta reportes de mascotas perdidas y localizadas para que vuelvan a casa mas rapido.") %}
+  {% set page_url = meta_url|default("https://ayudapet.com/") %}
+  {% set page_image = meta_image|default("https://ayudapet.com/static/og_image.png") %}
+  <meta name="description" content="{{ page_description }}">
+  <link rel="canonical" href="{{ page_url }}">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="AyudaPet">
-  <meta property="og:title" content="AyudaPet | Mascotas perdidas y localizadas">
-  <meta property="og:description" content="Publica y consulta reportes de mascotas perdidas o localizadas en tu comunidad.">
-  <meta property="og:url" content="https://ayudapet.com/">
-  <meta property="og:image" content="https://ayudapet.com/static/og_image.png">
-  <meta property="og:image:secure_url" content="https://ayudapet.com/static/og_image.png">
+  <meta property="og:title" content="{{ page_title }}">
+  <meta property="og:description" content="{{ page_description }}">
+  <meta property="og:url" content="{{ page_url }}">
+  <meta property="og:image" content="{{ page_image }}">
+  <meta property="og:image:secure_url" content="{{ page_image }}">
   <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="2048">
   <meta property="og:image:height" content="1152">
-  <meta property="og:image:alt" content="AyudaPet logo y dominio ayudapet.com">
+  <meta property="og:image:alt" content="{{ page_title }}">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="AyudaPet | Mascotas perdidas y localizadas">
-  <meta name="twitter:description" content="Publica y consulta reportes de mascotas perdidas o localizadas en tu comunidad.">
-  <meta name="twitter:image" content="https://ayudapet.com/static/og_image.png">
+  <meta name="twitter:title" content="{{ page_title }}">
+  <meta name="twitter:description" content="{{ page_description }}">
+  <meta name="twitter:image" content="{{ page_image }}">
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}">
   <link rel="shortcut icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='logo.png') }}">
@@ -1151,6 +1184,15 @@ TEMPLATES = {
     .split-info .info-row { min-width: 0; }
     .contact-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
     .btn.whatsapp { background: #25d366; color: #fff; }
+    .share-actions {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 18px;
+    }
+    .share-actions .btn { min-width: 0; padding-inline: 10px; }
+    .btn.facebook { background: #1877f2; color: #fff; }
+    .btn.twitter { background: #111827; color: #fff; }
     .wa-icon {
       width: 20px;
       height: 20px;
@@ -1393,6 +1435,7 @@ TEMPLATES = {
       .detail-wrap { grid-template-columns: 1fr; }
       .profile-layout { grid-template-columns: 1fr; }
       .contact-actions { grid-template-columns: 1fr; }
+      .share-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .split-info { column-gap: 14px; }
       .search-form { grid-template-columns: 1fr; }
       .actions { flex-direction: column; align-items: stretch; }
@@ -1603,6 +1646,26 @@ TEMPLATES = {
         }
       });
     });
+
+    document.querySelectorAll("[data-copy-url]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const url = button.dataset.copyUrl;
+        if (!url) return;
+        try {
+          await navigator.clipboard.writeText(url);
+        } catch (error) {
+          const input = document.createElement("input");
+          input.value = url;
+          document.body.appendChild(input);
+          input.select();
+          document.execCommand("copy");
+          input.remove();
+        }
+        const original = button.textContent;
+        button.textContent = "Copiado";
+        window.setTimeout(() => { button.textContent = original; }, 1600);
+      });
+    });
   </script>
 </body>
 </html>
@@ -1800,6 +1863,12 @@ TEMPLATES = {
           </a>
         </div>
       {% endif %}
+      <div class="share-actions" aria-label="Compartir reporte">
+        <a class="btn whatsapp" href="{{ share.whatsapp }}" target="_blank" rel="noopener">Compartir WhatsApp</a>
+        <a class="btn facebook" href="{{ share.facebook }}" target="_blank" rel="noopener">Facebook</a>
+        <a class="btn twitter" href="{{ share.twitter }}" target="_blank" rel="noopener">X</a>
+        <button class="btn" type="button" data-copy-url="{{ share.url }}">Copiar enlace</button>
+      </div>
       <div class="actions"><a class="btn" href="{{ url_for('index') }}">Volver a reportes</a></div>
     </article>
   </section>
