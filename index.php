@@ -644,7 +644,51 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
     <?php input_field('calles','Entre calles',$mascota); input_field('dueno','Dueno',$mascota); input_field('recompensa','Recompensa',$mascota); input_field('contacto','Contacto publico',$mascota, 'Telefono, WhatsApp o correo'); ?>
     <div class="field"><label>Estado del reporte</label><label class="btn ghost"><input type="checkbox" name="encontrado" <?= !empty($mascota['encontrado']) ? 'checked' : '' ?>> Localizado</label></div>
   </div><div class="actions"><button class="btn primary" type="submit"><?= $editing ? 'Guardar cambios' : 'Publicar reporte' ?></button><a class="btn" href="<?= $editing ? '/mascotas/' . e($mascota['id']) : '/' ?>">Cancelar</a></div></form>
-  <?php if ($mapsApiKey): ?><script>window.initAddressAutocomplete=function(){const input=document.querySelector("[data-address-autocomplete]");if(!input||!window.google?.maps?.places)return;const autocomplete=new google.maps.places.Autocomplete(input,{componentRestrictions:{country:"mx"},fields:["address_components","formatted_address","name"],types:["address"]});autocomplete.addListener("place_changed",()=>{const place=autocomplete.getPlace();input.value=place.formatted_address||place.name||input.value;input.dispatchEvent(new Event("input",{bubbles:true}));input.dispatchEvent(new Event("change",{bubbles:true}));window.setTimeout(()=>input.blur(),0)})};</script><script src="https://maps.googleapis.com/maps/api/js?key=<?= urlencode($mapsApiKey) ?>&libraries=places&callback=initAddressAutocomplete" async defer></script><?php endif; ?>
+  <?php if ($mapsApiKey): ?><script>
+    window.initAddressAutocomplete = function () {
+      const input = document.querySelector("[data-address-autocomplete]");
+      if (!input || !window.google?.maps?.places) return;
+      const autocomplete = new google.maps.places.Autocomplete(input, {
+        componentRestrictions: { country: "mx" },
+        fields: ["address_components", "formatted_address", "name"],
+        types: ["address"],
+      });
+
+      const getPart = (parts, type, shortName = false) => {
+        const item = parts.find((part) => part.types.includes(type));
+        return item ? (shortName ? item.short_name : item.long_name) : "";
+      };
+
+      const privateAddress = (place) => {
+        const parts = place.address_components || [];
+        const neighborhood =
+          getPart(parts, "sublocality_level_1") ||
+          getPart(parts, "sublocality") ||
+          getPart(parts, "neighborhood") ||
+          getPart(parts, "political");
+        const postalCode = getPart(parts, "postal_code");
+        const city =
+          getPart(parts, "locality") ||
+          getPart(parts, "administrative_area_level_2");
+        const state = getPart(parts, "administrative_area_level_1", true);
+        const country = getPart(parts, "country");
+        const cityLine = [postalCode, city].filter(Boolean).join(" ");
+        const safeParts = [neighborhood, cityLine, state, country].filter(Boolean);
+        if (safeParts.length >= 2) return safeParts.join(", ");
+        const formattedParts = (place.formatted_address || "").split(",").map((part) => part.trim()).filter(Boolean);
+        if (formattedParts.length > 2) return formattedParts.slice(1).join(", ");
+        return place.name || input.value;
+      };
+
+      autocomplete.addListener("place_changed", () => {
+        const place = autocomplete.getPlace();
+        input.value = privateAddress(place);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        window.setTimeout(() => input.blur(), 0);
+      });
+    };
+  </script><script src="https://maps.googleapis.com/maps/api/js?key=<?= urlencode($mapsApiKey) ?>&libraries=places&callback=initAddressAutocomplete" async defer></script><?php endif; ?>
   </section>
 <?php }
 
