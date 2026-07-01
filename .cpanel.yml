@@ -1,0 +1,8 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/sites/36b/5/5bebbea9cb/public_html/
+    - /bin/cp -R public/. $DEPLOYPATH
+    - /bin/cp -R static $DEPLOYPATH
+    - /bin/mkdir -p $DEPLOYPATH/uploads
+    - /bin/chmod 755 $DEPLOYPATH/uploads
