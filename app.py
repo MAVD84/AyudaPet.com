@@ -512,7 +512,7 @@ def detalle_mascota(report_id):
     detail_url = url_for("detalle_mascota", report_id=report_id, _external=True)
     status = "Localizado" if mascota.get("encontrado") else "Perdido"
     pet_name = mascota.get("nombre") or "Mascota"
-    location = ", ".join([value for value in [mascota.get("ciudad"), mascota.get("estado")] if value])
+    location = mascota.get("direccion")
     meta_title = f"{pet_name} - {status} | AyudaPet"
     meta_description = mascota.get("descripcion") or "Reporte de mascota en AyudaPet."
     if location:
@@ -530,9 +530,6 @@ def detalle_mascota(report_id):
     map_query = ", ".join(
         value for value in [
             mascota.get("direccion"),
-            mascota.get("ciudad"),
-            mascota.get("estado"),
-            mascota.get("cp"),
             "Mexico",
         ]
         if value
@@ -1863,21 +1860,6 @@ TEMPLATES = {
       </div>
       <div class="split-info">
         {% for label, value in [
-          ("Ciudad", mascota.ciudad),
-          ("Estado", mascota.estado)
-        ] %}
-          {% if value %}
-            <div class="info-row"><strong>{{ label }}</strong><span>{{ value }}</span></div>
-          {% endif %}
-        {% endfor %}
-      </div>
-      <div class="info-list">
-        {% if mascota.cp %}
-          <div class="info-row"><strong>Codigo postal</strong><span>{{ mascota.cp }}</span></div>
-        {% endif %}
-      </div>
-      <div class="split-info">
-        {% for label, value in [
           ("Dueño", mascota.dueno),
           ("Recompensa", mascota.recompensa)
         ] %}
@@ -2161,9 +2143,6 @@ TEMPLATES = {
         <div class="field"><label for="docil">Docil</label><input id="docil" name="docil" value="{{ mascota.docil or '' }}" placeholder="Docil, nervioso, asustado"></div>
         <div class="field full"><label for="direccion">Direccion de extravio</label><input id="direccion" name="direccion" value="{{ mascota.direccion or '' }}" autocomplete="off" data-address-autocomplete></div>
         <div class="field full"><label for="calles">Entre calles</label><input id="calles" name="calles" value="{{ mascota.calles or '' }}"></div>
-        <div class="field"><label for="ciudad">Ciudad</label><input id="ciudad" name="ciudad" value="{{ mascota.ciudad or '' }}"></div>
-        <div class="field"><label for="estado">Estado</label><input id="estado" name="estado" value="{{ mascota.estado or '' }}"></div>
-        <div class="field"><label for="cp">Codigo postal</label><input id="cp" name="cp" inputmode="numeric" value="{{ mascota.cp or '' }}"></div>
         <div class="field"><label for="dueno">Dueno</label><input id="dueno" name="dueno" value="{{ mascota.dueno or '' }}"></div>
         <div class="field"><label for="recompensa">Recompensa</label><input id="recompensa" name="recompensa" value="{{ mascota.recompensa or '' }}"></div>
         <div class="field">
@@ -2195,41 +2174,11 @@ TEMPLATES = {
             types: ["address"],
           });
 
-          const componentValue = (components, types, useShortName = false) => {
-            const typeList = Array.isArray(types) ? types : [types];
-            const part = components.find((item) => typeList.some((type) => item.types.includes(type)));
-            if (!part) return "";
-            return useShortName ? part.short_name : part.long_name;
-          };
-          const setFieldValue = (id, value) => {
-            const field = document.getElementById(id);
-            if (!field || !value) return;
-            field.value = value;
-            field.dispatchEvent(new Event("input", { bubbles: true }));
-            field.dispatchEvent(new Event("change", { bubbles: true }));
-          };
-
           autocomplete.addListener("place_changed", () => {
             const place = autocomplete.getPlace();
-            const components = place.address_components || [];
-            const street = [componentValue(components, "route"), componentValue(components, "street_number")]
-              .filter(Boolean)
-              .join(" ");
-            input.value = street || place.formatted_address || place.name || input.value;
-
-            const city = componentValue(components, [
-              "locality",
-              "postal_town",
-              "sublocality_level_1",
-              "sublocality",
-              "administrative_area_level_2",
-            ]);
-            const state = componentValue(components, "administrative_area_level_1");
-            const postalCode = componentValue(components, "postal_code", true);
-
-            setFieldValue("ciudad", city);
-            setFieldValue("estado", state);
-            setFieldValue("cp", postalCode);
+            input.value = place.formatted_address || place.name || input.value;
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+            input.dispatchEvent(new Event("change", { bubbles: true }));
           });
         };
       </script>
