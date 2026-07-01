@@ -690,8 +690,9 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
         document.querySelectorAll(".pac-container").forEach((container) => {
           container.style.display = "none";
         });
-        window.setTimeout(() => document.body.classList.remove("hide-google-places"), 700);
       };
+
+      let selectedPrivateAddress = input.value;
 
       const applySelectedPlace = () => {
         const place = autocomplete.getPlace();
@@ -699,13 +700,23 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
           closeSuggestions();
           return;
         }
-        input.value = privateAddress(place);
-        input.dispatchEvent(new Event("input", { bubbles: true }));
+        selectedPrivateAddress = privateAddress(place);
+        input.value = selectedPrivateAddress;
         input.dispatchEvent(new Event("change", { bubbles: true }));
         closeSuggestions();
       };
 
       autocomplete.addListener("place_changed", applySelectedPlace);
+      input.addEventListener("input", () => {
+        if (input.value !== selectedPrivateAddress) {
+          document.body.classList.remove("hide-google-places");
+        }
+      });
+      input.addEventListener("focus", () => {
+        if (input.value === selectedPrivateAddress) {
+          document.body.classList.add("hide-google-places");
+        }
+      });
       input.addEventListener("blur", () => {
         window.setTimeout(() => {
           document.querySelectorAll(".pac-container").forEach((container) => {
