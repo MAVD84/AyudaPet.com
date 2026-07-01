@@ -1216,12 +1216,22 @@ TEMPLATES = {
     .btn.whatsapp { background: #25d366; color: #fff; }
     .share-actions {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
       margin-top: 18px;
     }
+    .share-title {
+      grid-column: 1 / -1;
+      margin: 0;
+      color: var(--muted);
+      font-weight: 900;
+      text-transform: uppercase;
+      font-size: .82rem;
+    }
     .share-actions .btn { min-width: 0; padding-inline: 10px; }
     .btn.facebook { background: #1877f2; color: #fff; }
+    .btn.instagram { background: #d62976; color: #fff; }
+    .btn.tiktok { background: #111827; color: #fff; }
     .btn.twitter { background: #111827; color: #fff; }
     .wa-icon {
       width: 20px;
@@ -1692,7 +1702,7 @@ TEMPLATES = {
           input.remove();
         }
         const original = button.textContent;
-        button.textContent = "Copiado";
+        button.textContent = button.dataset.copyLabel ? `Copiado para ${button.dataset.copyLabel}` : "Copiado";
         window.setTimeout(() => { button.textContent = original; }, 1600);
       });
     });
@@ -1895,8 +1905,11 @@ TEMPLATES = {
         </div>
       {% endif %}
       <div class="share-actions" aria-label="Compartir reporte">
-        <a class="btn whatsapp" href="{{ share.whatsapp }}" target="_blank" rel="noopener">Compartir WhatsApp</a>
+        <p class="share-title">Comparte:</p>
         <a class="btn facebook" href="{{ share.facebook }}" target="_blank" rel="noopener">Facebook</a>
+        <button class="btn instagram" type="button" data-copy-url="{{ share.url }}" data-copy-label="Instagram">Instagram</button>
+        <button class="btn tiktok" type="button" data-copy-url="{{ share.url }}" data-copy-label="TikTok">TikTok</button>
+        <a class="btn whatsapp" href="{{ share.whatsapp }}" target="_blank" rel="noopener">WhatsApp</a>
         <a class="btn twitter" href="{{ share.twitter }}" target="_blank" rel="noopener">X</a>
         <button class="btn" type="button" data-copy-url="{{ share.url }}">Copiar enlace</button>
       </div>
