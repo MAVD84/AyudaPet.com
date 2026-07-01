@@ -739,7 +739,7 @@ def reportar():
         flash("Reporte publicado correctamente.", "success")
         return redirect(url_for("index"))
 
-    return render_template("reportar.html", mascota={}, editing=False)
+    return render_template("reportar.html", mascota={}, editing=False, maps_api_key=GOOGLE_MAPS_API_KEY)
 
 
 @app.route("/mascotas/<report_id>/editar", methods=["GET", "POST"])
@@ -760,7 +760,7 @@ def editar_mascota(report_id):
         flash("Reporte actualizado correctamente.", "success")
         return redirect(url_for("detalle_mascota", report_id=report_id))
 
-    return render_template("reportar.html", mascota=mascota, editing=True)
+    return render_template("reportar.html", mascota=mascota, editing=True, maps_api_key=GOOGLE_MAPS_API_KEY)
 
 
 @app.route("/mascotas/<report_id>/eliminar", methods=["POST"])
@@ -2159,7 +2159,7 @@ TEMPLATES = {
         <div class="field"><label for="color">Color</label><input id="color" name="color" value="{{ mascota.color or '' }}"></div>
         <div class="field"><label for="collar">Collar</label><input id="collar" name="collar" value="{{ mascota.collar or '' }}"></div>
         <div class="field"><label for="docil">Docil</label><input id="docil" name="docil" value="{{ mascota.docil or '' }}" placeholder="Docil, nervioso, asustado"></div>
-        <div class="field full"><label for="direccion">Direccion de extravio</label><input id="direccion" name="direccion" value="{{ mascota.direccion or '' }}"></div>
+        <div class="field full"><label for="direccion">Direccion de extravio</label><input id="direccion" name="direccion" value="{{ mascota.direccion or '' }}" autocomplete="off" data-address-autocomplete></div>
         <div class="field full"><label for="calles">Entre calles</label><input id="calles" name="calles" value="{{ mascota.calles or '' }}"></div>
         <div class="field"><label for="ciudad">Ciudad</label><input id="ciudad" name="ciudad" value="{{ mascota.ciudad or '' }}"></div>
         <div class="field"><label for="estado">Estado</label><input id="estado" name="estado" value="{{ mascota.estado or '' }}"></div>
@@ -2184,6 +2184,48 @@ TEMPLATES = {
         {% endif %}
       </div>
     </form>
+    {% if maps_api_key %}
+      <script>
+        window.initAddressAutocomplete = function () {
+          const input = document.querySelector("[data-address-autocomplete]");
+          if (!input || !window.google?.maps?.places) return;
+          const autocomplete = new google.maps.places.Autocomplete(input, {
+            componentRestrictions: { country: "mx" },
+            fields: ["address_components", "formatted_address", "name"],
+            types: ["address"],
+          });
+
+          const componentValue = (components, type, useShortName = false) => {
+            const part = components.find((item) => item.types.includes(type));
+            if (!part) return "";
+            return useShortName ? part.short_name : part.long_name;
+          };
+
+          autocomplete.addListener("place_changed", () => {
+            const place = autocomplete.getPlace();
+            const components = place.address_components || [];
+            const street = [componentValue(components, "route"), componentValue(components, "street_number")]
+              .filter(Boolean)
+              .join(" ");
+            input.value = street || place.formatted_address || place.name || input.value;
+
+            const city = componentValue(components, "locality")
+              || componentValue(components, "postal_town")
+              || componentValue(components, "administrative_area_level_2");
+            const state = componentValue(components, "administrative_area_level_1");
+            const postalCode = componentValue(components, "postal_code", true);
+
+            const cityInput = document.getElementById("ciudad");
+            const stateInput = document.getElementById("estado");
+            const postalInput = document.getElementById("cp");
+            if (city && cityInput) cityInput.value = city;
+            if (state && stateInput) stateInput.value = state;
+            if (postalCode && postalInput) postalInput.value = postalCode;
+          });
+        };
+      </script>
+      <script src="https://maps.googleapis.com/maps/api/js?key={{ maps_api_key|urlencode }}&libraries=places&callback=initAddressAutocomplete" async defer></script>
+    {% endif %}
   </section>
 {% endblock %}
 """,
