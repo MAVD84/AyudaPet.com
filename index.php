@@ -684,17 +684,43 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
         return place.name || input.value;
       };
 
-      autocomplete.addListener("place_changed", () => {
-        const place = autocomplete.getPlace();
-        input.value = privateAddress(place);
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-        input.dispatchEvent(new Event("change", { bubbles: true }));
+      const closeSuggestions = () => {
         input.blur();
         input.setAttribute("readonly", "readonly");
         document.querySelectorAll(".pac-container").forEach((container) => {
           container.style.display = "none";
         });
         window.setTimeout(() => input.removeAttribute("readonly"), 250);
+      };
+
+      const applySelectedPlace = () => {
+        const place = autocomplete.getPlace();
+        if (!place || (!place.address_components && !place.formatted_address && !place.name)) {
+          closeSuggestions();
+          return;
+        }
+        input.value = privateAddress(place);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        closeSuggestions();
+      };
+
+      autocomplete.addListener("place_changed", applySelectedPlace);
+
+      const handleSuggestionPick = (event) => {
+        if (!event.target.closest(".pac-item")) return;
+        window.setTimeout(applySelectedPlace, 80);
+        window.setTimeout(applySelectedPlace, 220);
+      };
+
+      document.addEventListener("mousedown", handleSuggestionPick, true);
+      document.addEventListener("touchend", handleSuggestionPick, true);
+      input.addEventListener("blur", () => {
+        window.setTimeout(() => {
+          document.querySelectorAll(".pac-container").forEach((container) => {
+            container.style.display = "none";
+          });
+        }, 120);
       });
     };
   </script><script src="https://maps.googleapis.com/maps/api/js?key=<?= urlencode($mapsApiKey) ?>&libraries=places&callback=initAddressAutocomplete" async defer></script><?php endif; ?>
