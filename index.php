@@ -217,7 +217,11 @@ function send_sms(string $phone, string $code): bool {
 function create_otp(string $phone): array {
     $code = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
     $expires = time() + (int)envv('OTP_TTL_SECONDS', '300');
-    $stmt = db()->prepare('REPLACE INTO otps (telefono, code, expires) VALUES (?, ?, ?)');
+    $stmt = db()->prepare(
+        'INSERT INTO otps (telefono, code, expires)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE code = VALUES(code), expires = VALUES(expires)'
+    );
     $stmt->execute([$phone, $code, $expires]);
     $sent = send_sms($phone, $code);
     return [$sent, envv('SHOW_OTP_IN_DEV') === 'true' ? $code : null];
