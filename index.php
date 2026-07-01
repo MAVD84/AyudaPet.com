@@ -489,7 +489,7 @@ function render(string $view, array $data = [], int $status = 200): void {
   <link rel="icon" type="image/png" href="/static/logo.png">
   <link rel="apple-touch-icon" href="/static/logo.png">
   <style><?= css() ?></style>
-  <style>.switch input:checked~.switch-ui{background:var(--green)}.switch input:checked~.switch-ui:before{transform:translateX(22px)}.inline-fields{display:grid;grid-template-columns:88px minmax(0,132px);gap:8px;align-items:center}.inline-fields select,.inline-fields input{min-width:0}.detail-media .views-badge,.detail-media .photo-badge{top:10px;min-width:86px;min-height:28px;padding:0 10px;font-size:.78rem;line-height:1;align-items:center;justify-content:center;text-align:center}.views-badge{position:absolute;left:10px;box-shadow:0 10px 24px rgba(20,32,48,.16);background:rgba(255,255,255,.94);color:var(--ink)}@media(max-width:420px){.detail-media .views-badge,.detail-media .photo-badge{top:7px;min-width:80px;min-height:24px;padding:0 8px;font-size:.68rem}.views-badge{left:7px}}</style>
+  <style>.switch input:checked~.switch-ui{background:var(--green)}.switch input:checked~.switch-ui:before{transform:translateX(22px)}.inline-fields{display:grid;grid-template-columns:88px minmax(0,132px);gap:8px;align-items:center}.inline-fields select,.inline-fields input{min-width:0}.pet-body{padding-right:20px}.detail-media .views-badge,.detail-media .photo-badge{top:10px;min-width:86px;min-height:28px;padding:0 10px;font-size:.78rem;line-height:1;align-items:center;justify-content:center;text-align:center}.views-badge{position:absolute;left:10px;box-shadow:0 10px 24px rgba(20,32,48,.16);background:rgba(255,255,255,.94);color:var(--ink)}@media(max-width:420px){.pet-body{padding-right:12px}.detail-media .views-badge,.detail-media .photo-badge{top:7px;min-width:80px;min-height:24px;padding:0 8px;font-size:.68rem}.views-badge{left:7px}}</style>
 </head>
 <body>
   <header class="topbar">
@@ -620,7 +620,6 @@ function view_index(array $mascotas, array $stats, array $filters): void { ?>
           <p class="meta"><?php if ($pet['direccion']): ?><strong>Direccion:</strong> <?= e($pet['direccion']) ?><br><?php endif; ?></p>
           <?php if ($pet['descripcion']): ?><p class="pet-summary"><?= e($pet['descripcion']) ?></p><?php endif; ?>
         </div>
-        <span class="view-cue" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"></path><circle cx="12" cy="12" r="2.8"></circle></svg></span>
       </a>
     <?php endforeach; ?>
   </section><?php else: ?><div class="empty">Todavia no hay reportes publicados.</div><?php endif; ?>
