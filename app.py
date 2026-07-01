@@ -507,6 +507,8 @@ def require_visitor_registration():
     if visitor_registered() or social_crawler_request():
         return None
     next_url = request.full_path if request.query_string else request.path
+    if request.endpoint == "index":
+        return render_template("inicio.html", next_url=next_url)
     return redirect(url_for("inicio", next=next_url))
 
 
