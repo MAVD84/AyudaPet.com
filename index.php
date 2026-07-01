@@ -90,6 +90,16 @@ function db(): PDO {
     return $pdo;
 }
 
+function ensure_views_column(): void {
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    $stmt = db()->query("SHOW COLUMNS FROM mascotas LIKE 'vistas'");
+    if (!$stmt->fetch()) {
+        db()->exec('ALTER TABLE mascotas ADD COLUMN vistas INT UNSIGNED NOT NULL DEFAULT 0');
+    }
+}
+
 function e($value): string {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
@@ -123,6 +133,11 @@ function age_input_parts(?string $value): array {
     $amount = $match[0] ?? '';
     $unit = strpos($raw, 'mes') !== false ? 'meses' : 'anos';
     return [$amount, $unit];
+}
+
+function views_label($value): string {
+    $count = max(0, (int)$value);
+    return $count . ' ' . ($count === 1 ? 'vista' : 'vistas');
 }
 
 function path_only(): string {
@@ -289,20 +304,28 @@ function save_user(string $phone, string $password, ?string $name = null): void 
 }
 
 function list_mascotas(): array {
+    ensure_views_column();
     return db()->query('SELECT * FROM mascotas ORDER BY creado_at DESC LIMIT 80')->fetchAll();
 }
 
 function list_user_reports(string $phone): array {
+    ensure_views_column();
     $stmt = db()->prepare('SELECT * FROM mascotas WHERE reportado_por = ? ORDER BY creado_at DESC');
     $stmt->execute([$phone]);
     return $stmt->fetchAll();
 }
 
 function get_mascota(string $id): ?array {
+    ensure_views_column();
     $stmt = db()->prepare('SELECT * FROM mascotas WHERE id = ? LIMIT 1');
     $stmt->execute([$id]);
     $pet = $stmt->fetch();
     return $pet ?: null;
+}
+
+function increment_report_views(string $id): void {
+    ensure_views_column();
+    db()->prepare('UPDATE mascotas SET vistas = vistas + 1 WHERE id = ?')->execute([$id]);
 }
 
 function pet_secondaries(array $pet): array {
@@ -466,7 +489,7 @@ function render(string $view, array $data = [], int $status = 200): void {
   <link rel="icon" type="image/png" href="/static/logo.png">
   <link rel="apple-touch-icon" href="/static/logo.png">
   <style><?= css() ?></style>
-  <style>.switch input:checked~.switch-ui{background:var(--green)}.switch input:checked~.switch-ui:before{transform:translateX(22px)}.inline-fields{display:grid;grid-template-columns:minmax(0,1fr) 132px;gap:8px}.inline-fields select{min-width:0}@media(max-width:420px){.inline-fields{grid-template-columns:1fr}}</style>
+  <style>.switch input:checked~.switch-ui{background:var(--green)}.switch input:checked~.switch-ui:before{transform:translateX(22px)}.inline-fields{display:grid;grid-template-columns:88px minmax(0,132px);gap:8px;align-items:center}.inline-fields select,.inline-fields input{min-width:0}.views-badge{position:absolute;top:10px;left:10px;box-shadow:0 10px 24px rgba(20,32,48,.16);background:rgba(255,255,255,.94);color:var(--ink)}</style>
 </head>
 <body>
   <header class="topbar">
@@ -590,6 +613,7 @@ function view_index(array $mascotas, array $stats, array $filters): void { ?>
       <a class="pet-card" href="/mascotas/<?= e($pet['id']) ?>">
         <div class="pet-media">
           <?php if ($pet['principal']): ?><img class="zoomable" src="<?= e($pet['principal']) ?>" alt="<?= e($pet['nombre']) ?>" data-zoom-src="<?= e($pet['principal']) ?>"><?php else: ?><?= e(first_letter($pet['nombre'] ?: '?')) ?><?php endif; ?>
+          <span class="badge views-badge"><?= e(views_label($pet['vistas'] ?? 0)) ?></span>
           <span class="badge photo-badge <?= $pet['encontrado'] ? 'found' : 'lost' ?>"><?= $pet['encontrado'] ? 'Localizado' : 'Perdido' ?></span>
         </div>
         <div class="pet-body">
@@ -612,6 +636,7 @@ function view_detalle(array $mascota, bool $isOwner, array $share, ?string $mapU
     <div class="detail-photos">
       <div class="detail-photo"><div class="detail-media">
         <?php if ($mascota['principal']): ?><img class="zoomable" src="<?= e($mascota['principal']) ?>" alt="<?= e($mascota['nombre']) ?>" data-zoom-src="<?= e($mascota['principal']) ?>"><?php else: ?><?= e(first_letter($mascota['nombre'] ?: '?')) ?><?php endif; ?>
+        <span class="badge views-badge"><?= e(views_label($mascota['vistas'] ?? 0)) ?></span>
         <span class="badge photo-badge <?= $mascota['encontrado'] ? 'found' : 'lost' ?>"><?= $mascota['encontrado'] ? 'Localizado' : 'Perdido' ?></span>
       </div></div>
       <?php if ($secundarias): ?><div class="gallery"><?php foreach ($secundarias as $image): ?><img class="zoomable" src="<?= e($image) ?>" alt="Foto de <?= e($mascota['nombre']) ?>" data-zoom-src="<?= e($image) ?>"><?php endforeach; ?></div><?php endif; ?>
@@ -946,6 +971,8 @@ function route(): void {
         if (preg_match('#^/mascotas/([a-f0-9]{32})$#', $path, $m)) {
             $pet = get_mascota($m[1]);
             if (!$pet) { render('error', ['title' => 'Reporte no encontrado', 'message' => 'El reporte solicitado no existe.'], 404); return; }
+            increment_report_views($pet['id']);
+            $pet['vistas'] = ((int)($pet['vistas'] ?? 0)) + 1;
             $status = $pet['encontrado'] ? 'Localizado' : 'Perdido';
             $detailUrl = full_url('/mascotas/' . $pet['id']);
             $mapUrl = null;
