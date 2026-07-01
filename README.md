@@ -15,7 +15,7 @@ Aplicacion PHP + MySQL para reportes de mascotas perdidas/localizadas.
 Configura estas variables en Coolify:
 
 ```env
-MYSQL_HOST=mysql
+MYSQL_HOST=localhost
 MYSQL_PORT=3306
 MYSQL_DATABASE=ayudapet
 MYSQL_USER=ayudapet

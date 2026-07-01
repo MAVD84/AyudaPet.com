@@ -76,7 +76,7 @@ function db(): PDO {
     static $pdo = null;
     if ($pdo instanceof PDO) return $pdo;
 
-    $host = envv('MYSQL_HOST', envv('DB_HOST', 'mysql'));
+    $host = envv('MYSQL_HOST', envv('DB_HOST', 'localhost'));
     $port = envv('MYSQL_PORT', envv('DB_PORT', '3306'));
     $name = envv('MYSQL_DATABASE', envv('DB_DATABASE', 'ayudapet'));
     $user = envv('MYSQL_USER', envv('DB_USER', 'ayudapet'));
