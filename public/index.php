@@ -3,13 +3,43 @@ declare(strict_types=1);
 
 session_start();
 
+$configFile = __DIR__ . '/config.php';
+if (is_file($configFile)) {
+    require_once $configFile;
+}
+
 const APP_NAME = 'AyudaPet';
 const APP_DOMAIN = 'ayudapet.com';
 const MAX_SECONDARY_IMAGES = 3;
 
 date_default_timezone_set(getenv('APP_TIMEZONE') ?: 'America/Matamoros');
 
+function starts_with(string $haystack, string $needle): bool {
+    return $needle === '' || strpos($haystack, $needle) === 0;
+}
+
+function contains_text(string $haystack, string $needle): bool {
+    return $needle === '' || strpos($haystack, $needle) !== false;
+}
+
+function first_letter(?string $value): string {
+    $value = trim((string)$value);
+    if ($value === '') return '?';
+    if (function_exists('mb_substr') && function_exists('mb_strtoupper')) {
+        return mb_strtoupper(mb_substr($value, 0, 1, 'UTF-8'), 'UTF-8');
+    }
+    return strtoupper(substr($value, 0, 1));
+}
+
+function lower_text(string $value): string {
+    return function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
+}
+
 function envv(string $key, ?string $default = null): ?string {
+    if (defined($key)) {
+        $value = constant($key);
+        return $value === '' || $value === null ? $default : (string)$value;
+    }
     $value = getenv($key);
     return $value === false || $value === '' ? $default : $value;
 }
@@ -32,7 +62,7 @@ function db(): PDO {
     return $pdo;
 }
 
-function e(mixed $value): string {
+function e($value): string {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 
@@ -49,13 +79,13 @@ function full_url(string $path): string {
     return 'https://' . APP_DOMAIN . url($path);
 }
 
-function redirect_to(string $path): never {
+function redirect_to(string $path): void {
     header('Location: ' . $path);
     exit;
 }
 
 function safe_next(?string $next): string {
-    if (!$next || !str_starts_with($next, '/') || str_starts_with($next, '//')) {
+    if (!$next || !starts_with($next, '/') || starts_with($next, '//')) {
         return '/';
     }
     return $next;
@@ -84,7 +114,7 @@ function require_login(): void {
 
 function normalize_phone(?string $raw): ?string {
     $digits = preg_replace('/\D+/', '', $raw ?? '');
-    if (str_starts_with($digits, '52') && strlen($digits) === 12) {
+    if (starts_with($digits, '52') && strlen($digits) === 12) {
         $digits = substr($digits, 2);
     }
     return preg_match('/^[2-9][0-9]{9}$/', $digits) ? $digits : null;
@@ -92,7 +122,7 @@ function normalize_phone(?string $raw): ?string {
 
 function phone_digits(?string $raw): string {
     $digits = preg_replace('/\D+/', '', $raw ?? '');
-    if (strlen($digits) === 12 && str_starts_with($digits, '52')) return substr($digits, 2);
+    if (strlen($digits) === 12 && starts_with($digits, '52')) return substr($digits, 2);
     return $digits;
 }
 
@@ -486,7 +516,7 @@ function view_index(array $mascotas, array $stats, array $filters): void { ?>
     <?php foreach ($mascotas as $pet): ?>
       <a class="pet-card" href="/mascotas/<?= e($pet['id']) ?>">
         <div class="pet-media">
-          <?php if ($pet['principal']): ?><img class="zoomable" src="<?= e($pet['principal']) ?>" alt="<?= e($pet['nombre']) ?>" data-zoom-src="<?= e($pet['principal']) ?>"><?php else: ?><?= e(mb_strtoupper(mb_substr($pet['nombre'] ?: '?', 0, 1))) ?><?php endif; ?>
+          <?php if ($pet['principal']): ?><img class="zoomable" src="<?= e($pet['principal']) ?>" alt="<?= e($pet['nombre']) ?>" data-zoom-src="<?= e($pet['principal']) ?>"><?php else: ?><?= e(first_letter($pet['nombre'] ?: '?')) ?><?php endif; ?>
           <span class="badge photo-badge <?= $pet['encontrado'] ? 'found' : 'lost' ?>"><?= $pet['encontrado'] ? 'Localizado' : 'Perdido' ?></span>
         </div>
         <div class="pet-body">
@@ -508,7 +538,7 @@ function view_detalle(array $mascota, bool $isOwner, array $share, ?string $mapU
   <section class="detail-wrap">
     <div class="detail-photos">
       <div class="detail-photo"><div class="detail-media">
-        <?php if ($mascota['principal']): ?><img class="zoomable" src="<?= e($mascota['principal']) ?>" alt="<?= e($mascota['nombre']) ?>" data-zoom-src="<?= e($mascota['principal']) ?>"><?php else: ?><?= e(mb_strtoupper(mb_substr($mascota['nombre'] ?: '?', 0, 1))) ?><?php endif; ?>
+        <?php if ($mascota['principal']): ?><img class="zoomable" src="<?= e($mascota['principal']) ?>" alt="<?= e($mascota['nombre']) ?>" data-zoom-src="<?= e($mascota['principal']) ?>"><?php else: ?><?= e(first_letter($mascota['nombre'] ?: '?')) ?><?php endif; ?>
         <span class="badge photo-badge <?= $mascota['encontrado'] ? 'found' : 'lost' ?>"><?= $mascota['encontrado'] ? 'Localizado' : 'Perdido' ?></span>
       </div></div>
       <?php if ($secundarias): ?><div class="gallery"><?php foreach ($secundarias as $image): ?><img class="zoomable" src="<?= e($image) ?>" alt="Foto de <?= e($mascota['nombre']) ?>" data-zoom-src="<?= e($image) ?>"><?php endforeach; ?></div><?php endif; ?>
@@ -527,7 +557,7 @@ function view_detalle(array $mascota, bool $isOwner, array $share, ?string $mapU
   </section>
 <?php }
 
-function info_row(string $label, mixed $value): void {
+function info_row(string $label, $value): void {
     if ($value === null || $value === '') return;
     echo '<div class="info-row"><strong>' . e($label) . '</strong><span>' . e($value) . '</span></div>';
 }
@@ -558,10 +588,10 @@ function view_recuperar(): void { ?>
 
 function view_perfil(array $user, array $reportes): void { ?>
   <section class="profile-layout">
-    <div class="panel profile-card"><p class="eyebrow" style="color:var(--brand);">Cuenta</p><div class="avatar"><?php if ($user['foto']): ?><img src="<?= e($user['foto']) ?>" alt="<?= e($user['nombre'] ?: 'Perfil') ?>"><?php else: ?><?= e(mb_strtoupper(mb_substr($user['nombre'] ?: $user['telefono'], 0, 1))) ?><?php endif; ?></div><h1><?= e($user['nombre'] ?: 'Mi perfil') ?></h1><p class="meta"><strong>Telefono registrado:</strong><br><?= e($user['telefono']) ?></p><form method="post" enctype="multipart/form-data" class="form-grid"><div class="field full"><label for="nombre">Nombre</label><input id="nombre" name="nombre" value="<?= e($user['nombre'] ?? '') ?>"></div><div class="field full"><label for="foto">Foto de perfil</label><input id="foto" name="foto" type="file" accept="image/*"></div><div class="actions"><button class="btn primary" type="submit">Guardar perfil</button></div></form></div>
+    <div class="panel profile-card"><p class="eyebrow" style="color:var(--brand);">Cuenta</p><div class="avatar"><?php if ($user['foto']): ?><img src="<?= e($user['foto']) ?>" alt="<?= e($user['nombre'] ?: 'Perfil') ?>"><?php else: ?><?= e(first_letter($user['nombre'] ?: $user['telefono'])) ?><?php endif; ?></div><h1><?= e($user['nombre'] ?: 'Mi perfil') ?></h1><p class="meta"><strong>Telefono registrado:</strong><br><?= e($user['telefono']) ?></p><form method="post" enctype="multipart/form-data" class="form-grid"><div class="field full"><label for="nombre">Nombre</label><input id="nombre" name="nombre" value="<?= e($user['nombre'] ?? '') ?>"></div><div class="field full"><label for="foto">Foto de perfil</label><input id="foto" name="foto" type="file" accept="image/*"></div><div class="actions"><button class="btn primary" type="submit">Guardar perfil</button></div></form></div>
     <div class="panel profile-card"><p class="eyebrow" style="color:var(--brand);">Seguridad</p><h1>Cambiar contrasena</h1><form method="post" action="/perfil/password" class="form-grid"><div class="field full"><label for="current_password">Contrasena actual</label><input id="current_password" name="current_password" type="password" autocomplete="current-password" required></div><div class="field"><label for="new_password">Nueva contrasena</label><input id="new_password" name="new_password" type="password" autocomplete="new-password" minlength="8" required></div><div class="field"><label for="confirm_password">Confirmar contrasena</label><input id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" minlength="8" required></div><div class="actions"><button class="btn primary" type="submit">Actualizar contrasena</button></div></form></div>
   </section>
-  <section class="panel profile-card" style="margin-top:18px;"><div class="section-head" style="margin-top:0;"><div><h2>Mis reportes</h2><p>Reportes publicados con tu numero registrado.</p></div><a class="btn primary" href="/reportar">Nuevo reporte</a></div><?php if ($reportes): ?><div class="mini-list"><?php foreach ($reportes as $pet): ?><a class="mini-report" href="/mascotas/<?= e($pet['id']) ?>"><?php if ($pet['principal']): ?><img src="<?= e($pet['principal']) ?>" alt="<?= e($pet['nombre']) ?>"><?php else: ?><span class="mini-thumb"><?= e(mb_strtoupper(mb_substr($pet['nombre'] ?: '?', 0, 1))) ?></span><?php endif; ?><span><strong><?= e($pet['nombre']) ?></strong><br><span class="meta"><?= $pet['encontrado'] ? 'Localizado' : 'Perdido' ?></span></span></a><?php endforeach; ?></div><?php else: ?><div class="empty">Todavia no tienes reportes publicados.</div><?php endif; ?></section>
+  <section class="panel profile-card" style="margin-top:18px;"><div class="section-head" style="margin-top:0;"><div><h2>Mis reportes</h2><p>Reportes publicados con tu numero registrado.</p></div><a class="btn primary" href="/reportar">Nuevo reporte</a></div><?php if ($reportes): ?><div class="mini-list"><?php foreach ($reportes as $pet): ?><a class="mini-report" href="/mascotas/<?= e($pet['id']) ?>"><?php if ($pet['principal']): ?><img src="<?= e($pet['principal']) ?>" alt="<?= e($pet['nombre']) ?>"><?php else: ?><span class="mini-thumb"><?= e(first_letter($pet['nombre'] ?: '?')) ?></span><?php endif; ?><span><strong><?= e($pet['nombre']) ?></strong><br><span class="meta"><?= $pet['encontrado'] ? 'Localizado' : 'Perdido' ?></span></span></a><?php endforeach; ?></div><?php else: ?><div class="empty">Todavia no tienes reportes publicados.</div><?php endif; ?></section>
 <?php }
 
 function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void {
@@ -606,8 +636,8 @@ function route(): void {
             if ($estado === 'perdidos') $pets = array_values(array_filter($pets, fn($p) => !$p['encontrado']));
             if ($estado === 'localizados') $pets = array_values(array_filter($pets, fn($p) => $p['encontrado']));
             if ($q !== '') {
-                $needle = mb_strtolower($q);
-                $pets = array_values(array_filter($pets, fn($p) => str_contains(mb_strtolower(implode(' ', [$p['nombre'],$p['descripcion'],$p['direccion'],$p['calles'],$p['contacto']])), $needle)));
+                $needle = lower_text($q);
+                $pets = array_values(array_filter($pets, fn($p) => contains_text(lower_text(implode(' ', [$p['nombre'],$p['descripcion'],$p['direccion'],$p['calles'],$p['contacto']])), $needle)));
             }
             render('index', ['title' => APP_NAME, 'mascotas' => $pets, 'stats' => $stats, 'filters' => ['q' => $q, 'estado' => $estado, 'resultados' => count($pets)]]);
             return;
