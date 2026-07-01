@@ -94,6 +94,37 @@ function e($value): string {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 
+function money_display(?string $value): ?string {
+    $raw = trim((string)$value);
+    if ($raw === '') return null;
+    $amount = preg_replace('/\D/', '', $raw);
+    if ($amount === '' || (int)$amount <= 0) return null;
+    return '$' . number_format((int)$amount, 0, '.', ',') . ' M.N.';
+}
+
+function money_input_value(?string $value): string {
+    $raw = trim((string)$value);
+    if ($raw === '') return '';
+    return preg_replace('/\D/', '', $raw) ?: '';
+}
+
+function age_display(?string $number, ?string $unit): ?string {
+    $amount = (int)preg_replace('/\D/', '', (string)$number);
+    if ($amount <= 0) return null;
+    $unit = $unit === 'meses' ? 'meses' : 'anos';
+    if ($unit === 'meses') return $amount . ' ' . ($amount === 1 ? 'mes' : 'meses');
+    return $amount . ' ' . ($amount === 1 ? 'año' : 'años');
+}
+
+function age_input_parts(?string $value): array {
+    $raw = lower_text(trim((string)$value));
+    if ($raw === '') return ['', 'anos'];
+    preg_match('/\d+/', $raw, $match);
+    $amount = $match[0] ?? '';
+    $unit = strpos($raw, 'mes') !== false ? 'meses' : 'anos';
+    return [$amount, $unit];
+}
+
 function path_only(): string {
     $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
     return '/' . trim($path, '/');
@@ -353,7 +384,7 @@ function report_payload(string $id, ?array $existing = null): array {
         'principal' => $principal,
         'secundarias' => json_encode($secondaries, JSON_UNESCAPED_SLASHES),
         'fecha' => post_value('fecha'),
-        'edad' => post_value('edad'),
+        'edad' => age_display(post_value('edad_numero'), post_value('edad_unidad')),
         'raza' => post_value('raza'),
         'genero' => post_value('genero'),
         'color' => post_value('color'),
@@ -362,7 +393,7 @@ function report_payload(string $id, ?array $existing = null): array {
         'direccion' => post_value('direccion'),
         'calles' => null,
         'dueno' => null,
-        'recompensa' => post_value('recompensa'),
+        'recompensa' => money_display(post_value('recompensa')),
         'encontrado' => isset($_POST['encontrado']) ? 1 : 0,
     ];
 }
@@ -435,7 +466,7 @@ function render(string $view, array $data = [], int $status = 200): void {
   <link rel="icon" type="image/png" href="/static/logo.png">
   <link rel="apple-touch-icon" href="/static/logo.png">
   <style><?= css() ?></style>
-  <style>.switch input:checked~.switch-ui{background:var(--green)}.switch input:checked~.switch-ui:before{transform:translateX(22px)}</style>
+  <style>.switch input:checked~.switch-ui{background:var(--green)}.switch input:checked~.switch-ui:before{transform:translateX(22px)}.inline-fields{display:grid;grid-template-columns:minmax(0,1fr) 132px;gap:8px}.inline-fields select{min-width:0}@media(max-width:420px){.inline-fields{grid-template-columns:1fr}}</style>
 </head>
 <body>
   <header class="topbar">
@@ -517,6 +548,7 @@ document.querySelectorAll("[data-copy-url]").forEach((button)=>button.addEventLi
 document.querySelectorAll("[data-native-share-button]").forEach((button)=>button.addEventListener("click",async()=>{const shareData={title:button.dataset.shareTitle||document.title,text:button.dataset.shareText||"",url:button.dataset.shareUrl||window.location.href};if(navigator.share){try{await navigator.share(shareData);return}catch(error){if(error?.name==="AbortError")return}}const original=button.textContent;button.textContent="Usa copiar enlace";window.setTimeout(()=>{button.textContent=original},1800)}));
 document.querySelectorAll("[data-max-files]").forEach((input)=>input.addEventListener("change",()=>{const maxFiles=Number(input.dataset.maxFiles||0);if(input.files.length>maxFiles){input.value="";alert(maxFiles>0?`Solo puedes seleccionar hasta ${maxFiles} imagenes.`:"Ya tienes el maximo de 3 fotos adicionales.")}}));
 document.querySelectorAll("[data-contact-toggle]").forEach((toggle)=>{const box=document.querySelector("[data-contact-own]");const input=document.querySelector("[data-contact-input]");const sync=()=>{if(!box)return;box.classList.toggle("show",toggle.checked);if(input){input.disabled=!toggle.checked;if(!toggle.checked)input.value=""}};toggle.addEventListener("change",sync);sync()});
+document.querySelectorAll("[data-money-input]").forEach((input)=>{const preview=document.querySelector("[data-money-preview]");const sync=()=>{if(!preview)return;const amount=Number(String(input.value||"").replace(/\D/g,""));preview.textContent=amount>0?`$${amount.toLocaleString("es-MX")} M.N.`:"Se mostrara como $1,000 M.N."};input.addEventListener("input",sync);sync()});
 JS;
 }
 
@@ -590,7 +622,7 @@ function view_detalle(array $mascota, bool $isOwner, array $share, ?string $mapU
       <div class="split-info"><?php foreach ([['Edad','edad'],['Raza','raza'],['Genero','genero'],['Color','color'],['Collar','collar'],['Docil','docil']] as [$label,$key]) info_row($label, $mascota[$key]); ?></div>
       <?php if ($mapUrl): ?><div class="map-frame"><iframe src="<?= e($mapUrl) ?>" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen title="Mapa de direccion de extravio"></iframe></div><?php endif; ?>
       <div class="info-list"><?php info_row('Direccion de extravio', $mascota['direccion']); ?></div>
-      <div class="split-info"><?php info_row('Recompensa', $mascota['recompensa']); ?></div>
+      <div class="split-info"><?php info_row('Recompensa', money_display($mascota['recompensa'])); ?></div>
       <?php if ($callPhone): ?><div class="contact-actions"><a class="btn primary" href="tel:<?= e($callPhone) ?>">Llamar</a><a class="btn whatsapp" href="https://wa.me/<?= e($waPhone) ?>" target="_blank" rel="noopener">WhatsApp</a></div><?php endif; ?>
       <div class="share-actions" aria-label="Compartir reporte"><p class="share-title">Comparte:</p><button class="btn primary" type="button" data-native-share-button data-share-title="<?= e($share['text']) ?>" data-share-text="<?= e($share['message']) ?>" data-share-url="<?= e($share['url']) ?>">Compartir</button><button class="btn" type="button" data-copy-url="<?= e($share['url']) ?>">Copiar enlace</button></div>
       <div class="actions"><a class="btn" href="/">Volver a reportes</a></div>
@@ -638,6 +670,10 @@ function view_perfil(array $user, array $reportes): void { ?>
 function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void {
     $secundarias = $editing ? pet_secondaries($mascota) : [];
     $slots = max(0, MAX_SECONDARY_IMAGES - count($secundarias));
+    [$edadNumero, $edadUnidad] = age_input_parts($mascota['edad'] ?? '');
+    $recompensaInput = money_input_value($mascota['recompensa'] ?? '');
+    $collarActual = lower_text($mascota['collar'] ?? '');
+    $docilActual = lower_text($mascota['docil'] ?? '');
     ?>
   <section class="form-wrap"><form class="form-panel" method="post" enctype="multipart/form-data"><p class="eyebrow" style="color:var(--brand);"><?= $editing ? 'Editar reporte' : 'Nuevo reporte' ?></p><h1><?= $editing ? 'Editar reporte' : 'Datos de la mascota' ?></h1><div class="form-grid">
     <div class="field full"><label for="principal">Foto principal</label><?php if ($editing && $mascota['principal']): ?><div class="edit-images"><div class="edit-image-item"><img src="<?= e($mascota['principal']) ?>" alt="Foto principal actual"><label class="remove-image-check" title="Quitar" data-remove-image data-remove-url="/mascotas/<?= e($mascota['id']) ?>/imagenes/eliminar" data-remove-target="principal"><input type="checkbox" name="remove_principal"><span>&times;</span></label></div></div><?php endif; ?><input id="principal" name="principal" type="file" accept="image/*"></div>
@@ -645,11 +681,14 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
     <div class="field"><label for="fecha">Fecha de extravio</label><input id="fecha" name="fecha" type="date" value="<?= e($mascota['fecha'] ?? '') ?>"></div>
     <div class="field"><label for="nombre">Nombre de mascota</label><input id="nombre" name="nombre" value="<?= e($mascota['nombre'] ?? '') ?>" required></div>
     <div class="field full"><label for="descripcion">Descripcion</label><textarea id="descripcion" name="descripcion" placeholder="Senales particulares, temperamento, ultima vez visto"><?= e($mascota['descripcion'] ?? '') ?></textarea></div>
-    <?php input_field('edad','Edad',$mascota); input_field('raza','Raza',$mascota); ?>
+    <div class="field"><label for="edad_numero">Edad</label><div class="inline-fields"><input id="edad_numero" name="edad_numero" type="number" min="1" step="1" inputmode="numeric" value="<?= e($edadNumero) ?>" placeholder="1"><select name="edad_unidad" aria-label="Unidad de edad"><option value="meses" <?= $edadUnidad === 'meses' ? 'selected' : '' ?>>Meses</option><option value="anos" <?= $edadUnidad === 'anos' ? 'selected' : '' ?>>Años</option></select></div></div>
+    <?php input_field('raza','Raza',$mascota); ?>
     <div class="field"><label for="genero">Genero</label><select id="genero" name="genero"><option value="">Seleccionar</option><?php foreach (['Macho','Hembra','No se sabe'] as $opt): ?><option <?= ($mascota['genero'] ?? '') === $opt ? 'selected' : '' ?>><?= e($opt) ?></option><?php endforeach; ?></select></div>
-    <?php input_field('color','Color',$mascota); input_field('collar','Collar',$mascota); input_field('docil','Docil',$mascota, 'Docil, nervioso, asustado'); ?>
+    <?php input_field('color','Color',$mascota); ?>
+    <div class="field"><label for="collar">Collar</label><select id="collar" name="collar"><option value="">Seleccionar</option><?php foreach (['Si','No'] as $opt): ?><option <?= $collarActual === lower_text($opt) || ($opt === 'Si' && $collarActual === 'sí') ? 'selected' : '' ?>><?= e($opt) ?></option><?php endforeach; ?></select></div>
+    <div class="field"><label for="docil">Docil</label><select id="docil" name="docil"><option value="">Seleccionar</option><?php foreach (['Si','No'] as $opt): ?><option <?= $docilActual === lower_text($opt) || ($opt === 'Si' && $docilActual === 'sí') ? 'selected' : '' ?>><?= e($opt) ?></option><?php endforeach; ?></select></div>
     <div class="field full"><label for="direccion">Direccion de extravio</label><input id="direccion" name="direccion" value="<?= e($mascota['direccion'] ?? '') ?>" autocomplete="off" data-address-autocomplete></div>
-    <?php input_field('recompensa','Recompensa',$mascota); ?>
+    <div class="field"><label for="recompensa">Recompensa</label><input id="recompensa" name="recompensa" type="number" min="0" step="1" inputmode="numeric" value="<?= e($recompensaInput) ?>" placeholder="1000" data-money-input><span class="hint" data-money-preview><?= e(money_display($recompensaInput) ?: 'Se mostrara como $1,000 M.N.') ?></span></div>
     <?php $usesOwnContact = !empty($mascota['contacto']) && $mascota['contacto'] !== DEFAULT_PUBLIC_CONTACT; ?>
     <div class="field">
       <label>Contacto publico</label>
