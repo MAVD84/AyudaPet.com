@@ -389,9 +389,11 @@ function upload_image(array $file, string $reportId, string $label): ?string {
 }
 
 function report_payload(string $id, ?array $existing = null): array {
-    $name = post_value('nombre');
-    if (!$name) throw new RuntimeException('El nombre de la mascota es obligatorio.');
     $existing = $existing ?? [];
+    $reportType = report_type_value(post_value('tipo_reporte') ?: ($existing['tipo_reporte'] ?? 'extravio'));
+    $name = post_value('nombre');
+    if (!$name && $reportType === 'extravio') throw new RuntimeException('El nombre de la mascota es obligatorio.');
+    if (!$name) $name = 'Sin nombre';
     $contacto = isset($_POST['usar_contacto_propio']) ? post_value('contacto') : null;
 
     $principal = !empty($_POST['remove_principal']) ? null : ($existing['principal'] ?? null);
@@ -430,7 +432,7 @@ function report_payload(string $id, ?array $existing = null): array {
     }
 
     return [
-        'tipo_reporte' => report_type_value(post_value('tipo_reporte') ?: ($existing['tipo_reporte'] ?? 'extravio')),
+        'tipo_reporte' => $reportType,
         'tipo_mascota' => post_value('tipo_mascota'),
         'nombre' => $name,
         'descripcion' => post_value('descripcion'),
@@ -447,7 +449,7 @@ function report_payload(string $id, ?array $existing = null): array {
         'direccion' => post_value('direccion'),
         'calles' => null,
         'dueno' => null,
-        'recompensa' => money_display(post_value('recompensa')),
+        'recompensa' => $reportType === 'resguardo' ? null : money_display(post_value('recompensa')),
         'encontrado' => isset($_POST['encontrado']) ? 1 : 0,
     ];
 }
@@ -727,7 +729,7 @@ function view_tipo_reporte(): void { ?>
         </a>
         <a class="report-type-option" href="/reportar?reporte=resguardo">
           <strong>Reporte de resguardo</strong>
-          <span>Encontre una mascota y la tengo resguardada o ubicada.</span>
+          <span>Encontre una mascota y la tengo resguardada o ubicada, aunque no sepa su nombre.</span>
         </a>
       </div>
       <div class="actions"><a class="btn" href="/">Cancelar</a></div>
@@ -743,6 +745,7 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
     $formTitle = $editing ? 'Editar reporte' : ($isResguardo ? 'Reporte de resguardo' : 'Reporte de extravio');
     $fechaLabel = $isResguardo ? 'Fecha de resguardo' : 'Fecha de extravio';
     $direccionLabel = $isResguardo ? 'Direccion donde se encontro' : 'Direccion de extravio';
+    $nombrePlaceholder = $isResguardo ? 'Si no se sabe, dejalo en blanco' : '';
     $estadoLabel = $isResguardo ? 'Resuelto' : 'Localizado';
     $estadoHint = $isResguardo ? 'Activalo cuando la mascota ya fue entregada o el caso se resolvio' : 'Activalo cuando la mascota ya fue encontrada';
     [$edadNumero, $edadUnidad] = age_input_parts($mascota['edad'] ?? '');
@@ -754,7 +757,7 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
     <div class="field full"><label for="principal">Foto principal</label><?php if ($editing && $mascota['principal']): ?><div class="edit-images"><div class="edit-image-item"><img src="<?= e($mascota['principal']) ?>" alt="Foto principal actual"><label class="remove-image-check" title="Quitar" data-remove-image data-remove-url="/mascotas/<?= e($mascota['id']) ?>/imagenes/eliminar" data-remove-target="principal"><input type="checkbox" name="remove_principal"><span>&times;</span></label></div></div><?php endif; ?><input id="principal" name="principal" type="file" accept="image/*"></div>
     <div class="field full"><label>Fotos adicionales</label><?php if ($secundarias): ?><div class="edit-image-grid"><?php foreach ($secundarias as $image): ?><div class="edit-image-item"><img src="<?= e($image) ?>" alt="Foto secundaria actual"><label class="remove-image-check" title="Quitar" data-remove-image data-remove-url="/mascotas/<?= e($mascota['id']) ?>/imagenes/eliminar" data-remove-target="secundaria" data-remove-image-url="<?= e($image) ?>"><input type="checkbox" name="remove_secundarias[]" value="<?= e($image) ?>"><span>&times;</span></label></div><?php endforeach; ?></div><?php endif; ?><input name="secundarias[]" type="file" accept="image/*" multiple data-max-files="<?= e($slots) ?>"><span class="hint">Puedes seleccionar hasta 3 imagenes adicionales.</span></div>
     <div class="field"><label for="fecha"><?= e($fechaLabel) ?></label><input id="fecha" name="fecha" type="date" value="<?= e($mascota['fecha'] ?? '') ?>"></div>
-    <div class="field"><label for="nombre">Nombre de mascota</label><input id="nombre" name="nombre" value="<?= e($mascota['nombre'] ?? '') ?>" required></div>
+    <div class="field"><label for="nombre">Nombre de mascota</label><input id="nombre" name="nombre" value="<?= e(($isResguardo && ($mascota['nombre'] ?? '') === 'Sin nombre') ? '' : ($mascota['nombre'] ?? '')) ?>" placeholder="<?= e($nombrePlaceholder) ?>" <?= $isResguardo ? '' : 'required' ?>></div>
     <div class="field"><label for="tipo_mascota">Tipo de mascota</label><select id="tipo_mascota" name="tipo_mascota"><option value="">Seleccionar</option><?php foreach (['Perro','Gato','Otro'] as $opt): ?><option <?= ($mascota['tipo_mascota'] ?? '') === $opt ? 'selected' : '' ?>><?= e($opt) ?></option><?php endforeach; ?></select></div>
     <div class="field full"><label for="descripcion">Descripcion</label><textarea id="descripcion" name="descripcion" placeholder="Senales particulares, temperamento, ultima vez visto"><?= e($mascota['descripcion'] ?? '') ?></textarea></div>
     <div class="field"><label for="edad_numero">Edad</label><div class="inline-fields"><input id="edad_numero" name="edad_numero" type="number" min="1" step="1" inputmode="numeric" value="<?= e($edadNumero) ?>" placeholder="1"><select name="edad_unidad" aria-label="Unidad de edad"><option value="meses" <?= $edadUnidad === 'meses' ? 'selected' : '' ?>>Meses</option><option value="anos" <?= $edadUnidad === 'anos' ? 'selected' : '' ?>>Años</option></select></div></div>
@@ -764,7 +767,7 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
     <div class="field"><label for="collar">Collar</label><select id="collar" name="collar"><option value="">Seleccionar</option><?php foreach (['Si','No'] as $opt): ?><option <?= $collarActual === lower_text($opt) || ($opt === 'Si' && $collarActual === 'sí') ? 'selected' : '' ?>><?= e($opt) ?></option><?php endforeach; ?></select></div>
     <div class="field"><label for="docil">Docil</label><select id="docil" name="docil"><option value="">Seleccionar</option><?php foreach (['Si','No'] as $opt): ?><option <?= $docilActual === lower_text($opt) || ($opt === 'Si' && $docilActual === 'sí') ? 'selected' : '' ?>><?= e($opt) ?></option><?php endforeach; ?></select></div>
     <div class="field full"><label for="direccion"><?= e($direccionLabel) ?></label><input id="direccion" name="direccion" value="<?= e($mascota['direccion'] ?? '') ?>" autocomplete="off" data-address-autocomplete></div>
-    <div class="field"><label for="recompensa">Recompensa</label><input id="recompensa" name="recompensa" type="number" min="0" step="1" inputmode="numeric" value="<?= e($recompensaInput) ?>" placeholder="1000" data-money-input><span class="hint" data-money-preview><?= e(money_display($recompensaInput) ?: 'Se mostrara como $1,000 M.N.') ?></span></div>
+    <?php if (!$isResguardo): ?><div class="field"><label for="recompensa">Recompensa</label><input id="recompensa" name="recompensa" type="number" min="0" step="1" inputmode="numeric" value="<?= e($recompensaInput) ?>" placeholder="1000" data-money-input><span class="hint" data-money-preview><?= e(money_display($recompensaInput) ?: 'Se mostrara como $1,000 M.N.') ?></span></div><?php endif; ?>
     <?php $usesOwnContact = !empty($mascota['contacto']) && $mascota['contacto'] !== DEFAULT_PUBLIC_CONTACT; ?>
     <div class="field">
       <label>Contacto publico</label>
