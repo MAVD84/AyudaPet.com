@@ -523,12 +523,18 @@ def detalle_mascota(report_id):
     meta_image = mascota.get("principal") or url_for("static", filename="og_image.png", _external=True)
     share_text = f"{status}: {pet_name} en AyudaPet"
     share_message = f"{share_text} {detail_url}"
+    facebook_url = f"https://www.facebook.com/sharer/sharer.php?u={quote_plus(detail_url)}"
+    twitter_url = f"https://twitter.com/intent/tweet?text={quote_plus(share_text)}&url={quote_plus(detail_url)}"
     share = {
         "url": detail_url,
         "text": share_text,
+        "message": share_message,
         "whatsapp": f"https://wa.me/?text={quote_plus(share_message)}",
-        "facebook": f"https://www.facebook.com/sharer/sharer.php?u={quote_plus(detail_url)}",
-        "twitter": f"https://twitter.com/intent/tweet?text={quote_plus(share_text)}&url={quote_plus(detail_url)}",
+        "whatsapp_app": f"whatsapp://send?text={quote_plus(share_message)}",
+        "facebook": facebook_url,
+        "facebook_app": f"fb://facewebmodal/f?href={quote_plus(facebook_url)}",
+        "twitter": twitter_url,
+        "twitter_app": f"twitter://post?message={quote_plus(share_message)}",
     }
     map_query = ", ".join(
         value for value in [
@@ -1707,6 +1713,48 @@ TEMPLATES = {
       });
     });
 
+    document.querySelectorAll("[data-share-app]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const shareData = {
+          title: button.dataset.shareTitle || document.title,
+          text: button.dataset.shareText || "",
+          url: button.dataset.shareUrl || window.location.href,
+        };
+
+        if (button.dataset.nativeShare === "true" && navigator.share) {
+          try {
+            await navigator.share(shareData);
+            return;
+          } catch (error) {
+            if (error?.name === "AbortError") return;
+          }
+        }
+
+        const appUrl = button.dataset.appUrl;
+        const webUrl = button.dataset.webUrl;
+        if (appUrl) {
+          window.location.href = appUrl;
+          if (webUrl) {
+            window.setTimeout(() => {
+              if (!document.hidden) window.location.href = webUrl;
+            }, 900);
+          }
+          return;
+        }
+
+        if (navigator.share) {
+          try {
+            await navigator.share(shareData);
+            return;
+          } catch (error) {
+            if (error?.name === "AbortError") return;
+          }
+        }
+
+        if (webUrl) window.location.href = webUrl;
+      });
+    });
+
     document.querySelectorAll("[data-max-files]").forEach((input) => {
       input.addEventListener("change", () => {
         const maxFiles = Number(input.dataset.maxFiles || 0);
@@ -1906,11 +1954,11 @@ TEMPLATES = {
       {% endif %}
       <div class="share-actions" aria-label="Compartir reporte">
         <p class="share-title">Comparte:</p>
-        <a class="btn facebook" href="{{ share.facebook }}" target="_blank" rel="noopener">Facebook</a>
-        <button class="btn instagram" type="button" data-copy-url="{{ share.url }}" data-copy-label="Instagram">Instagram</button>
-        <button class="btn tiktok" type="button" data-copy-url="{{ share.url }}" data-copy-label="TikTok">TikTok</button>
-        <a class="btn whatsapp" href="{{ share.whatsapp }}" target="_blank" rel="noopener">WhatsApp</a>
-        <a class="btn twitter" href="{{ share.twitter }}" target="_blank" rel="noopener">X</a>
+        <button class="btn facebook" type="button" data-share-app data-app-url="{{ share.facebook_app }}" data-web-url="{{ share.facebook }}" data-share-title="{{ share.text }}" data-share-text="{{ share.message }}" data-share-url="{{ share.url }}">Facebook</button>
+        <button class="btn instagram" type="button" data-share-app data-native-share="true" data-share-title="{{ share.text }}" data-share-text="{{ share.message }}" data-share-url="{{ share.url }}">Instagram</button>
+        <button class="btn tiktok" type="button" data-share-app data-native-share="true" data-share-title="{{ share.text }}" data-share-text="{{ share.message }}" data-share-url="{{ share.url }}">TikTok</button>
+        <button class="btn whatsapp" type="button" data-share-app data-app-url="{{ share.whatsapp_app }}" data-web-url="{{ share.whatsapp }}" data-share-title="{{ share.text }}" data-share-text="{{ share.message }}" data-share-url="{{ share.url }}">WhatsApp</button>
+        <button class="btn twitter" type="button" data-share-app data-app-url="{{ share.twitter_app }}" data-web-url="{{ share.twitter }}" data-share-title="{{ share.text }}" data-share-text="{{ share.message }}" data-share-url="{{ share.url }}">X</button>
         <button class="btn" type="button" data-copy-url="{{ share.url }}">Copiar enlace</button>
       </div>
       <div class="actions"><a class="btn" href="{{ url_for('index') }}">Volver a reportes</a></div>
