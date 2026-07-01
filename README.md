@@ -1,37 +1,63 @@
-# UBICAN ID - Reportes SOS
+# AyudaPet
 
-Aplicacion Flask para registrar usuarios por telefono, verificar OTP y publicar reportes de mascotas perdidas o encontradas usando Supabase como base de datos.
+Aplicacion PHP + MySQL para reportes de mascotas perdidas/localizadas.
 
-## Configuracion
+## Stack
 
-1. Copia `.env.example` a `.env`.
-2. Rellena valores reales y nuevos. No reutilices claves que hayan sido publicadas en Git.
-3. En Supabase, ejecuta `supabase_hardening.sql` despues de rotar credenciales.
+- PHP 8.3 con Apache
+- MySQL/MariaDB
+- LabsMobile para OTP por SMS
+- Google Maps Places + mapa con `API_KEY`
+- Uploads locales en `/uploads`
 
-Variables principales:
+## Variables de entorno
 
-- `SECRET_KEY`: valor largo y aleatorio para sesiones Flask.
-- `SUPABASE_URL`: URL del proyecto Supabase.
-- `SUPABASE_SERVICE_ROLE_KEY`: key solo para el servidor Flask.
-- `SUPABASE_STORAGE_BUCKET`: bucket publico donde se suben fotos de reportes.
-- `SHOW_OTP_IN_DEV`: usa `true` solo en desarrollo para ver codigos OTP en pantalla.
-- `LABSMOBILE_*`: credenciales para envio de SMS. `LABSMOBILE_DEFAULT_COUNTRY_CODE=52` convierte telefonos mexicanos de 10 digitos a formato internacional.
+Configura estas variables en Coolify:
 
-## Desarrollo local
+```env
+MYSQL_HOST=mysql
+MYSQL_PORT=3306
+MYSQL_DATABASE=ayudapet
+MYSQL_USER=ayudapet
+MYSQL_PASSWORD=
 
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-python app.py
+SHOW_OTP_IN_DEV=false
+OTP_TTL_SECONDS=300
+
+LABSMOBILE_USER=
+LABSMOBILE_TOKEN=
+LABSMOBILE_SENDER=AYUDAPET
+LABSMOBILE_API=https://api.labsmobile.com/json/send
+LABSMOBILE_DEFAULT_COUNTRY_CODE=52
+
+API_KEY=
 ```
 
-Abre `http://127.0.0.1:5000`.
+## Base de datos
 
-## Seguridad
+Ejecuta [database/schema.sql](database/schema.sql) en tu MySQL antes de usar la app.
 
-- `.env` esta ignorado por Git.
-- No expongas `SUPABASE_SERVICE_ROLE_KEY` en frontend.
-- Ejecuta `supabase_storage.sql` para crear el bucket publico de imagenes.
-- Rota las claves que estuvieron en el historial del repositorio.
-- Para eliminar secretos del historial publico, usa una herramienta como `git filter-repo` o rota claves y reemplaza el repositorio si prefieres una ruta simple.
+## Coolify
+
+1. Usa el `Dockerfile` del repo.
+2. Agrega un servicio MySQL en el mismo proyecto/red.
+3. Configura las variables `MYSQL_*` con los datos del servicio MySQL.
+4. Recomendado: crea un volumen persistente para `/var/www/html/uploads` para no perder imagenes al redeploy.
+5. Ejecuta el SQL de `database/schema.sql`.
+6. Redeploy.
+
+## Desarrollo local rapido
+
+Con PHP instalado:
+
+```bash
+php -S 127.0.0.1:8000 -t public
+```
+
+Necesitas un MySQL accesible y las variables de entorno `MYSQL_*`.
+
+## Notas
+
+- El repo ya no usa Supabase ni Flask.
+- Las imagenes se guardan localmente en `/uploads`.
+- No subas archivos `.env` al repositorio.
