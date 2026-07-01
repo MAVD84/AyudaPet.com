@@ -489,7 +489,7 @@ function render(string $view, array $data = [], int $status = 200): void {
   <link rel="icon" type="image/png" href="/static/logo.png">
   <link rel="apple-touch-icon" href="/static/logo.png">
   <style><?= css() ?></style>
-  <style>.switch input:checked~.switch-ui{background:var(--green)}.switch input:checked~.switch-ui:before{transform:translateX(22px)}.inline-fields{display:grid;grid-template-columns:88px minmax(0,132px);gap:8px;align-items:center}.inline-fields select,.inline-fields input{min-width:0}.pet-body{padding-right:20px}.detail-media .views-badge,.detail-media .photo-badge{top:10px;min-width:86px;min-height:28px;padding:0 10px;font-size:.78rem;line-height:1;align-items:center;justify-content:center;text-align:center}.views-badge{position:absolute;left:10px;box-shadow:0 10px 24px rgba(20,32,48,.16);background:rgba(255,255,255,.94);color:var(--ink)}@media(max-width:420px){.pet-body{padding-right:12px}.detail-media .views-badge,.detail-media .photo-badge{top:7px;min-width:80px;min-height:24px;padding:0 8px;font-size:.68rem}.views-badge{left:7px}}</style>
+  <style>.switch input:checked~.switch-ui{background:var(--green)}.switch input:checked~.switch-ui:before{transform:translateX(22px)}.inline-fields{display:grid;grid-template-columns:88px minmax(0,132px);gap:8px;align-items:center}.inline-fields select,.inline-fields input{min-width:0}.pet-body{padding-right:20px}.filter-dropdown summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:14px;cursor:pointer;font-weight:900}.filter-dropdown summary::-webkit-details-marker{display:none}.filter-dropdown summary:after{content:"+";color:var(--muted);font-size:1.25rem}.filter-dropdown[open] summary:after{content:"-"}.filter-dropdown .search-form{margin-top:16px}.detail-media .views-badge,.detail-media .photo-badge{top:10px;min-width:86px;min-height:28px;padding:0 10px;font-size:.78rem;line-height:1;align-items:center;justify-content:center;text-align:center}.views-badge{position:absolute;left:10px;box-shadow:0 10px 24px rgba(20,32,48,.16);background:rgba(255,255,255,.94);color:var(--ink)}@media(max-width:420px){.pet-body{padding-right:12px}.filter-dropdown summary{align-items:flex-start;flex-direction:column}.detail-media .views-badge,.detail-media .photo-badge{top:7px;min-width:80px;min-height:24px;padding:0 8px;font-size:.68rem}.views-badge{left:7px}}</style>
 </head>
 <body>
   <header class="topbar">
@@ -576,6 +576,7 @@ JS;
 }
 
 function view_index(array $mascotas, array $stats, array $filters): void { ?>
+  <?php $activeFilter = trim((string)$filters['q']) !== '' || $filters['estado'] !== 'todos'; ?>
   <section class="hero">
     <div class="hero-main">
       <p class="eyebrow">Red de reportes comunitarios</p>
@@ -595,18 +596,7 @@ function view_index(array $mascotas, array $stats, array $filters): void { ?>
       </details>
     </aside>
   </section>
-  <section class="panel search-panel">
-    <form class="search-form" method="get" action="/">
-      <div class="field"><label for="q">Buscar</label><input id="q" name="q" value="<?= e($filters['q']) ?>" placeholder="Nombre, direccion o contacto"></div>
-      <div class="field"><label for="estado">Filtro</label><select id="estado" name="estado">
-        <?php foreach (['todos'=>'Todos','perdidos'=>'Perdidos','localizados'=>'Localizados'] as $value => $label): ?>
-          <option value="<?= e($value) ?>" <?= $filters['estado'] === $value ? 'selected' : '' ?>><?= e($label) ?></option>
-        <?php endforeach; ?>
-      </select></div>
-      <button class="btn primary" type="submit">Buscar</button>
-    </form>
-    <p class="filter-meta"><?= e($filters['resultados']) ?> resultado<?= $filters['resultados'] == 1 ? '' : 's' ?></p>
-  </section>
+  <section class="panel search-panel"><details class="filter-dropdown" <?= $activeFilter ? 'open' : '' ?>><summary><span>Buscar y filtrar</span><span><?= e($filters['resultados']) ?> resultado<?= $filters['resultados'] == 1 ? '' : 's' ?></span></summary><form class="search-form" method="get" action="/"><div class="field"><label for="q">Buscar</label><input id="q" name="q" value="<?= e($filters['q']) ?>" placeholder="Nombre, direccion o contacto"></div><div class="field"><label for="estado">Estado</label><select id="estado" name="estado"><?php foreach (['todos'=>'Todos','perdidos'=>'Perdidos','localizados'=>'Localizados'] as $value => $label): ?><option value="<?= e($value) ?>" <?= $filters['estado'] === $value ? 'selected' : '' ?>><?= e($label) ?></option><?php endforeach; ?></select></div><button class="btn primary" type="submit">Buscar</button></form></details></section>
   <div class="section-head"><div><h2>Reportes recientes</h2><p>Informacion publica enviada por la comunidad.</p></div></div>
   <?php if ($mascotas): ?><section class="grid">
     <?php foreach ($mascotas as $pet): ?>
