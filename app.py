@@ -6,6 +6,7 @@ import re
 import secrets
 import time
 import uuid
+from datetime import datetime, timezone
 from functools import wraps
 from urllib.parse import quote_plus
 
@@ -40,6 +41,8 @@ SUPABASE_STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "mascotas")
 SHOW_OTP_IN_DEV = os.getenv("SHOW_OTP_IN_DEV", "").lower() in {"1", "true", "yes"}
 OTP_TTL_SECONDS = int(os.getenv("OTP_TTL_SECONDS", "300"))
 GOOGLE_MAPS_API_KEY = os.getenv("API_KEY")
+GOOGLE_SHEETS_WEBHOOK_URL = os.getenv("GOOGLE_SHEETS_WEBHOOK_URL")
+GOOGLE_SHEETS_WEBHOOK_SECRET = os.getenv("GOOGLE_SHEETS_WEBHOOK_SECRET")
 
 PHONE_RE = re.compile(r"^\+?[0-9]{10,15}$")
 MX_PHONE_RE = re.compile(r"^[2-9][0-9]{9}$")
@@ -176,6 +179,51 @@ def phone_digits(raw_phone):
 def whatsapp_digits(raw_phone):
     digits = phone_digits(raw_phone)
     return phone_for_sms(digits) if len(digits) == 10 else digits
+
+
+def visitor_registered():
+    return bool(session.get("visitor_registered"))
+
+
+def social_crawler_request():
+    user_agent = (request.headers.get("User-Agent") or "").casefold()
+    crawlers = (
+        "facebookexternalhit",
+        "facebot",
+        "twitterbot",
+        "linkedinbot",
+        "whatsapp",
+        "telegrambot",
+        "slackbot",
+        "discordbot",
+        "googlebot",
+    )
+    return any(crawler in user_agent for crawler in crawlers)
+
+
+def save_visitor_to_sheets(name, whatsapp):
+    if not GOOGLE_SHEETS_WEBHOOK_URL:
+        logger.warning("Visitante no enviado a Sheets: falta GOOGLE_SHEETS_WEBHOOK_URL.")
+        return False
+
+    payload = {
+        "nombre": name,
+        "whatsapp": whatsapp,
+        "whatsapp_e164": f"+{phone_for_sms(whatsapp)}",
+        "pagina": request.form.get("next") or url_for("index"),
+        "user_agent": request.headers.get("User-Agent", "")[:500],
+        "registrado_at": datetime.now(timezone.utc).isoformat(),
+        "secret": GOOGLE_SHEETS_WEBHOOK_SECRET or "",
+    }
+    try:
+        response = requests.post(GOOGLE_SHEETS_WEBHOOK_URL, json=payload, timeout=10)
+        response.raise_for_status()
+        logger.info("Visitante registrado en Sheets: %s", whatsapp)
+        return True
+    except requests.RequestException as exc:
+        detail = getattr(exc.response, "text", "") if getattr(exc, "response", None) else ""
+        logger.exception("No se pudo registrar visitante en Sheets. Respuesta: %s", detail[:500])
+        return False
 
 
 def current_user_phone():
@@ -451,6 +499,17 @@ def user_owns_report(mascota):
     return bool(mascota and current_user_phone() and mascota.get("reportado_por") == current_user_phone())
 
 
+@app.before_request
+def require_visitor_registration():
+    allowed_endpoints = {"inicio", "static"}
+    if request.endpoint in allowed_endpoints or request.endpoint is None:
+        return None
+    if visitor_registered() or social_crawler_request():
+        return None
+    next_url = request.full_path if request.query_string else request.path
+    return redirect(url_for("inicio", next=next_url))
+
+
 @app.context_processor
 def inject_globals():
     def is_active(endpoint):
@@ -478,6 +537,29 @@ def handle_database_error(error):
 @app.errorhandler(404)
 def not_found(_error):
     return render_template("error.html", title="Pagina no encontrada", message="La ruta solicitada no existe."), 404
+
+
+@app.route("/inicio", methods=["GET", "POST"])
+def inicio():
+    next_url = request.values.get("next") or url_for("index")
+    if not next_url.startswith("/") or next_url.startswith("/inicio"):
+        next_url = url_for("index")
+
+    if request.method == "POST":
+        nombre = (request.form.get("nombre") or "").strip()
+        whatsapp = phone_digits(request.form.get("whatsapp"))
+        if len(nombre) < 2:
+            flash("Escribe tu nombre para continuar.", "error")
+        elif not MX_PHONE_RE.match(whatsapp):
+            flash("Escribe un numero mexicano de WhatsApp valido.", "error")
+        else:
+            session["visitor_registered"] = True
+            session["visitor_name"] = nombre
+            session["visitor_whatsapp"] = whatsapp
+            save_visitor_to_sheets(nombre, whatsapp)
+            return redirect(next_url)
+
+    return render_template("inicio.html", next_url=next_url)
 
 
 @app.route("/")
@@ -1159,6 +1241,18 @@ TEMPLATES = {
       box-shadow: 0 10px 24px rgba(20,32,48,.16);
     }
     .form-wrap { max-width: 900px; margin: 0 auto; }
+    .entry-wrap { max-width: 720px; }
+    .entry-panel { text-align: center; }
+    .entry-panel .form-grid { text-align: left; }
+    .entry-logo {
+      width: 86px;
+      height: 86px;
+      border-radius: 999px;
+      object-fit: cover;
+      margin: 0 auto 14px;
+      display: block;
+      box-shadow: 0 12px 30px rgba(20,32,48,.13);
+    }
     .detail-wrap { display: grid; grid-template-columns: minmax(0, .9fr) minmax(min(320px, 100%), 1.1fr); gap: 22px; align-items: start; }
     .detail-photos { display: grid; gap: 12px; }
     .detail-photo {
@@ -1928,6 +2022,36 @@ TEMPLATES = {
       </div>
       <div class="actions"><a class="btn" href="{{ url_for('index') }}">Volver a reportes</a></div>
     </article>
+  </section>
+{% endblock %}
+""",
+    "inicio.html": """
+{% extends "base.html" %}
+{% block content %}
+  <section class="form-wrap entry-wrap">
+    <form class="form-panel entry-panel" method="post">
+      <img class="entry-logo" src="{{ url_for('static', filename='logo.png') }}" alt="AyudaPet">
+      <p class="eyebrow" style="color: var(--brand);">Antes de continuar</p>
+      <h1>Bienvenido a AyudaPet</h1>
+      <p class="muted">Dejanos tu nombre y WhatsApp para abrir los reportes.</p>
+      <input type="hidden" name="next" value="{{ next_url }}">
+      <div class="form-grid">
+        <div class="field">
+          <label for="nombre">Nombre</label>
+          <input id="nombre" name="nombre" autocomplete="name" placeholder="Tu nombre" required autofocus>
+        </div>
+        <div class="field">
+          <label for="whatsapp">WhatsApp</label>
+          <div class="phone-box">
+            <span class="phone-prefix"><span>MX</span><span>+52</span></span>
+            <input id="whatsapp" name="whatsapp" inputmode="numeric" autocomplete="tel" placeholder="(656) 778-7712" maxlength="14" pattern="\\(?[0-9]{3}\\)?[\\s-]?[0-9]{3}-?[0-9]{4}" data-phone-input required>
+          </div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn primary" type="submit">Continuar</button>
+      </div>
+    </form>
   </section>
 {% endblock %}
 """,
