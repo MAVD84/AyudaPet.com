@@ -313,7 +313,9 @@ function report_payload(string $id, ?array $existing = null): array {
     $secondaries = $existing ? pet_secondaries($existing) : [];
     $remove = $_POST['remove_secundarias'] ?? [];
     if (is_array($remove)) {
-        $secondaries = array_values(array_filter($secondaries, fn($img) => !in_array($img, $remove, true)));
+        $secondaries = array_values(array_filter($secondaries, function ($img) use ($remove) {
+            return !in_array($img, $remove, true);
+        }));
     }
 
     $files = $_FILES['secundarias'] ?? null;
@@ -383,7 +385,9 @@ function remove_report_image(string $id, array $pet, string $target, ?string $im
         return;
     }
     if ($target === 'secundaria' && $image) {
-        $secondaries = array_values(array_filter(pet_secondaries($pet), fn($img) => $img !== $image));
+        $secondaries = array_values(array_filter(pet_secondaries($pet), function ($img) use ($image) {
+            return $img !== $image;
+        }));
         db()->prepare('UPDATE mascotas SET secundarias = ? WHERE id = ? AND reportado_por = ?')->execute([json_encode($secondaries), $id, current_user_phone()]);
         return;
     }
@@ -400,7 +404,9 @@ function render(string $view, array $data = [], int $status = 200): void {
     $metaDescription = $metaDescription ?? 'AyudaPet conecta reportes de mascotas perdidas y localizadas para que vuelvan a casa mas rapido.';
     $metaUrl = $metaUrl ?? full_url('/');
     $metaImage = $metaImage ?? full_url('/static/og_image.png');
-    $active = fn(string $path) => path_only() === $path ? 'active' : '';
+    $active = function (string $path): string {
+        return path_only() === $path ? 'active' : '';
+    };
     ?>
 <!doctype html>
 <html lang="es">
@@ -659,12 +665,22 @@ function route(): void {
             $pets = list_mascotas();
             $q = trim((string)($_GET['q'] ?? ''));
             $estado = strtolower(trim((string)($_GET['estado'] ?? 'todos')));
-            $stats = ['total' => count($pets), 'activos' => count(array_filter($pets, fn($p) => !$p['encontrado'])), 'encontrados' => count(array_filter($pets, fn($p) => $p['encontrado']))];
-            if ($estado === 'perdidos') $pets = array_values(array_filter($pets, fn($p) => !$p['encontrado']));
-            if ($estado === 'localizados') $pets = array_values(array_filter($pets, fn($p) => $p['encontrado']));
+            $stats = [
+                'total' => count($pets),
+                'activos' => count(array_filter($pets, function ($p) { return !$p['encontrado']; })),
+                'encontrados' => count(array_filter($pets, function ($p) { return $p['encontrado']; })),
+            ];
+            if ($estado === 'perdidos') {
+                $pets = array_values(array_filter($pets, function ($p) { return !$p['encontrado']; }));
+            }
+            if ($estado === 'localizados') {
+                $pets = array_values(array_filter($pets, function ($p) { return $p['encontrado']; }));
+            }
             if ($q !== '') {
                 $needle = lower_text($q);
-                $pets = array_values(array_filter($pets, fn($p) => contains_text(lower_text(implode(' ', [$p['nombre'],$p['descripcion'],$p['direccion'],$p['calles'],$p['contacto']])), $needle)));
+                $pets = array_values(array_filter($pets, function ($p) use ($needle) {
+                    return contains_text(lower_text(implode(' ', [$p['nombre'], $p['descripcion'], $p['direccion'], $p['calles'], $p['contacto']])), $needle);
+                }));
             }
             render('index', ['title' => APP_NAME, 'mascotas' => $pets, 'stats' => $stats, 'filters' => ['q' => $q, 'estado' => $estado, 'resultados' => count($pets)]]);
             return;
@@ -836,9 +852,9 @@ function route(): void {
         }
 
         render('error', ['title' => 'Pagina no encontrada', 'message' => 'La ruta solicitada no existe.'], 404);
-    } catch (PDOException $e) {
+    } catch (Throwable $e) {
         error_log($e->getMessage());
-        render('error', ['title' => 'Base de datos no disponible', 'message' => 'No se pudo completar la operacion en la base de datos.'], 502);
+        render('error', ['title' => 'No se pudo cargar AyudaPet', 'message' => 'Revisa la configuracion de PHP/MySQL en el hosting. Detalle: ' . $e->getMessage()], 500);
     }
 }
 
