@@ -545,6 +545,7 @@ function render(string $view, array $data = [], int $status = 200): void {
         <a class="btn ghost <?= $active('/perfil') ?>" href="/perfil">Mi perfil</a>
         <a class="btn ghost <?= $active('/reportar') ?>" href="/reportar">Reportar mascota</a>
         <a class="btn ghost <?= $active('/') ?>" href="/">Reportes</a>
+        <a class="btn primary" href="https://donate.stripe.com/6oU3cpg1T0Y60sOerJ3ks00" target="_blank" rel="noopener">Donar</a>
         <a class="btn ghost" href="/logout">Cerrar sesion</a>
       <?php else: ?>
         <a class="btn ghost <?= $active('/login') ?>" href="/login">Entrar</a>
