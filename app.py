@@ -375,7 +375,10 @@ def report_payload(report_id, existing=None):
     principal = None if remove_principal else existing.get("principal")
     principal = upload_image(request.files.get("principal"), report_id, "principal") or principal
     secundarias = [image for image in list(existing.get("secundarias") or []) if image not in remove_secondary]
-    for index, image in enumerate(request.files.getlist("secundarias"), start=1):
+    new_secondary_files = [image for image in request.files.getlist("secundarias") if image and image.filename]
+    if len(secundarias) + len(new_secondary_files) > 3:
+        raise AppError("Solo puedes tener hasta 3 fotos adicionales.")
+    for index, image in enumerate(new_secondary_files, start=1):
         uploaded = upload_image(image, report_id, f"secundaria-{index}")
         if uploaded:
             secundarias.append(uploaded)
@@ -1693,6 +1696,16 @@ TEMPLATES = {
         window.setTimeout(() => { button.textContent = original; }, 1600);
       });
     });
+
+    document.querySelectorAll("[data-max-files]").forEach((input) => {
+      input.addEventListener("change", () => {
+        const maxFiles = Number(input.dataset.maxFiles || 0);
+        if (input.files.length > maxFiles) {
+          input.value = "";
+          alert(maxFiles > 0 ? `Solo puedes seleccionar hasta ${maxFiles} imagenes.` : "Ya tienes el maximo de 3 fotos adicionales.");
+        }
+      });
+    });
   </script>
 </body>
 </html>
@@ -2111,7 +2124,7 @@ TEMPLATES = {
           <input id="principal" name="principal" type="file" accept="image/*">
         </div>
         <div class="field full">
-          <label>Fotos secundarias</label>
+          <label>Fotos adicionales</label>
           {% if editing and mascota.secundarias %}
             <div class="edit-image-grid">
               {% for image in mascota.secundarias %}
@@ -2123,8 +2136,10 @@ TEMPLATES = {
             </div>
           {% endif %}
           <div class="checks">
-            <input name="secundarias" type="file" accept="image/*" multiple>
+            {% set secondary_slots = 3 - (mascota.secundarias|length if mascota.secundarias else 0) %}
+            <input name="secundarias" type="file" accept="image/*" multiple data-max-files="{{ [secondary_slots, 0]|max }}">
           </div>
+          <span class="hint">Puedes seleccionar hasta 3 imagenes adicionales.</span>
         </div>
         <div class="field"><label for="fecha">Fecha de extravio</label><input id="fecha" name="fecha" type="date" value="{{ mascota.fecha or '' }}"></div>
         <div class="field">
