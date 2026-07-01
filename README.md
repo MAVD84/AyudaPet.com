@@ -51,7 +51,7 @@ Ejecuta [database/schema.sql](database/schema.sql) en tu MySQL antes de usar la 
 Con PHP instalado:
 
 ```bash
-php -S 127.0.0.1:8000 -t public
+php -S 127.0.0.1:8000
 ```
 
 Necesitas un MySQL accesible y las variables de entorno `MYSQL_*`.

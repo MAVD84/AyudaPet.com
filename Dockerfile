@@ -9,7 +9,7 @@ RUN apt-get update \
 
 WORKDIR /var/www/html
 
-COPY public/ /var/www/html/
+COPY index.php .htaccess config.example.php /var/www/html/
 COPY static/ /var/www/html/static/
 
 RUN mkdir -p /var/www/html/uploads \
