@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS otps (
 CREATE TABLE IF NOT EXISTS mascotas (
   id CHAR(32) PRIMARY KEY,
   reportado_por VARCHAR(10) NOT NULL,
+  tipo_reporte VARCHAR(30) NULL DEFAULT 'extravio',
+  tipo_mascota VARCHAR(40) NULL,
   nombre VARCHAR(160) NOT NULL,
   descripcion TEXT NULL,
   contacto VARCHAR(160) NULL,

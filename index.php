@@ -90,13 +90,23 @@ function db(): PDO {
     return $pdo;
 }
 
-function ensure_views_column(): void {
+function ensure_report_columns(): void {
     static $checked = false;
     if ($checked) return;
     $checked = true;
-    $stmt = db()->query("SHOW COLUMNS FROM mascotas LIKE 'vistas'");
-    if (!$stmt->fetch()) {
+    $columns = db()->query('SHOW COLUMNS FROM mascotas')->fetchAll();
+    $existing = [];
+    foreach ($columns as $column) {
+        $existing[$column['Field']] = true;
+    }
+    if (empty($existing['vistas'])) {
         db()->exec('ALTER TABLE mascotas ADD COLUMN vistas INT UNSIGNED NOT NULL DEFAULT 0');
+    }
+    if (empty($existing['tipo_reporte'])) {
+        db()->exec("ALTER TABLE mascotas ADD COLUMN tipo_reporte VARCHAR(30) NULL DEFAULT 'extravio'");
+    }
+    if (empty($existing['tipo_mascota'])) {
+        db()->exec('ALTER TABLE mascotas ADD COLUMN tipo_mascota VARCHAR(40) NULL');
     }
 }
 
@@ -138,6 +148,25 @@ function age_input_parts(?string $value): array {
 function views_label($value): string {
     $count = max(0, (int)$value);
     return $count . ' ' . ($count === 1 ? 'vista' : 'vistas');
+}
+
+function report_type_value(?string $value): string {
+    return $value === 'resguardo' ? 'resguardo' : 'extravio';
+}
+
+function report_type_label(?string $value): string {
+    return report_type_value($value) === 'resguardo' ? 'Resguardo' : 'Extravio';
+}
+
+function report_status_label(array $pet): string {
+    $type = report_type_value($pet['tipo_reporte'] ?? '');
+    if (!empty($pet['encontrado'])) return $type === 'resguardo' ? 'Resuelto' : 'Localizado';
+    return $type === 'resguardo' ? 'En resguardo' : 'Perdido';
+}
+
+function report_status_class(array $pet): string {
+    if (!empty($pet['encontrado'])) return 'found';
+    return report_type_value($pet['tipo_reporte'] ?? '') === 'resguardo' ? 'rescue' : 'lost';
 }
 
 function path_only(): string {
@@ -304,19 +333,19 @@ function save_user(string $phone, string $password, ?string $name = null): void 
 }
 
 function list_mascotas(): array {
-    ensure_views_column();
+    ensure_report_columns();
     return db()->query('SELECT * FROM mascotas ORDER BY creado_at DESC LIMIT 80')->fetchAll();
 }
 
 function list_user_reports(string $phone): array {
-    ensure_views_column();
+    ensure_report_columns();
     $stmt = db()->prepare('SELECT * FROM mascotas WHERE reportado_por = ? ORDER BY creado_at DESC');
     $stmt->execute([$phone]);
     return $stmt->fetchAll();
 }
 
 function get_mascota(string $id): ?array {
-    ensure_views_column();
+    ensure_report_columns();
     $stmt = db()->prepare('SELECT * FROM mascotas WHERE id = ? LIMIT 1');
     $stmt->execute([$id]);
     $pet = $stmt->fetch();
@@ -324,7 +353,7 @@ function get_mascota(string $id): ?array {
 }
 
 function increment_report_views(string $id): void {
-    ensure_views_column();
+    ensure_report_columns();
     db()->prepare('UPDATE mascotas SET vistas = vistas + 1 WHERE id = ?')->execute([$id]);
 }
 
@@ -401,6 +430,8 @@ function report_payload(string $id, ?array $existing = null): array {
     }
 
     return [
+        'tipo_reporte' => report_type_value(post_value('tipo_reporte') ?: ($existing['tipo_reporte'] ?? 'extravio')),
+        'tipo_mascota' => post_value('tipo_mascota'),
         'nombre' => $name,
         'descripcion' => post_value('descripcion'),
         'contacto' => $contacto ?: DEFAULT_PUBLIC_CONTACT,
@@ -422,16 +453,18 @@ function report_payload(string $id, ?array $existing = null): array {
 }
 
 function create_report(): string {
+    ensure_report_columns();
     $id = bin2hex(random_bytes(16));
     $data = report_payload($id);
-    $sql = 'INSERT INTO mascotas (id, reportado_por, nombre, descripcion, contacto, principal, secundarias, fecha, edad, raza, genero, color, collar, docil, direccion, calles, dueno, recompensa, encontrado)
-            VALUES (:id, :reportado_por, :nombre, :descripcion, :contacto, :principal, :secundarias, :fecha, :edad, :raza, :genero, :color, :collar, :docil, :direccion, :calles, :dueno, :recompensa, :encontrado)';
+    $sql = 'INSERT INTO mascotas (id, reportado_por, tipo_reporte, tipo_mascota, nombre, descripcion, contacto, principal, secundarias, fecha, edad, raza, genero, color, collar, docil, direccion, calles, dueno, recompensa, encontrado)
+            VALUES (:id, :reportado_por, :tipo_reporte, :tipo_mascota, :nombre, :descripcion, :contacto, :principal, :secundarias, :fecha, :edad, :raza, :genero, :color, :collar, :docil, :direccion, :calles, :dueno, :recompensa, :encontrado)';
     $stmt = db()->prepare($sql);
     $stmt->execute(['id' => $id, 'reportado_por' => current_user_phone()] + $data);
     return $id;
 }
 
 function update_report(string $id, array $existing): void {
+    ensure_report_columns();
     $data = report_payload($id, $existing);
     $sets = [];
     foreach ($data as $key => $_) $sets[] = "{$key} = :{$key}";
@@ -489,7 +522,7 @@ function render(string $view, array $data = [], int $status = 200): void {
   <link rel="icon" type="image/png" href="/static/logo.png">
   <link rel="apple-touch-icon" href="/static/logo.png">
   <style><?= css() ?></style>
-  <style>.switch input:checked~.switch-ui{background:var(--green)}.switch input:checked~.switch-ui:before{transform:translateX(22px)}.inline-fields{display:grid;grid-template-columns:88px minmax(0,132px);gap:8px;align-items:center}.inline-fields select,.inline-fields input{min-width:0}.pet-body{padding-right:20px}.filter-dropdown{position:relative}.filter-dropdown summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:14px;padding-right:32px;cursor:pointer;font-weight:900}.filter-dropdown summary::-webkit-details-marker{display:none}.filter-dropdown summary:after{content:"+";position:absolute;top:0;right:0;color:var(--muted);font-size:1.25rem;line-height:1}.filter-dropdown[open] summary:after{content:"-"}.filter-dropdown .search-form{margin-top:16px}.detail-media .views-badge,.detail-media .photo-badge{top:10px;min-width:86px;min-height:28px;padding:0 10px;font-size:.78rem;line-height:1;align-items:center;justify-content:center;text-align:center}.views-badge{position:absolute;left:10px;box-shadow:0 10px 24px rgba(20,32,48,.16);background:rgba(255,255,255,.94);color:var(--ink)}@media(max-width:420px){.pet-body{padding-right:12px}.filter-dropdown summary{align-items:flex-start;flex-direction:column}.detail-media .views-badge,.detail-media .photo-badge{top:7px;min-width:80px;min-height:24px;padding:0 8px;font-size:.68rem}.views-badge{left:7px}}</style>
+  <style>.switch input:checked~.switch-ui{background:var(--green)}.switch input:checked~.switch-ui:before{transform:translateX(22px)}.inline-fields{display:grid;grid-template-columns:88px minmax(0,132px);gap:8px;align-items:center}.inline-fields select,.inline-fields input{min-width:0}.pet-body{padding-right:20px}.badge.rescue{background:#fff8e8;color:var(--amber)}.filter-dropdown{position:relative}.filter-dropdown summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:14px;padding-right:32px;cursor:pointer;font-weight:900}.filter-dropdown summary::-webkit-details-marker{display:none}.filter-dropdown summary:after{content:"+";position:absolute;top:0;right:0;color:var(--muted);font-size:1.25rem;line-height:1}.filter-dropdown[open] summary:after{content:"-"}.filter-dropdown .search-form{margin-top:16px}.modal-page{min-height:calc(100vh - 170px);display:grid;place-items:center;padding:clamp(16px,4vw,34px)}.report-type-modal{width:min(680px,100%);padding:clamp(20px,4vw,34px)}.report-type-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:20px}.report-type-option{display:grid;gap:8px;padding:18px;border:1px solid var(--line);border-radius:8px;background:#fbfdff}.report-type-option:hover{border-color:var(--brand);box-shadow:0 12px 28px rgba(20,32,48,.08)}.report-type-option strong{font-size:1.05rem}.report-type-option span{color:var(--muted);line-height:1.45}.detail-media .views-badge,.detail-media .photo-badge{top:10px;min-width:86px;min-height:28px;padding:0 10px;font-size:.78rem;line-height:1;align-items:center;justify-content:center;text-align:center}.views-badge{position:absolute;left:10px;box-shadow:0 10px 24px rgba(20,32,48,.16);background:rgba(255,255,255,.94);color:var(--ink)}@media(max-width:640px){.report-type-actions{grid-template-columns:1fr}}@media(max-width:420px){.pet-body{padding-right:12px}.filter-dropdown summary{align-items:flex-start;flex-direction:column}.detail-media .views-badge,.detail-media .photo-badge{top:7px;min-width:80px;min-height:24px;padding:0 8px;font-size:.68rem}.views-badge{left:7px}}</style>
 </head>
 <body>
   <header class="topbar">
@@ -546,6 +579,7 @@ function view(string $view, array $vars): void {
     if ($view === 'login') { view_login(); return; }
     if ($view === 'recuperar') { view_recuperar(); return; }
     if ($view === 'perfil') { view_perfil($user, $reportes); return; }
+    if ($view === 'tipo_reporte') { view_tipo_reporte(); return; }
     if ($view === 'reportar') { view_reportar($mascota, $editing, $mapsApiKey); return; }
     if ($view === 'error') { view_error($title, $message); return; }
 }
@@ -596,14 +630,14 @@ function view_index(array $mascotas, array $stats, array $filters): void { ?>
       </details>
     </aside>
   </section>
-  <section class="panel search-panel"><details class="filter-dropdown" <?= $activeFilter ? 'open' : '' ?>><summary><span>Buscar y filtrar</span></summary><form class="search-form" method="get" action="/"><div class="field"><label for="q">Buscar</label><input id="q" name="q" value="<?= e($filters['q']) ?>" placeholder="Nombre, direccion o contacto"></div><div class="field"><label for="estado">Estado</label><select id="estado" name="estado"><?php foreach (['todos'=>'Todos','perdidos'=>'Perdidos','localizados'=>'Localizados'] as $value => $label): ?><option value="<?= e($value) ?>" <?= $filters['estado'] === $value ? 'selected' : '' ?>><?= e($label) ?></option><?php endforeach; ?></select></div><button class="btn primary" type="submit">Buscar</button></form><p class="filter-meta"><?= e($filters['resultados']) ?> resultado<?= $filters['resultados'] == 1 ? '' : 's' ?></p></details></section>
+  <section class="panel search-panel"><details class="filter-dropdown" <?= $activeFilter ? 'open' : '' ?>><summary><span>Buscar y filtrar</span></summary><form class="search-form" method="get" action="/"><div class="field"><label for="q">Buscar</label><input id="q" name="q" value="<?= e($filters['q']) ?>" placeholder="Nombre, direccion o contacto"></div><div class="field"><label for="estado">Estado</label><select id="estado" name="estado"><?php foreach (['todos'=>'Todos','perdidos'=>'Perdidos','resguardo'=>'En resguardo','localizados'=>'Localizados'] as $value => $label): ?><option value="<?= e($value) ?>" <?= $filters['estado'] === $value ? 'selected' : '' ?>><?= e($label) ?></option><?php endforeach; ?></select></div><button class="btn primary" type="submit">Buscar</button></form><p class="filter-meta"><?= e($filters['resultados']) ?> resultado<?= $filters['resultados'] == 1 ? '' : 's' ?></p></details></section>
   <div class="section-head"><div><h2>Reportes recientes</h2><p>Informacion publica enviada por la comunidad.</p></div></div>
   <?php if ($mascotas): ?><section class="grid">
     <?php foreach ($mascotas as $pet): ?>
       <a class="pet-card" href="/mascotas/<?= e($pet['id']) ?>">
         <div class="pet-media">
           <?php if ($pet['principal']): ?><img class="zoomable" src="<?= e($pet['principal']) ?>" alt="<?= e($pet['nombre']) ?>" data-zoom-src="<?= e($pet['principal']) ?>"><?php else: ?><?= e(first_letter($pet['nombre'] ?: '?')) ?><?php endif; ?>
-          <span class="badge photo-badge <?= $pet['encontrado'] ? 'found' : 'lost' ?>"><?= $pet['encontrado'] ? 'Localizado' : 'Perdido' ?></span>
+          <span class="badge photo-badge <?= e(report_status_class($pet)) ?>"><?= e(report_status_label($pet)) ?></span>
         </div>
         <div class="pet-body">
           <h3><?= e($pet['nombre']) ?></h3>
@@ -619,22 +653,23 @@ function view_detalle(array $mascota, bool $isOwner, array $share, ?string $mapU
     $secundarias = pet_secondaries($mascota);
     $callPhone = phone_digits($mascota['contacto'] ?? '');
     $waPhone = whatsapp_digits($mascota['contacto'] ?? '');
+    $direccionLabel = report_type_value($mascota['tipo_reporte'] ?? '') === 'resguardo' ? 'Direccion donde se encontro' : 'Direccion de extravio';
     ?>
   <section class="detail-wrap">
     <div class="detail-photos">
       <div class="detail-photo"><div class="detail-media">
         <?php if ($mascota['principal']): ?><img class="zoomable" src="<?= e($mascota['principal']) ?>" alt="<?= e($mascota['nombre']) ?>" data-zoom-src="<?= e($mascota['principal']) ?>"><?php else: ?><?= e(first_letter($mascota['nombre'] ?: '?')) ?><?php endif; ?>
         <span class="badge views-badge"><?= e(views_label($mascota['vistas'] ?? 0)) ?></span>
-        <span class="badge photo-badge <?= $mascota['encontrado'] ? 'found' : 'lost' ?>"><?= $mascota['encontrado'] ? 'Localizado' : 'Perdido' ?></span>
+        <span class="badge photo-badge <?= e(report_status_class($mascota)) ?>"><?= e(report_status_label($mascota)) ?></span>
       </div></div>
       <?php if ($secundarias): ?><div class="gallery"><?php foreach ($secundarias as $image): ?><img class="zoomable" src="<?= e($image) ?>" alt="Foto de <?= e($mascota['nombre']) ?>" data-zoom-src="<?= e($image) ?>"><?php endforeach; ?></div><?php endif; ?>
     </div>
     <article class="detail-info">
       <?php if ($isOwner): ?><div class="actions" style="margin-top:0;"><a class="btn primary" href="/mascotas/<?= e($mascota['id']) ?>/editar">Editar</a><form method="post" action="/mascotas/<?= e($mascota['id']) ?>/eliminar" onsubmit="return confirm('Eliminar este reporte?');"><button class="btn" type="submit">Eliminar</button></form></div><?php endif; ?>
-      <div class="info-list"><?php info_row('Fecha de extravio', $mascota['fecha']); info_row('Nombre de mascota', $mascota['nombre']); info_row('Descripcion', $mascota['descripcion']); ?></div>
-      <div class="split-info"><?php foreach ([['Edad','edad'],['Raza','raza'],['Genero','genero'],['Color','color'],['Collar','collar'],['Docil','docil']] as [$label,$key]) info_row($label, $mascota[$key]); ?></div>
+      <div class="info-list"><?php info_row('Tipo de reporte', report_type_label($mascota['tipo_reporte'] ?? 'extravio')); info_row('Fecha', $mascota['fecha']); info_row('Nombre de mascota', $mascota['nombre']); info_row('Descripcion', $mascota['descripcion']); ?></div>
+      <div class="split-info"><?php foreach ([['Tipo de mascota','tipo_mascota'],['Edad','edad'],['Raza','raza'],['Genero','genero'],['Color','color'],['Collar','collar'],['Docil','docil']] as [$label,$key]) info_row($label, $mascota[$key]); ?></div>
       <?php if ($mapUrl): ?><div class="map-frame"><iframe src="<?= e($mapUrl) ?>" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen title="Mapa de direccion de extravio"></iframe></div><?php endif; ?>
-      <div class="info-list"><?php info_row('Direccion de extravio', $mascota['direccion']); ?></div>
+      <div class="info-list"><?php info_row($direccionLabel, $mascota['direccion']); ?></div>
       <div class="split-info"><?php info_row('Recompensa', money_display($mascota['recompensa'])); ?></div>
       <?php if ($callPhone): ?><div class="contact-actions"><a class="btn primary" href="tel:<?= e($callPhone) ?>">Llamar</a><a class="btn whatsapp" href="https://wa.me/<?= e($waPhone) ?>" target="_blank" rel="noopener">WhatsApp</a></div><?php endif; ?>
       <div class="share-actions" aria-label="Compartir reporte"><p class="share-title">Comparte:</p><button class="btn primary" type="button" data-native-share-button data-share-title="<?= e($share['text']) ?>" data-share-text="<?= e($share['message']) ?>" data-share-url="<?= e($share['url']) ?>">Compartir</button><button class="btn" type="button" data-copy-url="<?= e($share['url']) ?>">Copiar enlace</button></div>
@@ -677,22 +712,50 @@ function view_perfil(array $user, array $reportes): void { ?>
     <div class="panel profile-card"><p class="eyebrow" style="color:var(--brand);">Cuenta</p><div class="avatar"><?php if ($user['foto']): ?><img src="<?= e($user['foto']) ?>" alt="<?= e($user['nombre'] ?: 'Perfil') ?>"><?php else: ?><?= e(first_letter($user['nombre'] ?: $user['telefono'])) ?><?php endif; ?></div><h1><?= e($user['nombre'] ?: 'Mi perfil') ?></h1><p class="meta"><strong>Telefono registrado:</strong><br><?= e($user['telefono']) ?></p><form method="post" enctype="multipart/form-data" class="form-grid"><div class="field full"><label for="nombre">Nombre</label><input id="nombre" name="nombre" value="<?= e($user['nombre'] ?? '') ?>"></div><div class="field full"><label for="foto">Foto de perfil</label><input id="foto" name="foto" type="file" accept="image/*"></div><div class="actions"><button class="btn primary" type="submit">Guardar perfil</button></div></form></div>
     <div class="panel profile-card"><p class="eyebrow" style="color:var(--brand);">Seguridad</p><h1>Cambiar contrasena</h1><form method="post" action="/perfil/password" class="form-grid"><div class="field full"><label for="current_password">Contrasena actual</label><input id="current_password" name="current_password" type="password" autocomplete="current-password" required></div><div class="field"><label for="new_password">Nueva contrasena</label><input id="new_password" name="new_password" type="password" autocomplete="new-password" minlength="8" required></div><div class="field"><label for="confirm_password">Confirmar contrasena</label><input id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" minlength="8" required></div><div class="actions"><button class="btn primary" type="submit">Actualizar contrasena</button></div></form></div>
   </section>
-  <section class="panel profile-card" style="margin-top:18px;"><div class="section-head" style="margin-top:0;"><div><h2>Mis reportes</h2><p>Reportes publicados con tu numero registrado.</p></div><a class="btn primary" href="/reportar">Nuevo reporte</a></div><?php if ($reportes): ?><div class="mini-list"><?php foreach ($reportes as $pet): ?><a class="mini-report" href="/mascotas/<?= e($pet['id']) ?>"><?php if ($pet['principal']): ?><img src="<?= e($pet['principal']) ?>" alt="<?= e($pet['nombre']) ?>"><?php else: ?><span class="mini-thumb"><?= e(first_letter($pet['nombre'] ?: '?')) ?></span><?php endif; ?><span><strong><?= e($pet['nombre']) ?></strong><br><span class="meta"><?= $pet['encontrado'] ? 'Localizado' : 'Perdido' ?></span></span></a><?php endforeach; ?></div><?php else: ?><div class="empty">Todavia no tienes reportes publicados.</div><?php endif; ?></section>
+  <section class="panel profile-card" style="margin-top:18px;"><div class="section-head" style="margin-top:0;"><div><h2>Mis reportes</h2><p>Reportes publicados con tu numero registrado.</p></div><a class="btn primary" href="/reportar">Nuevo reporte</a></div><?php if ($reportes): ?><div class="mini-list"><?php foreach ($reportes as $pet): ?><a class="mini-report" href="/mascotas/<?= e($pet['id']) ?>"><?php if ($pet['principal']): ?><img src="<?= e($pet['principal']) ?>" alt="<?= e($pet['nombre']) ?>"><?php else: ?><span class="mini-thumb"><?= e(first_letter($pet['nombre'] ?: '?')) ?></span><?php endif; ?><span><strong><?= e($pet['nombre']) ?></strong><br><span class="meta"><?= e(report_status_label($pet)) ?></span></span></a><?php endforeach; ?></div><?php else: ?><div class="empty">Todavia no tienes reportes publicados.</div><?php endif; ?></section>
+<?php }
+
+function view_tipo_reporte(): void { ?>
+  <div class="modal-page">
+    <section class="panel report-type-modal" role="dialog" aria-modal="true" aria-labelledby="tipo-reporte-title">
+      <p class="eyebrow" style="color:var(--brand);">Nuevo reporte</p>
+      <h1 id="tipo-reporte-title">Que tipo de reporte quieres crear?</h1>
+      <div class="report-type-actions">
+        <a class="report-type-option" href="/reportar?reporte=extravio">
+          <strong>Reporte de extravio</strong>
+          <span>Mi mascota se perdio y necesito ayuda para encontrarla.</span>
+        </a>
+        <a class="report-type-option" href="/reportar?reporte=resguardo">
+          <strong>Reporte de resguardo</strong>
+          <span>Encontre una mascota y la tengo resguardada o ubicada.</span>
+        </a>
+      </div>
+      <div class="actions"><a class="btn" href="/">Cancelar</a></div>
+    </section>
+  </div>
 <?php }
 
 function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void {
     $secundarias = $editing ? pet_secondaries($mascota) : [];
     $slots = max(0, MAX_SECONDARY_IMAGES - count($secundarias));
+    $tipoReporte = report_type_value($mascota['tipo_reporte'] ?? ($_GET['reporte'] ?? 'extravio'));
+    $isResguardo = $tipoReporte === 'resguardo';
+    $formTitle = $editing ? 'Editar reporte' : ($isResguardo ? 'Reporte de resguardo' : 'Reporte de extravio');
+    $fechaLabel = $isResguardo ? 'Fecha de resguardo' : 'Fecha de extravio';
+    $direccionLabel = $isResguardo ? 'Direccion donde se encontro' : 'Direccion de extravio';
+    $estadoLabel = $isResguardo ? 'Resuelto' : 'Localizado';
+    $estadoHint = $isResguardo ? 'Activalo cuando la mascota ya fue entregada o el caso se resolvio' : 'Activalo cuando la mascota ya fue encontrada';
     [$edadNumero, $edadUnidad] = age_input_parts($mascota['edad'] ?? '');
     $recompensaInput = money_input_value($mascota['recompensa'] ?? '');
     $collarActual = lower_text($mascota['collar'] ?? '');
     $docilActual = lower_text($mascota['docil'] ?? '');
     ?>
-  <section class="form-wrap"><form class="form-panel" method="post" enctype="multipart/form-data"><p class="eyebrow" style="color:var(--brand);"><?= $editing ? 'Editar reporte' : 'Nuevo reporte' ?></p><h1><?= $editing ? 'Editar reporte' : 'Datos de la mascota' ?></h1><div class="form-grid">
+  <section class="form-wrap"><form class="form-panel" method="post" enctype="multipart/form-data"><input type="hidden" name="tipo_reporte" value="<?= e($tipoReporte) ?>"><p class="eyebrow" style="color:var(--brand);"><?= $editing ? report_type_label($tipoReporte) : 'Nuevo reporte' ?></p><h1><?= e($formTitle) ?></h1><div class="form-grid">
     <div class="field full"><label for="principal">Foto principal</label><?php if ($editing && $mascota['principal']): ?><div class="edit-images"><div class="edit-image-item"><img src="<?= e($mascota['principal']) ?>" alt="Foto principal actual"><label class="remove-image-check" title="Quitar" data-remove-image data-remove-url="/mascotas/<?= e($mascota['id']) ?>/imagenes/eliminar" data-remove-target="principal"><input type="checkbox" name="remove_principal"><span>&times;</span></label></div></div><?php endif; ?><input id="principal" name="principal" type="file" accept="image/*"></div>
     <div class="field full"><label>Fotos adicionales</label><?php if ($secundarias): ?><div class="edit-image-grid"><?php foreach ($secundarias as $image): ?><div class="edit-image-item"><img src="<?= e($image) ?>" alt="Foto secundaria actual"><label class="remove-image-check" title="Quitar" data-remove-image data-remove-url="/mascotas/<?= e($mascota['id']) ?>/imagenes/eliminar" data-remove-target="secundaria" data-remove-image-url="<?= e($image) ?>"><input type="checkbox" name="remove_secundarias[]" value="<?= e($image) ?>"><span>&times;</span></label></div><?php endforeach; ?></div><?php endif; ?><input name="secundarias[]" type="file" accept="image/*" multiple data-max-files="<?= e($slots) ?>"><span class="hint">Puedes seleccionar hasta 3 imagenes adicionales.</span></div>
-    <div class="field"><label for="fecha">Fecha de extravio</label><input id="fecha" name="fecha" type="date" value="<?= e($mascota['fecha'] ?? '') ?>"></div>
+    <div class="field"><label for="fecha"><?= e($fechaLabel) ?></label><input id="fecha" name="fecha" type="date" value="<?= e($mascota['fecha'] ?? '') ?>"></div>
     <div class="field"><label for="nombre">Nombre de mascota</label><input id="nombre" name="nombre" value="<?= e($mascota['nombre'] ?? '') ?>" required></div>
+    <div class="field"><label for="tipo_mascota">Tipo de mascota</label><select id="tipo_mascota" name="tipo_mascota"><option value="">Seleccionar</option><?php foreach (['Perro','Gato','Otro'] as $opt): ?><option <?= ($mascota['tipo_mascota'] ?? '') === $opt ? 'selected' : '' ?>><?= e($opt) ?></option><?php endforeach; ?></select></div>
     <div class="field full"><label for="descripcion">Descripcion</label><textarea id="descripcion" name="descripcion" placeholder="Senales particulares, temperamento, ultima vez visto"><?= e($mascota['descripcion'] ?? '') ?></textarea></div>
     <div class="field"><label for="edad_numero">Edad</label><div class="inline-fields"><input id="edad_numero" name="edad_numero" type="number" min="1" step="1" inputmode="numeric" value="<?= e($edadNumero) ?>" placeholder="1"><select name="edad_unidad" aria-label="Unidad de edad"><option value="meses" <?= $edadUnidad === 'meses' ? 'selected' : '' ?>>Meses</option><option value="anos" <?= $edadUnidad === 'anos' ? 'selected' : '' ?>>Años</option></select></div></div>
     <?php input_field('raza','Raza',$mascota); ?>
@@ -700,7 +763,7 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
     <?php input_field('color','Color',$mascota); ?>
     <div class="field"><label for="collar">Collar</label><select id="collar" name="collar"><option value="">Seleccionar</option><?php foreach (['Si','No'] as $opt): ?><option <?= $collarActual === lower_text($opt) || ($opt === 'Si' && $collarActual === 'sí') ? 'selected' : '' ?>><?= e($opt) ?></option><?php endforeach; ?></select></div>
     <div class="field"><label for="docil">Docil</label><select id="docil" name="docil"><option value="">Seleccionar</option><?php foreach (['Si','No'] as $opt): ?><option <?= $docilActual === lower_text($opt) || ($opt === 'Si' && $docilActual === 'sí') ? 'selected' : '' ?>><?= e($opt) ?></option><?php endforeach; ?></select></div>
-    <div class="field full"><label for="direccion">Direccion de extravio</label><input id="direccion" name="direccion" value="<?= e($mascota['direccion'] ?? '') ?>" autocomplete="off" data-address-autocomplete></div>
+    <div class="field full"><label for="direccion"><?= e($direccionLabel) ?></label><input id="direccion" name="direccion" value="<?= e($mascota['direccion'] ?? '') ?>" autocomplete="off" data-address-autocomplete></div>
     <div class="field"><label for="recompensa">Recompensa</label><input id="recompensa" name="recompensa" type="number" min="0" step="1" inputmode="numeric" value="<?= e($recompensaInput) ?>" placeholder="1000" data-money-input><span class="hint" data-money-preview><?= e(money_display($recompensaInput) ?: 'Se mostrara como $1,000 M.N.') ?></span></div>
     <?php $usesOwnContact = !empty($mascota['contacto']) && $mascota['contacto'] !== DEFAULT_PUBLIC_CONTACT; ?>
     <div class="field">
@@ -718,7 +781,7 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
     <div class="field">
       <label>Estado del reporte</label>
       <label class="switch">
-        <span class="switch-text"><span>Localizado</span><small>Activalo cuando la mascota ya fue encontrada</small></span>
+        <span class="switch-text"><span><?= e($estadoLabel) ?></span><small><?= e($estadoHint) ?></small></span>
         <input type="checkbox" name="encontrado" <?= !empty($mascota['encontrado']) ? 'checked' : '' ?>>
         <span class="switch-ui" aria-hidden="true"></span>
       </label>
@@ -823,13 +886,17 @@ function route(): void {
             $pets = list_mascotas();
             $q = trim((string)($_GET['q'] ?? ''));
             $estado = strtolower(trim((string)($_GET['estado'] ?? 'todos')));
+            if (!in_array($estado, ['todos', 'perdidos', 'resguardo', 'localizados'], true)) $estado = 'todos';
             $stats = [
                 'total' => count($pets),
                 'activos' => count(array_filter($pets, function ($p) { return !$p['encontrado']; })),
                 'encontrados' => count(array_filter($pets, function ($p) { return $p['encontrado']; })),
             ];
             if ($estado === 'perdidos') {
-                $pets = array_values(array_filter($pets, function ($p) { return !$p['encontrado']; }));
+                $pets = array_values(array_filter($pets, function ($p) { return !$p['encontrado'] && report_type_value($p['tipo_reporte'] ?? '') === 'extravio'; }));
+            }
+            if ($estado === 'resguardo') {
+                $pets = array_values(array_filter($pets, function ($p) { return !$p['encontrado'] && report_type_value($p['tipo_reporte'] ?? '') === 'resguardo'; }));
             }
             if ($estado === 'localizados') {
                 $pets = array_values(array_filter($pets, function ($p) { return $p['encontrado']; }));
@@ -837,7 +904,7 @@ function route(): void {
             if ($q !== '') {
                 $needle = lower_text($q);
                 $pets = array_values(array_filter($pets, function ($p) use ($needle) {
-                    return contains_text(lower_text(implode(' ', [$p['nombre'], $p['descripcion'], $p['direccion'], $p['calles'], $p['contacto']])), $needle);
+                    return contains_text(lower_text(implode(' ', [$p['nombre'], $p['tipo_mascota'] ?? '', $p['descripcion'], $p['direccion'], $p['calles'], $p['contacto']])), $needle);
                 }));
             }
             render('index', ['title' => APP_NAME, 'mascotas' => $pets, 'stats' => $stats, 'filters' => ['q' => $q, 'estado' => $estado, 'resultados' => count($pets)]]);
@@ -949,10 +1016,16 @@ function route(): void {
         if ($path === '/reportar') {
             require_login();
             if ($method === 'POST') {
+                $postType = report_type_value(post_value('tipo_reporte'));
                 try { create_report(); flash('Reporte publicado correctamente.', 'success'); redirect_to('/'); }
-                catch (RuntimeException $e) { flash($e->getMessage(), 'error'); redirect_to('/reportar'); }
+                catch (RuntimeException $e) { flash($e->getMessage(), 'error'); redirect_to('/reportar?reporte=' . $postType); }
             }
-            render('reportar', ['title' => 'Reportar mascota', 'mascota' => [], 'editing' => false, 'mapsApiKey' => envv('API_KEY')]);
+            $reportType = $_GET['reporte'] ?? '';
+            if (!in_array($reportType, ['extravio', 'resguardo'], true)) {
+                render('tipo_reporte', ['title' => 'Nuevo reporte']);
+                return;
+            }
+            render('reportar', ['title' => 'Reportar mascota', 'mascota' => ['tipo_reporte' => $reportType], 'editing' => false, 'mapsApiKey' => envv('API_KEY')]);
             return;
         }
 
@@ -961,7 +1034,7 @@ function route(): void {
             if (!$pet) { render('error', ['title' => 'Reporte no encontrado', 'message' => 'El reporte solicitado no existe.'], 404); return; }
             increment_report_views($pet['id']);
             $pet['vistas'] = ((int)($pet['vistas'] ?? 0)) + 1;
-            $status = $pet['encontrado'] ? 'Localizado' : 'Perdido';
+            $status = report_status_label($pet);
             $detailUrl = full_url('/mascotas/' . $pet['id']);
             $mapUrl = null;
             if (envv('API_KEY') && $pet['direccion']) $mapUrl = 'https://www.google.com/maps/embed/v1/place?key=' . urlencode(envv('API_KEY')) . '&q=' . urlencode($pet['direccion'] . ', Mexico');
