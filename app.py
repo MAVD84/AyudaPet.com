@@ -39,6 +39,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_ANO
 SUPABASE_STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "mascotas")
 SHOW_OTP_IN_DEV = os.getenv("SHOW_OTP_IN_DEV", "").lower() in {"1", "true", "yes"}
 OTP_TTL_SECONDS = int(os.getenv("OTP_TTL_SECONDS", "300"))
+GOOGLE_MAPS_API_KEY = os.getenv("API_KEY")
 
 PHONE_RE = re.compile(r"^\+?[0-9]{10,15}$")
 MX_PHONE_RE = re.compile(r"^[2-9][0-9]{9}$")
@@ -526,11 +527,25 @@ def detalle_mascota(report_id):
         "facebook": f"https://www.facebook.com/sharer/sharer.php?u={quote_plus(detail_url)}",
         "twitter": f"https://twitter.com/intent/tweet?text={quote_plus(share_text)}&url={quote_plus(detail_url)}",
     }
+    map_query = ", ".join(
+        value for value in [
+            mascota.get("direccion"),
+            mascota.get("ciudad"),
+            mascota.get("estado"),
+            mascota.get("cp"),
+            "Mexico",
+        ]
+        if value
+    )
+    map_url = None
+    if GOOGLE_MAPS_API_KEY and map_query.strip() != "Mexico":
+        map_url = f"https://www.google.com/maps/embed/v1/place?key={quote_plus(GOOGLE_MAPS_API_KEY)}&q={quote_plus(map_query)}"
     return render_template(
         "detalle.html",
         mascota=mascota,
         is_owner=user_owns_report(mascota),
         share=share,
+        map_url=map_url,
         title=meta_title,
         meta_title=meta_title,
         meta_description=meta_description,
@@ -1182,6 +1197,21 @@ TEMPLATES = {
       border-top: 1px solid var(--line);
     }
     .split-info .info-row { min-width: 0; }
+    .map-frame {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      margin-top: 22px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #edf3f7;
+    }
+    .map-frame iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+    }
     .contact-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
     .btn.whatsapp { background: #25d366; color: #fff; }
     .share-actions {
@@ -1814,6 +1844,12 @@ TEMPLATES = {
           {% endif %}
         {% endfor %}
       </div>
+
+      {% if map_url %}
+        <div class="map-frame">
+          <iframe src="{{ map_url }}" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen title="Mapa de direccion de extravio"></iframe>
+        </div>
+      {% endif %}
 
       <div class="info-list">
         {% for label, value in [
