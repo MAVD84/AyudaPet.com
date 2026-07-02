@@ -45,6 +45,7 @@ SMTP_PASS=
 SMTP_SECURE=tls
 SMTP_FROM=no-reply@ayudapet.com
 SMTP_FROM_NAME=AyudaPet
+CRON_SECRET=
 ```
 
 ## Base de datos
@@ -79,3 +80,4 @@ Necesitas un MySQL accesible y las variables de entorno `MYSQL_*`.
 - `BOOST_NOTIFY_EMAIL` recibe un correo cada vez que un anuncio se activa como impulsado.
 - Para correos SMTP usa el email real creado en tu hosting. Normalmente `SMTP_PORT=587` con `SMTP_SECURE=tls`; si tu hosting indica puerto `465`, usa `SMTP_SECURE=ssl`.
 - Para probar correo inicia sesion y abre `/correo/prueba`; la pagina muestra si SMTP envio o el error exacto.
+- Para avisar impulsos vencidos, configura un cron que abra `https://ayudapet.com/cron/boosts?token=TU_CRON_SECRET` una vez por hora o una vez al dia.

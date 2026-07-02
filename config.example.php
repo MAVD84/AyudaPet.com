@@ -31,3 +31,4 @@ define('SMTP_PASS', '');
 define('SMTP_SECURE', 'tls');
 define('SMTP_FROM', 'no-reply@ayudapet.com');
 define('SMTP_FROM_NAME', 'AyudaPet');
+define('CRON_SECRET', '');

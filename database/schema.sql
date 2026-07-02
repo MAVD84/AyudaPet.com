@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS mascotas (
   impulsado_hasta DATETIME NULL,
   stripe_session_id VARCHAR(255) NULL,
   stripe_payment_status VARCHAR(50) NULL,
+  boost_expired_notified_at DATETIME NULL,
   creado_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   actualizado_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_mascotas_usuario (reportado_por),

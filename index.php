@@ -125,6 +125,9 @@ function ensure_report_columns(): void {
     if (empty($existing['stripe_payment_status'])) {
         db()->exec('ALTER TABLE mascotas ADD COLUMN stripe_payment_status VARCHAR(50) NULL');
     }
+    if (empty($existing['boost_expired_notified_at'])) {
+        db()->exec('ALTER TABLE mascotas ADD COLUMN boost_expired_notified_at DATETIME NULL');
+    }
 }
 
 function e($value): string {
@@ -312,12 +315,50 @@ function send_boost_notification(array $pet, string $sessionId, string $boostedU
     if (!$sent) error_log('Correo de anuncio impulsado no enviado: ' . $message);
 }
 
+function send_boost_expired_notification(array $pet): bool {
+    $url = full_url('/mascotas/' . $pet['id']);
+    [$sent, $message] = send_notification_email('Anuncio impulsado vencido en AyudaPet', [
+        'Termino un anuncio impulsado en AyudaPet.',
+        '',
+        'Mascota: ' . ($pet['nombre'] ?? 'Sin nombre'),
+        'Tipo de reporte: ' . report_type_label($pet['tipo_reporte'] ?? 'extravio'),
+        'Telefono del usuario: ' . ($pet['reportado_por'] ?? ''),
+        'Contacto publico: ' . ($pet['contacto'] ?? ''),
+        'Direccion: ' . ($pet['direccion'] ?? ''),
+        'Estuvo activo hasta: ' . ($pet['impulsado_hasta'] ?? ''),
+        'Stripe session: ' . ($pet['stripe_session_id'] ?? ''),
+        '',
+        'Ver reporte: ' . $url,
+    ]);
+    if (!$sent) error_log('Correo de anuncio vencido no enviado: ' . $message);
+    return $sent;
+}
+
+function process_expired_boosts(int $limit = 50): array {
+    ensure_report_columns();
+    $stmt = db()->prepare("SELECT * FROM mascotas WHERE impulsado_hasta IS NOT NULL AND impulsado_hasta <= NOW() AND stripe_payment_status = 'paid' AND boost_expired_notified_at IS NULL ORDER BY impulsado_hasta ASC LIMIT ?");
+    $stmt->bindValue(1, max(1, min(100, $limit)), PDO::PARAM_INT);
+    $stmt->execute();
+    $pets = $stmt->fetchAll();
+    $sent = 0;
+    $failed = 0;
+    foreach ($pets as $pet) {
+        if (send_boost_expired_notification($pet)) {
+            db()->prepare('UPDATE mascotas SET boost_expired_notified_at = NOW() WHERE id = ?')->execute([$pet['id']]);
+            $sent++;
+        } else {
+            $failed++;
+        }
+    }
+    return ['checked' => count($pets), 'sent' => $sent, 'failed' => $failed];
+}
+
 function activate_boost(string $petId, string $sessionId): void {
     ensure_report_columns();
     $pet = get_mascota($petId);
     if (!$pet) return;
     $alreadyNotified = is_boosted($pet) && ($pet['stripe_session_id'] ?? '') === $sessionId && ($pet['stripe_payment_status'] ?? '') === 'paid';
-    db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . BOOST_DAYS . ' DAY), stripe_session_id = ?, stripe_payment_status = ? WHERE id = ?')
+    db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . BOOST_DAYS . ' DAY), stripe_session_id = ?, stripe_payment_status = ?, boost_expired_notified_at = NULL WHERE id = ?')
         ->execute([$sessionId, 'paid', $petId]);
     if (!$alreadyNotified) {
         $updated = get_mascota($petId);
@@ -1188,6 +1229,19 @@ function route(): void {
     try {
         if ($path === '/stripe/webhook' && $method === 'POST') {
             handle_stripe_webhook();
+            return;
+        }
+
+        if ($path === '/cron/boosts') {
+            $secret = envv('CRON_SECRET');
+            $token = (string)($_GET['token'] ?? '');
+            if (!$secret || !$token || !hash_equals($secret, $token)) {
+                render('error', ['title' => 'Sin permiso', 'message' => 'Token de cron invalido.'], 403);
+                return;
+            }
+            $result = process_expired_boosts();
+            header('Content-Type: text/plain; charset=UTF-8');
+            echo 'checked=' . $result['checked'] . ' sent=' . $result['sent'] . ' failed=' . $result['failed'];
             return;
         }
 
