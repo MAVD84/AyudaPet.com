@@ -1212,6 +1212,7 @@ document.querySelectorAll("[data-phone-input]").forEach((input)=>{input.addEvent
 document.querySelectorAll("[data-menu-open]").forEach((button)=>button.addEventListener("click",()=>document.body.classList.add("menu-open")));
 document.querySelectorAll("[data-menu-close]").forEach((button)=>button.addEventListener("click",()=>document.body.classList.remove("menu-open")));
 document.addEventListener("keydown",(event)=>{if(event.key==="Escape")document.body.classList.remove("menu-open")});
+document.querySelectorAll("[data-responsive-open]").forEach((details)=>{const query=window.matchMedia("(min-width: 841px)");const sync=()=>{details.open=query.matches};sync();query.addEventListener?.("change",sync)});
 const lightbox=document.querySelector("[data-lightbox]");const lightboxImage=lightbox?.querySelector("img");function closeLightbox(){if(!lightbox||!lightboxImage)return;lightbox.classList.remove("open");lightbox.setAttribute("aria-hidden","true");lightboxImage.src="";lightboxImage.alt=""}
 document.querySelectorAll("[data-zoom-src]").forEach((image)=>image.addEventListener("click",(event)=>{if(!lightbox||!lightboxImage)return;event.preventDefault();event.stopPropagation();lightboxImage.src=image.dataset.zoomSrc;lightboxImage.alt=image.alt||"Imagen ampliada";lightbox.classList.add("open");lightbox.setAttribute("aria-hidden","false")}));
 document.querySelectorAll("[data-lightbox-close]").forEach((button)=>button.addEventListener("click",closeLightbox));lightbox?.addEventListener("click",(event)=>{if(event.target===lightbox)closeLightbox()});document.addEventListener("keydown",(event)=>{if(event.key==="Escape")closeLightbox()});
@@ -1237,7 +1238,7 @@ function view_index(array $mascotas, array $stats, array $filters): void { ?>
       <div class="actions"><a class="btn primary" href="/reportar">Crear reporte</a><a class="btn" href="/registro">Unirme</a></div>
     </div>
     <aside class="panel">
-      <details class="stats-dropdown">
+      <details class="stats-dropdown" data-responsive-open>
         <summary><span class="badge">Panel activo</span><span><?= e($stats['activos']) ?> activos</span></summary>
         <div class="stats">
           <div class="stat"><strong><?= e($stats['total']) ?></strong><span>reportes</span></div>
