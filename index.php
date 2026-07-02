@@ -39,6 +39,8 @@ const APP_NAME = 'AyudaPet';
 const APP_DOMAIN = 'ayudapet.com';
 const MAX_SECONDARY_IMAGES = 3;
 const DEFAULT_PUBLIC_CONTACT = '+526567787712';
+const BOOST_DAYS = 10;
+const BOOST_PRICE_LABEL = '$1,300 M.N.';
 
 date_default_timezone_set(getenv('APP_TIMEZONE') ?: 'America/Matamoros');
 
@@ -114,6 +116,15 @@ function ensure_report_columns(): void {
     if (empty($existing['ubicacion_lng'])) {
         db()->exec('ALTER TABLE mascotas ADD COLUMN ubicacion_lng DECIMAL(9,6) NULL');
     }
+    if (empty($existing['impulsado_hasta'])) {
+        db()->exec('ALTER TABLE mascotas ADD COLUMN impulsado_hasta DATETIME NULL');
+    }
+    if (empty($existing['stripe_session_id'])) {
+        db()->exec('ALTER TABLE mascotas ADD COLUMN stripe_session_id VARCHAR(255) NULL');
+    }
+    if (empty($existing['stripe_payment_status'])) {
+        db()->exec('ALTER TABLE mascotas ADD COLUMN stripe_payment_status VARCHAR(50) NULL');
+    }
 }
 
 function e($value): string {
@@ -126,6 +137,112 @@ function money_display(?string $value): ?string {
     $amount = preg_replace('/\D/', '', $raw);
     if ($amount === '' || (int)$amount <= 0) return null;
     return '$' . number_format((int)$amount, 0, '.', ',') . ' M.N.';
+}
+
+function is_boosted(array $pet): bool {
+    $until = trim((string)($pet['impulsado_hasta'] ?? ''));
+    return $until !== '' && strtotime($until) !== false && strtotime($until) > time();
+}
+
+function boosted_until_label(array $pet): ?string {
+    if (!is_boosted($pet)) return null;
+    $timestamp = strtotime((string)$pet['impulsado_hasta']);
+    return $timestamp ? date('d/m/Y', $timestamp) : null;
+}
+
+function stripe_enabled(): bool {
+    return (bool)(envv('STRIPE_SECRET_KEY') && envv('STRIPE_PRICE_ID'));
+}
+
+function stripe_request(string $method, string $endpoint, array $params = []): array {
+    $secret = envv('STRIPE_SECRET_KEY');
+    if (!$secret) throw new RuntimeException('Falta STRIPE_SECRET_KEY en el .env.');
+    $url = 'https://api.stripe.com/v1/' . ltrim($endpoint, '/');
+    $ch = curl_init($url);
+    $options = [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_USERPWD => $secret . ':',
+        CURLOPT_TIMEOUT => 20,
+    ];
+    if ($method === 'POST') {
+        $options[CURLOPT_POST] = true;
+        $options[CURLOPT_POSTFIELDS] = http_build_query($params);
+    }
+    curl_setopt_array($ch, $options);
+    $body = curl_exec($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $error = curl_error($ch);
+    curl_close($ch);
+    $json = json_decode((string)$body, true);
+    if ($body === false || $status < 200 || $status >= 300) {
+        $message = is_array($json) && isset($json['error']['message']) ? $json['error']['message'] : ($error ?: 'Stripe no pudo procesar la solicitud.');
+        throw new RuntimeException($message);
+    }
+    return is_array($json) ? $json : [];
+}
+
+function create_boost_checkout(array $pet): string {
+    if (!stripe_enabled()) throw new RuntimeException('Stripe todavia no esta configurado.');
+    $session = stripe_request('POST', 'checkout/sessions', [
+        'mode' => 'payment',
+        'line_items[0][price]' => envv('STRIPE_PRICE_ID'),
+        'line_items[0][quantity]' => '1',
+        'success_url' => full_url('/mascotas/' . $pet['id']) . '?impulso=exito',
+        'cancel_url' => full_url('/mascotas/' . $pet['id']) . '?impulso=cancelado',
+        'metadata[pet_id]' => $pet['id'],
+        'metadata[owner_phone]' => $pet['reportado_por'],
+        'metadata[boost_days]' => (string)BOOST_DAYS,
+    ]);
+    if (empty($session['id']) || empty($session['url'])) throw new RuntimeException('Stripe no regreso una sesion valida.');
+    db()->prepare('UPDATE mascotas SET stripe_session_id = ?, stripe_payment_status = ? WHERE id = ? AND reportado_por = ?')
+        ->execute([$session['id'], $session['payment_status'] ?? 'pending', $pet['id'], current_user_phone()]);
+    return (string)$session['url'];
+}
+
+function stripe_signature_valid(string $payload, string $header, string $secret): bool {
+    $timestamp = null;
+    $signatures = [];
+    foreach (explode(',', $header) as $part) {
+        [$key, $value] = array_pad(explode('=', trim($part), 2), 2, '');
+        if ($key === 't') $timestamp = $value;
+        if ($key === 'v1') $signatures[] = $value;
+    }
+    if (!$timestamp || !$signatures) return false;
+    if (abs(time() - (int)$timestamp) > 300) return false;
+    $expected = hash_hmac('sha256', $timestamp . '.' . $payload, $secret);
+    foreach ($signatures as $signature) {
+        if (hash_equals($expected, $signature)) return true;
+    }
+    return false;
+}
+
+function handle_stripe_webhook(): void {
+    $secret = envv('STRIPE_WEBHOOK_SECRET');
+    $payload = file_get_contents('php://input') ?: '';
+    $signature = $_SERVER['HTTP_STRIPE_SIGNATURE'] ?? '';
+    if (!$secret || !stripe_signature_valid($payload, $signature, $secret)) {
+        http_response_code(400);
+        echo 'invalid signature';
+        return;
+    }
+    $event = json_decode($payload, true);
+    if (!is_array($event)) {
+        http_response_code(400);
+        echo 'invalid payload';
+        return;
+    }
+    if (($event['type'] ?? '') === 'checkout.session.completed') {
+        $session = $event['data']['object'] ?? [];
+        $petId = (string)($session['metadata']['pet_id'] ?? '');
+        $sessionId = (string)($session['id'] ?? '');
+        if ($petId && ($session['payment_status'] ?? '') === 'paid') {
+            ensure_report_columns();
+            db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . BOOST_DAYS . ' DAY), stripe_session_id = ?, stripe_payment_status = ? WHERE id = ?')
+                ->execute([$sessionId, 'paid', $petId]);
+        }
+    }
+    http_response_code(200);
+    echo 'ok';
 }
 
 function money_input_value(?string $value): string {
@@ -348,12 +465,12 @@ function save_user(string $phone, string $password, ?string $name = null): void 
 
 function list_mascotas(): array {
     ensure_report_columns();
-    return db()->query('SELECT * FROM mascotas ORDER BY creado_at DESC LIMIT 80')->fetchAll();
+    return db()->query("SELECT * FROM mascotas ORDER BY CASE WHEN impulsado_hasta IS NOT NULL AND impulsado_hasta > NOW() THEN 0 ELSE 1 END, creado_at DESC LIMIT 80")->fetchAll();
 }
 
 function list_user_reports(string $phone): array {
     ensure_report_columns();
-    $stmt = db()->prepare('SELECT * FROM mascotas WHERE reportado_por = ? ORDER BY creado_at DESC');
+    $stmt = db()->prepare("SELECT * FROM mascotas WHERE reportado_por = ? ORDER BY CASE WHEN impulsado_hasta IS NOT NULL AND impulsado_hasta > NOW() THEN 0 ELSE 1 END, creado_at DESC");
     $stmt->execute([$phone]);
     return $stmt->fetchAll();
 }
@@ -540,7 +657,7 @@ function render(string $view, array $data = [], int $status = 200): void {
   <link rel="icon" type="image/png" href="/static/logo.png">
   <link rel="apple-touch-icon" href="/static/logo.png">
   <style><?= css() ?></style>
-  <style>.switch input:checked~.switch-ui{background:var(--green)}.switch input:checked~.switch-ui:before{transform:translateX(22px)}.inline-fields{display:grid;grid-template-columns:88px minmax(0,132px);gap:8px;align-items:center}.inline-fields select,.inline-fields input{min-width:0}.pet-body{padding-right:20px}.btn.facebook{background:#1877f2;color:#fff;border-color:#1877f2}.btn.facebook:hover{background:#145dbd}.btn.donate{background:#22607a;color:#fff;border-color:#22607a}.btn.donate:hover{background:#18475c}.badge.rescue{background:#fff8e8;color:var(--amber)}.filter-dropdown{position:relative}.filter-dropdown summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:14px;padding-right:32px;cursor:pointer;font-weight:900}.filter-dropdown summary::-webkit-details-marker{display:none}.filter-dropdown summary:after{content:"+";position:absolute;top:0;right:0;color:var(--muted);font-size:1.25rem;line-height:1}.filter-dropdown[open] summary:after{content:"-"}.filter-dropdown .search-form{margin-top:16px}.modal-page{min-height:calc(100vh - 170px);display:grid;place-items:center;padding:clamp(16px,4vw,34px)}.report-type-modal{width:min(680px,100%);padding:clamp(20px,4vw,34px)}.report-type-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:20px}.report-type-option{display:grid;gap:8px;padding:18px;border:1px solid var(--line);border-radius:8px;background:#fbfdff}.report-type-option:hover{border-color:var(--brand);box-shadow:0 12px 28px rgba(20,32,48,.08)}.report-type-option strong{font-size:1.05rem}.report-type-option span{color:var(--muted);line-height:1.45}.donation-modal{position:fixed;inset:0;z-index:90;display:none;place-items:center;padding:18px;background:rgba(10,16,24,.48)}.donation-modal.open{display:grid}.donation-dialog{width:min(460px,100%);padding:24px;border:1px solid var(--line);border-radius:8px;background:#fff;box-shadow:0 24px 80px rgba(20,32,48,.22)}.donation-dialog h2{margin:0;font-size:1.6rem}.donation-dialog p:not(.eyebrow){color:var(--muted);line-height:1.55}.detail-media .views-badge,.detail-media .photo-badge{top:10px;min-width:86px;min-height:28px;padding:0 10px;font-size:.78rem;line-height:1;align-items:center;justify-content:center;text-align:center}.views-badge{position:absolute;left:10px;box-shadow:0 10px 24px rgba(20,32,48,.16);background:rgba(255,255,255,.94);color:var(--ink)}@media(max-width:640px){.report-type-actions{grid-template-columns:1fr}}@media(max-width:420px){.pet-body{padding-right:12px}.filter-dropdown summary{align-items:flex-start;flex-direction:column}.detail-media .views-badge,.detail-media .photo-badge{top:7px;min-width:80px;min-height:24px;padding:0 8px;font-size:.68rem}.views-badge{left:7px}}</style>
+  <style>.switch input:checked~.switch-ui{background:var(--green)}.switch input:checked~.switch-ui:before{transform:translateX(22px)}.inline-fields{display:grid;grid-template-columns:88px minmax(0,132px);gap:8px;align-items:center}.inline-fields select,.inline-fields input{min-width:0}.pet-body{padding-right:20px}.btn.facebook{background:#1877f2;color:#fff;border-color:#1877f2}.btn.facebook:hover{background:#145dbd}.btn.donate{background:#22607a;color:#fff;border-color:#22607a}.btn.donate:hover{background:#18475c}.btn.boost{background:#f6a623;color:#18212f;border-color:#f6a623}.btn.boost:hover{background:#e99612}.badge.rescue{background:#fff8e8;color:var(--amber)}.boost-badge{width:max-content;background:#fff4d8;color:#8a570b}.pet-card.boosted{border-color:#f0c56f;box-shadow:0 16px 42px rgba(164,102,20,.16)}.boost-panel,.boost-copy{margin-bottom:16px;padding:14px;border:1px solid #f0c56f;border-radius:8px;background:#fffaf0}.boost-panel{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.boost-copy h2{margin:0 0 8px;font-size:1.15rem}.boost-copy p{margin:0 0 10px;color:var(--muted);line-height:1.5}.filter-dropdown{position:relative}.filter-dropdown summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:14px;padding-right:32px;cursor:pointer;font-weight:900}.filter-dropdown summary::-webkit-details-marker{display:none}.filter-dropdown summary:after{content:"+";position:absolute;top:0;right:0;color:var(--muted);font-size:1.25rem;line-height:1}.filter-dropdown[open] summary:after{content:"-"}.filter-dropdown .search-form{margin-top:16px}.modal-page{min-height:calc(100vh - 170px);display:grid;place-items:center;padding:clamp(16px,4vw,34px)}.report-type-modal{width:min(680px,100%);padding:clamp(20px,4vw,34px)}.report-type-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:20px}.report-type-option{display:grid;gap:8px;padding:18px;border:1px solid var(--line);border-radius:8px;background:#fbfdff}.report-type-option:hover{border-color:var(--brand);box-shadow:0 12px 28px rgba(20,32,48,.08)}.report-type-option strong{font-size:1.05rem}.report-type-option span{color:var(--muted);line-height:1.45}.donation-modal{position:fixed;inset:0;z-index:90;display:none;place-items:center;padding:18px;background:rgba(10,16,24,.48)}.donation-modal.open{display:grid}.donation-dialog{width:min(460px,100%);padding:24px;border:1px solid var(--line);border-radius:8px;background:#fff;box-shadow:0 24px 80px rgba(20,32,48,.22)}.donation-dialog h2{margin:0;font-size:1.6rem}.donation-dialog p:not(.eyebrow){color:var(--muted);line-height:1.55}.detail-media .views-badge,.detail-media .photo-badge{top:10px;min-width:86px;min-height:28px;padding:0 10px;font-size:.78rem;line-height:1;align-items:center;justify-content:center;text-align:center}.views-badge{position:absolute;left:10px;box-shadow:0 10px 24px rgba(20,32,48,.16);background:rgba(255,255,255,.94);color:var(--ink)}@media(max-width:640px){.report-type-actions{grid-template-columns:1fr}}@media(max-width:420px){.pet-body{padding-right:12px}.filter-dropdown summary{align-items:flex-start;flex-direction:column}.detail-media .views-badge,.detail-media .photo-badge{top:7px;min-width:80px;min-height:24px;padding:0 8px;font-size:.68rem}.views-badge{left:7px}}</style>
 </head>
 <body>
   <header class="topbar">
@@ -665,12 +782,13 @@ function view_index(array $mascotas, array $stats, array $filters): void { ?>
   <div class="section-head"><div><h2>Reportes recientes</h2><p>Informacion publica enviada por la comunidad.</p></div></div>
   <?php if ($mascotas): ?><section class="grid">
     <?php foreach ($mascotas as $pet): ?>
-      <a class="pet-card" href="/mascotas/<?= e($pet['id']) ?>">
+      <a class="pet-card <?= is_boosted($pet) ? 'boosted' : '' ?>" href="/mascotas/<?= e($pet['id']) ?>">
         <div class="pet-media">
           <?php if ($pet['principal']): ?><img class="zoomable" src="<?= e($pet['principal']) ?>" alt="<?= e($pet['nombre']) ?>" data-zoom-src="<?= e($pet['principal']) ?>"><?php else: ?><?= e(first_letter($pet['nombre'] ?: '?')) ?><?php endif; ?>
           <span class="badge photo-badge <?= e(report_status_class($pet)) ?>"><?= e(report_status_label($pet)) ?></span>
         </div>
         <div class="pet-body">
+          <?php if (is_boosted($pet)): ?><span class="badge boost-badge">Impulsado</span><?php endif; ?>
           <h3><?= e($pet['nombre']) ?></h3>
           <p class="meta"><?php if ($pet['direccion']): ?><strong>Direccion:</strong> <?= e($pet['direccion']) ?><br><?php endif; ?></p>
           <?php if ($pet['descripcion']): ?><p class="pet-summary"><?= e($pet['descripcion']) ?></p><?php endif; ?>
@@ -685,6 +803,7 @@ function view_detalle(array $mascota, bool $isOwner, array $share, ?string $mapU
     $callPhone = phone_digits($mascota['contacto'] ?? '');
     $waPhone = whatsapp_digits($mascota['contacto'] ?? '');
     $direccionLabel = report_type_value($mascota['tipo_reporte'] ?? '') === 'resguardo' ? 'Direccion donde se encontro' : 'Direccion de extravio';
+    $boostedUntil = boosted_until_label($mascota);
     ?>
   <section class="detail-wrap">
     <div class="detail-photos">
@@ -696,7 +815,9 @@ function view_detalle(array $mascota, bool $isOwner, array $share, ?string $mapU
       <?php if ($secundarias): ?><div class="gallery"><?php foreach ($secundarias as $image): ?><img class="zoomable" src="<?= e($image) ?>" alt="Foto de <?= e($mascota['nombre']) ?>" data-zoom-src="<?= e($image) ?>"><?php endforeach; ?></div><?php endif; ?>
     </div>
     <article class="detail-info">
-      <?php if ($isOwner): ?><div class="actions" style="margin-top:0;"><a class="btn primary" href="/mascotas/<?= e($mascota['id']) ?>/editar">Editar</a><form method="post" action="/mascotas/<?= e($mascota['id']) ?>/eliminar" onsubmit="return confirm('Eliminar este reporte?');"><button class="btn" type="submit">Eliminar</button></form></div><?php endif; ?>
+      <?php if ($boostedUntil): ?><div class="boost-panel"><span class="badge boost-badge">Impulsado</span><strong>Activo hasta <?= e($boostedUntil) ?></strong></div><?php endif; ?>
+      <?php if ($isOwner): ?><div class="actions" style="margin-top:0;"><a class="btn primary" href="/mascotas/<?= e($mascota['id']) ?>/editar">Editar</a><?php if (!$boostedUntil): ?><form method="post" action="/mascotas/<?= e($mascota['id']) ?>/impulsar"><button class="btn boost" type="submit">Impulsa tu anuncio</button></form><?php endif; ?><form method="post" action="/mascotas/<?= e($mascota['id']) ?>/eliminar" onsubmit="return confirm('Eliminar este reporte?');"><button class="btn" type="submit">Eliminar</button></form></div><?php endif; ?>
+      <?php if ($isOwner && !$boostedUntil): ?><div class="boost-copy"><h2>Impulsa tu anuncio por 10 dias.</h2><p>Lo destacamos en AyudaPet y tambien enviamos tu reporte directo a celulares de personas cercanas a la zona donde se perdio tu mascota.</p><strong><?= e(BOOST_PRICE_LABEL) ?> por <?= e(BOOST_DAYS) ?> dias</strong></div><?php endif; ?>
       <div class="info-list"><?php info_row('Tipo de reporte', report_type_label($mascota['tipo_reporte'] ?? 'extravio')); info_row('Fecha', $mascota['fecha']); info_row('Nombre de mascota', $mascota['nombre']); info_row('Descripcion', $mascota['descripcion']); ?></div>
       <div class="split-info"><?php foreach ([['Tipo de mascota','tipo_mascota'],['Edad','edad'],['Raza','raza'],['Genero','genero'],['Color','color'],['Collar','collar'],['Docil','docil']] as [$label,$key]) info_row($label, $mascota[$key]); ?></div>
       <?php if ($mapUrl): ?><div class="map-frame"><iframe src="<?= e($mapUrl) ?>" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen title="Mapa de direccion de extravio"></iframe></div><?php endif; ?>
@@ -931,6 +1052,11 @@ function route(): void {
     $path = path_only();
 
     try {
+        if ($path === '/stripe/webhook' && $method === 'POST') {
+            handle_stripe_webhook();
+            return;
+        }
+
         if ($path === '/') {
             $pets = list_mascotas();
             $q = trim((string)($_GET['q'] ?? ''));
@@ -1081,6 +1207,8 @@ function route(): void {
         if (preg_match('#^/mascotas/([a-f0-9]{32})$#', $path, $m)) {
             $pet = get_mascota($m[1]);
             if (!$pet) { render('error', ['title' => 'Reporte no encontrado', 'message' => 'El reporte solicitado no existe.'], 404); return; }
+            if (($_GET['impulso'] ?? '') === 'exito') { flash('Pago recibido. Stripe confirmara el impulso en unos momentos.', 'success'); redirect_to('/mascotas/' . $pet['id']); }
+            if (($_GET['impulso'] ?? '') === 'cancelado') { flash('Pago cancelado. Tu reporte no fue impulsado.', 'warning'); redirect_to('/mascotas/' . $pet['id']); }
             increment_report_views($pet['id']);
             $pet['vistas'] = ((int)($pet['vistas'] ?? 0)) + 1;
             $status = report_status_label($pet);
@@ -1099,6 +1227,16 @@ function route(): void {
                 'share' => ['url' => $detailUrl, 'text' => "{$status}: {$pet['nombre']} en AyudaPet", 'message' => "{$status}: {$pet['nombre']} en AyudaPet {$detailUrl}"],
             ]);
             return;
+        }
+
+        if (preg_match('#^/mascotas/([a-f0-9]{32})/impulsar$#', $path, $m) && $method === 'POST') {
+            require_login();
+            $pet = get_mascota($m[1]);
+            if (!$pet) { render('error', ['title' => 'Reporte no encontrado', 'message' => 'El reporte solicitado no existe.'], 404); return; }
+            if (!owns_report($pet)) { render('error', ['title' => 'Sin permiso', 'message' => 'Solo puedes impulsar tus propios reportes.'], 403); return; }
+            if (is_boosted($pet)) { flash('Este reporte ya esta impulsado.', 'success'); redirect_to('/mascotas/' . $pet['id']); }
+            $checkoutUrl = create_boost_checkout($pet);
+            redirect_to($checkoutUrl);
         }
 
         if (preg_match('#^/mascotas/([a-f0-9]{32})/editar$#', $path, $m)) {

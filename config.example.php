@@ -17,3 +17,7 @@ define('LABSMOBILE_API', 'https://api.labsmobile.com/json/send');
 define('LABSMOBILE_DEFAULT_COUNTRY_CODE', '52');
 
 define('API_KEY', '');
+
+define('STRIPE_SECRET_KEY', '');
+define('STRIPE_WEBHOOK_SECRET', '');
+define('STRIPE_PRICE_ID', '');

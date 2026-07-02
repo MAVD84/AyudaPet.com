@@ -39,10 +39,14 @@ CREATE TABLE IF NOT EXISTS mascotas (
   recompensa VARCHAR(160) NULL,
   encontrado TINYINT(1) NOT NULL DEFAULT 0,
   vistas INT UNSIGNED NOT NULL DEFAULT 0,
+  impulsado_hasta DATETIME NULL,
+  stripe_session_id VARCHAR(255) NULL,
+  stripe_payment_status VARCHAR(50) NULL,
   creado_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   actualizado_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_mascotas_usuario (reportado_por),
   INDEX idx_mascotas_encontrado (encontrado),
+  INDEX idx_mascotas_impulsado (impulsado_hasta),
   INDEX idx_mascotas_fecha (creado_at),
   CONSTRAINT fk_mascotas_usuario FOREIGN KEY (reportado_por)
     REFERENCES usuarios(telefono) ON DELETE CASCADE

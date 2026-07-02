@@ -31,6 +31,10 @@ LABSMOBILE_API=https://api.labsmobile.com/json/send
 LABSMOBILE_DEFAULT_COUNTRY_CODE=52
 
 API_KEY=
+
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+STRIPE_PRICE_ID=
 ```
 
 ## Base de datos
@@ -61,3 +65,4 @@ Necesitas un MySQL accesible y las variables de entorno `MYSQL_*`.
 - El repo ya no usa Supabase ni Flask.
 - Las imagenes se guardan localmente en `/uploads`.
 - No subas archivos `.env` al repositorio.
+- Para impulsar anuncios, crea un producto/precio en Stripe por `$1,300 MXN`, usa ese `STRIPE_PRICE_ID` y configura el webhook a `https://ayudapet.com/stripe/webhook` escuchando `checkout.session.completed`.
