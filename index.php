@@ -117,6 +117,9 @@ function ensure_report_columns(): void {
     if (empty($existing['ubicacion_lng'])) {
         db()->exec('ALTER TABLE mascotas ADD COLUMN ubicacion_lng DECIMAL(9,6) NULL');
     }
+    if (empty($existing['direccion_completa'])) {
+        db()->exec('ALTER TABLE mascotas ADD COLUMN direccion_completa VARCHAR(700) NULL');
+    }
     if (empty($existing['impulsado_hasta'])) {
         db()->exec('ALTER TABLE mascotas ADD COLUMN impulsado_hasta DATETIME NULL');
     }
@@ -157,6 +160,7 @@ function ensure_archive_table(): void {
         collar VARCHAR(120) NULL,
         docil VARCHAR(120) NULL,
         direccion VARCHAR(500) NULL,
+        direccion_completa VARCHAR(700) NULL,
         ubicacion_lat DECIMAL(9,6) NULL,
         ubicacion_lng DECIMAL(9,6) NULL,
         calles VARCHAR(240) NULL,
@@ -177,6 +181,14 @@ function ensure_archive_table(): void {
         INDEX idx_archivadas_archivado_at (archivado_at),
         INDEX idx_archivadas_ubicacion (ubicacion_lat, ubicacion_lng)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $columns = db()->query('SHOW COLUMNS FROM mascotas_archivadas')->fetchAll();
+    $existing = [];
+    foreach ($columns as $column) {
+        $existing[$column['Field']] = true;
+    }
+    if (empty($existing['direccion_completa'])) {
+        db()->exec('ALTER TABLE mascotas_archivadas ADD COLUMN direccion_completa VARCHAR(700) NULL AFTER direccion');
+    }
     $indexes = db()->query("SHOW INDEX FROM mascotas_archivadas WHERE Key_name = 'uniq_archivadas_reporte'")->fetchAll();
     if (!$indexes) {
         db()->exec('DELETE older FROM mascotas_archivadas older JOIN mascotas_archivadas newer ON older.id = newer.id AND older.archive_id < newer.archive_id');
@@ -736,7 +748,7 @@ function archive_report(array $pet, string $reason = 'deleted_by_owner'): void {
     $fields = [
         'id', 'reportado_por', 'tipo_reporte', 'tipo_mascota', 'nombre', 'descripcion', 'contacto',
         'principal', 'secundarias', 'fecha', 'edad', 'raza', 'genero', 'color', 'collar', 'docil',
-        'direccion', 'ubicacion_lat', 'ubicacion_lng', 'calles', 'dueno', 'recompensa', 'encontrado',
+        'direccion', 'direccion_completa', 'ubicacion_lat', 'ubicacion_lng', 'calles', 'dueno', 'recompensa', 'encontrado',
         'vistas', 'impulsado_hasta', 'stripe_session_id', 'stripe_payment_status',
         'boost_expired_notified_at', 'creado_at', 'actualizado_at'
     ];
@@ -782,7 +794,7 @@ function sync_report_archives(int $limit = 500): array {
 
 function heatmap_reports(): array {
     ensure_archive_table();
-    $stmt = db()->query("SELECT id, nombre, tipo_reporte, tipo_mascota, direccion, principal, ubicacion_lat, ubicacion_lng, encontrado, creado_at, archivado_at
+    $stmt = db()->query("SELECT id, nombre, tipo_reporte, tipo_mascota, direccion, direccion_completa, principal, ubicacion_lat, ubicacion_lng, encontrado, creado_at, archivado_at
         FROM mascotas_archivadas
         WHERE ubicacion_lat IS NOT NULL AND ubicacion_lng IS NOT NULL
         ORDER BY archivado_at DESC
@@ -844,7 +856,7 @@ function contact_rows_to_sms(array $rows): array {
             $contacts[] = [
                 'phone' => $phone,
                 'sms' => phone_for_sms($phone),
-                'direccion' => (string)($row['direccion'] ?? ''),
+                'direccion' => (string)(($row['direccion_completa'] ?? '') ?: ($row['direccion'] ?? '')),
                 'reportes' => (int)($row['reportes'] ?? 0),
             ];
         }
@@ -859,22 +871,27 @@ function heatmap_city_contacts(?string $city): array {
     $terms = preg_split('/\s+/', preg_replace('/[^\p{L}\p{N}]+/u', ' ', lower_text($city)) ?: '', -1, PREG_SPLIT_NO_EMPTY);
     $terms = array_values(array_filter($terms, fn($term) => !in_array($term, ['cd', 'ciudad', 'mx', 'mexico'], true)));
     if (!$terms) $terms = [$city];
-    $where = implode(' AND ', array_fill(0, count($terms), 'direccion LIKE ?'));
-    $stmt = db()->prepare("SELECT reportado_por, contacto, direccion, COUNT(*) AS reportes, MAX(archivado_at) AS ultimo
+    $where = implode(' AND ', array_fill(0, count($terms), '(direccion LIKE ? OR direccion_completa LIKE ?)'));
+    $stmt = db()->prepare("SELECT reportado_por, contacto, direccion, direccion_completa, COUNT(*) AS reportes, MAX(archivado_at) AS ultimo
         FROM mascotas_archivadas
         WHERE {$where}
-        GROUP BY reportado_por, contacto, direccion
+        GROUP BY reportado_por, contacto, direccion, direccion_completa
         ORDER BY ultimo DESC
         LIMIT 600");
-    $stmt->execute(array_map(fn($term) => '%' . $term . '%', $terms));
+    $params = [];
+    foreach ($terms as $term) {
+        $params[] = '%' . $term . '%';
+        $params[] = '%' . $term . '%';
+    }
+    $stmt->execute($params);
     $contacts = contact_rows_to_sms($stmt->fetchAll());
     $source = 'texto';
     if (!$contacts && ($area = google_geocode_area($city))) {
-        $stmt = db()->prepare("SELECT reportado_por, contacto, direccion, COUNT(*) AS reportes, MAX(archivado_at) AS ultimo,
+        $stmt = db()->prepare("SELECT reportado_por, contacto, direccion, direccion_completa, COUNT(*) AS reportes, MAX(archivado_at) AS ultimo,
             (6371 * ACOS(LEAST(1, GREATEST(-1, COS(RADIANS(?)) * COS(RADIANS(ubicacion_lat)) * COS(RADIANS(ubicacion_lng) - RADIANS(?)) + SIN(RADIANS(?)) * SIN(RADIANS(ubicacion_lat)))))) AS distance_km
             FROM mascotas_archivadas
             WHERE ubicacion_lat IS NOT NULL AND ubicacion_lng IS NOT NULL
-            GROUP BY reportado_por, contacto, direccion, ubicacion_lat, ubicacion_lng
+            GROUP BY reportado_por, contacto, direccion, direccion_completa, ubicacion_lat, ubicacion_lng
             HAVING distance_km <= ?
             ORDER BY distance_km ASC
             LIMIT 600");
@@ -928,6 +945,11 @@ function report_payload(string $id, ?array $existing = null): array {
     if (!$name && $reportType === 'extravio') throw new RuntimeException('El nombre de la mascota es obligatorio.');
     if (!$name) $name = 'Sin nombre';
     $contacto = isset($_POST['usar_contacto_propio']) ? post_value('contacto') : null;
+    $direccion = post_value('direccion');
+    $direccionCompleta = post_value('direccion_completa');
+    if (!$direccionCompleta && $direccion && $direccion === ($existing['direccion'] ?? null)) {
+        $direccionCompleta = $existing['direccion_completa'] ?? null;
+    }
 
     $principal = !empty($_POST['remove_principal']) ? null : ($existing['principal'] ?? null);
     if (isset($_FILES['principal'])) {
@@ -979,7 +1001,8 @@ function report_payload(string $id, ?array $existing = null): array {
         'color' => post_value('color'),
         'collar' => post_value('collar'),
         'docil' => post_value('docil'),
-        'direccion' => post_value('direccion'),
+        'direccion' => $direccion,
+        'direccion_completa' => $direccionCompleta,
         'ubicacion_lat' => geo_value(post_value('ubicacion_lat'), -90, 90),
         'ubicacion_lng' => geo_value(post_value('ubicacion_lng'), -180, 180),
         'calles' => null,
@@ -993,8 +1016,8 @@ function create_report(): string {
     ensure_report_columns();
     $id = bin2hex(random_bytes(16));
     $data = report_payload($id);
-    $sql = 'INSERT INTO mascotas (id, reportado_por, tipo_reporte, tipo_mascota, nombre, descripcion, contacto, principal, secundarias, fecha, edad, raza, genero, color, collar, docil, direccion, ubicacion_lat, ubicacion_lng, calles, dueno, recompensa, encontrado)
-            VALUES (:id, :reportado_por, :tipo_reporte, :tipo_mascota, :nombre, :descripcion, :contacto, :principal, :secundarias, :fecha, :edad, :raza, :genero, :color, :collar, :docil, :direccion, :ubicacion_lat, :ubicacion_lng, :calles, :dueno, :recompensa, :encontrado)';
+    $sql = 'INSERT INTO mascotas (id, reportado_por, tipo_reporte, tipo_mascota, nombre, descripcion, contacto, principal, secundarias, fecha, edad, raza, genero, color, collar, docil, direccion, direccion_completa, ubicacion_lat, ubicacion_lng, calles, dueno, recompensa, encontrado)
+            VALUES (:id, :reportado_por, :tipo_reporte, :tipo_mascota, :nombre, :descripcion, :contacto, :principal, :secundarias, :fecha, :edad, :raza, :genero, :color, :collar, :docil, :direccion, :direccion_completa, :ubicacion_lat, :ubicacion_lng, :calles, :dueno, :recompensa, :encontrado)';
     $stmt = db()->prepare($sql);
     $stmt->execute(['id' => $id, 'reportado_por' => current_user_phone()] + $data);
     try {
@@ -1337,7 +1360,7 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
     <?php input_field('color','Color',$mascota); ?>
     <div class="field"><label for="collar">Collar</label><select id="collar" name="collar"><option value="">Seleccionar</option><?php foreach (['Si','No'] as $opt): ?><option <?= $collarActual === lower_text($opt) || ($opt === 'Si' && $collarActual === 'sí') ? 'selected' : '' ?>><?= e($opt) ?></option><?php endforeach; ?></select></div>
     <div class="field"><label for="docil">Docil</label><select id="docil" name="docil"><option value="">Seleccionar</option><?php foreach (['Si','No'] as $opt): ?><option <?= $docilActual === lower_text($opt) || ($opt === 'Si' && $docilActual === 'sí') ? 'selected' : '' ?>><?= e($opt) ?></option><?php endforeach; ?></select></div>
-    <div class="field full"><label for="direccion"><?= e($direccionLabel) ?></label><input id="direccion" name="direccion" value="<?= e($mascota['direccion'] ?? '') ?>" autocomplete="off" data-address-autocomplete><input type="hidden" name="ubicacion_lat" value="<?= e($mascota['ubicacion_lat'] ?? '') ?>" data-address-lat><input type="hidden" name="ubicacion_lng" value="<?= e($mascota['ubicacion_lng'] ?? '') ?>" data-address-lng></div>
+    <div class="field full"><label for="direccion"><?= e($direccionLabel) ?></label><input id="direccion" name="direccion" value="<?= e($mascota['direccion'] ?? '') ?>" autocomplete="off" data-address-autocomplete><input type="hidden" name="direccion_completa" value="<?= e($mascota['direccion_completa'] ?? '') ?>" data-address-full><input type="hidden" name="ubicacion_lat" value="<?= e($mascota['ubicacion_lat'] ?? '') ?>" data-address-lat><input type="hidden" name="ubicacion_lng" value="<?= e($mascota['ubicacion_lng'] ?? '') ?>" data-address-lng></div>
     <?php if (!$isResguardo): ?><div class="field"><label for="recompensa">Recompensa</label><input id="recompensa" name="recompensa" type="number" min="0" step="1" inputmode="numeric" value="<?= e($recompensaInput) ?>" placeholder="1000" data-money-input><span class="hint" data-money-preview><?= e(money_display($recompensaInput) ?: 'Se mostrara como $1,000 M.N.') ?></span></div><?php endif; ?>
     <?php $usesOwnContact = !empty($mascota['contacto']) && $mascota['contacto'] !== DEFAULT_PUBLIC_CONTACT; ?>
     <div class="field">
@@ -1364,6 +1387,7 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
   <?php if ($mapsApiKey): ?><script>
     window.initAddressAutocomplete = function () {
       const input = document.querySelector("[data-address-autocomplete]");
+      const fullInput = document.querySelector("[data-address-full]");
       const latInput = document.querySelector("[data-address-lat]");
       const lngInput = document.querySelector("[data-address-lng]");
       if (!input || !window.google?.maps?.places) return;
@@ -1371,6 +1395,9 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
         componentRestrictions: { country: "mx" },
         fields: ["address_components", "formatted_address", "geometry", "name"],
         types: ["address"],
+      });
+      input.addEventListener("input", () => {
+        if (fullInput) fullInput.value = "";
       });
 
       const getPart = (parts, type, shortName = false) => {
@@ -1432,6 +1459,9 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
           closeSuggestions();
           return;
         }
+        if (fullInput) {
+          fullInput.value = place.formatted_address || place.name || input.value || "";
+        }
         selectedPrivateAddress = privateAddress(place);
         input.value = selectedPrivateAddress;
         setCoordinates(place);
@@ -1470,7 +1500,7 @@ function view_mapa_calor(array $reports, array $stats, ?string $mapsApiKey, arra
             'lat' => $lat,
             'lng' => $lng,
             'nombre' => (string)($report['nombre'] ?? 'Reporte'),
-            'direccion' => (string)($report['direccion'] ?? ''),
+            'direccion' => (string)(($report['direccion_completa'] ?? '') ?: ($report['direccion'] ?? '')),
             'imagen' => (string)($report['principal'] ?? ''),
             'tipo' => report_type_value($report['tipo_reporte'] ?? ''),
         ];
@@ -1491,7 +1521,7 @@ function view_mapa_calor(array $reports, array $stats, ?string $mapsApiKey, arra
     </section>
     <section class="panel heatmap-list">
       <div class="section-head" style="margin-top:0;"><div><h2>Ultimas ubicaciones</h2><p>Datos privados para seguimiento interno.</p></div></div>
-      <?php if ($reports): ?><div class="mini-list"><?php foreach (array_slice($reports, 0, 40) as $report): ?><div class="mini-report"><?php if (!empty($report['principal'])): ?><img src="<?= e($report['principal']) ?>" alt="<?= e($report['nombre'] ?: 'Reporte') ?>"><?php else: ?><span class="mini-thumb"><?= e(first_letter($report['nombre'] ?? '?')) ?></span><?php endif; ?><span><strong><?= e($report['nombre'] ?: 'Reporte') ?></strong><span class="meta"><?= e(report_type_value($report['tipo_reporte'] ?? '') === 'resguardo' ? 'Resguardo' : 'Extravio') ?> · <?= e($report['direccion'] ?: 'Sin direccion') ?></span></span></div><?php endforeach; ?></div><?php else: ?><div class="empty">Todavia no hay ubicaciones archivadas.</div><?php endif; ?>
+      <?php if ($reports): ?><div class="mini-list"><?php foreach (array_slice($reports, 0, 40) as $report): ?><div class="mini-report"><?php if (!empty($report['principal'])): ?><img src="<?= e($report['principal']) ?>" alt="<?= e($report['nombre'] ?: 'Reporte') ?>"><?php else: ?><span class="mini-thumb"><?= e(first_letter($report['nombre'] ?? '?')) ?></span><?php endif; ?><span><strong><?= e($report['nombre'] ?: 'Reporte') ?></strong><span class="meta"><?= e(report_type_value($report['tipo_reporte'] ?? '') === 'resguardo' ? 'Resguardo' : 'Extravio') ?> · <?= e(($report['direccion_completa'] ?? '') ?: ($report['direccion'] ?? 'Sin direccion')) ?></span></span></div><?php endforeach; ?></div><?php else: ?><div class="empty">Todavia no hay ubicaciones archivadas.</div><?php endif; ?>
     </section>
     <section class="panel sms-panel">
       <div class="section-head" style="margin-top:0;"><div><h2>Telefonos por ciudad</h2><p>Busca numeros registrados asociados a reportes de esa ciudad.</p></div></div>
