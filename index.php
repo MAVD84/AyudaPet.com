@@ -798,6 +798,40 @@ function heatmap_reports(): array {
     return ['reports' => $reports, 'stats' => $stats];
 }
 
+function heatmap_city_contacts(?string $city): array {
+    ensure_archive_table();
+    $city = trim((string)$city);
+    if ($city === '') return ['city' => '', 'contacts' => [], 'sms' => ''];
+    $stmt = db()->prepare("SELECT reportado_por, contacto, direccion, COUNT(*) AS reportes, MAX(archivado_at) AS ultimo
+        FROM mascotas_archivadas
+        WHERE direccion LIKE ?
+        GROUP BY reportado_por, contacto, direccion
+        ORDER BY ultimo DESC
+        LIMIT 600");
+    $stmt->execute(['%' . $city . '%']);
+    $seen = [];
+    $contacts = [];
+    $excluded = array_merge(admin_phones(), [normalize_phone(DEFAULT_PUBLIC_CONTACT)]);
+    foreach ($stmt->fetchAll() as $row) {
+        foreach ([$row['reportado_por'] ?? null, $row['contacto'] ?? null] as $rawPhone) {
+            $phone = normalize_phone($rawPhone);
+            if (!$phone || isset($seen[$phone]) || in_array($phone, $excluded, true)) continue;
+            $seen[$phone] = true;
+            $contacts[] = [
+                'phone' => $phone,
+                'sms' => phone_for_sms($phone),
+                'direccion' => (string)($row['direccion'] ?? ''),
+                'reportes' => (int)($row['reportes'] ?? 0),
+            ];
+        }
+    }
+    return [
+        'city' => $city,
+        'contacts' => $contacts,
+        'sms' => implode("\n", array_column($contacts, 'sms')),
+    ];
+}
+
 function pet_secondaries(array $pet): array {
     $items = json_decode((string)($pet['secundarias'] ?? '[]'), true);
     return is_array($items) ? array_values(array_filter($items, 'is_string')) : [];
@@ -981,7 +1015,7 @@ function render(string $view, array $data = [], int $status = 200): void {
   <style><?= css() ?></style>
   <style>.switch input:checked~.switch-ui{background:var(--green)}.switch input:checked~.switch-ui:before{transform:translateX(22px)}.inline-fields{display:grid;grid-template-columns:88px minmax(0,132px);gap:8px;align-items:center}.inline-fields select,.inline-fields input{min-width:0}.pet-body{padding-right:20px}.btn.facebook{background:#1877f2;color:#fff;border-color:#1877f2}.btn.facebook:hover{background:#145dbd}.btn.donate{background:#22607a;color:#fff;border-color:#22607a}.btn.donate:hover{background:#18475c}.btn.boost{background:#f6a623;color:#18212f;border-color:#f6a623}.btn.boost:hover{background:#e99612}.badge.rescue{background:#fff8e8;color:var(--amber)}.boost-badge{width:max-content;background:#fff4d8;color:#8a570b}.pet-card.boosted{border-color:#f0c56f;box-shadow:0 16px 42px rgba(164,102,20,.16)}.boost-panel,.boost-copy{margin-bottom:16px;padding:14px;border:1px solid #f0c56f;border-radius:8px;background:#fffaf0}.boost-panel{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.boost-copy h2{margin:0 0 8px;font-size:1.15rem}.boost-copy p{margin:0 0 10px;color:var(--muted);line-height:1.5}.filter-dropdown{position:relative}.filter-dropdown summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:14px;padding-right:32px;cursor:pointer;font-weight:900}.filter-dropdown summary::-webkit-details-marker{display:none}.filter-dropdown summary:after{content:"+";position:absolute;top:0;right:0;color:var(--muted);font-size:1.25rem;line-height:1}.filter-dropdown[open] summary:after{content:"-"}.filter-dropdown .search-form{margin-top:16px}.modal-page{min-height:calc(100vh - 170px);display:grid;place-items:center;padding:clamp(16px,4vw,34px)}.report-type-modal{width:min(680px,100%);padding:clamp(20px,4vw,34px)}.report-type-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:20px}.report-type-option{display:grid;gap:8px;padding:18px;border:1px solid var(--line);border-radius:8px;background:#fbfdff}.report-type-option:hover{border-color:var(--brand);box-shadow:0 12px 28px rgba(20,32,48,.08)}.report-type-option strong{font-size:1.05rem}.report-type-option span{color:var(--muted);line-height:1.45}.donation-modal{position:fixed;inset:0;z-index:90;display:none;place-items:center;padding:18px;background:rgba(10,16,24,.48)}.donation-modal.open{display:grid}.donation-dialog{width:min(460px,100%);padding:24px;border:1px solid var(--line);border-radius:8px;background:#fff;box-shadow:0 24px 80px rgba(20,32,48,.22)}.donation-dialog h2{margin:0;font-size:1.6rem}.donation-dialog p:not(.eyebrow){color:var(--muted);line-height:1.55}.detail-media .views-badge,.detail-media .photo-badge{top:10px;min-width:86px;min-height:28px;padding:0 10px;font-size:.78rem;line-height:1;align-items:center;justify-content:center;text-align:center}.views-badge{position:absolute;left:10px;box-shadow:0 10px 24px rgba(20,32,48,.16);background:rgba(255,255,255,.94);color:var(--ink)}@media(max-width:640px){.report-type-actions{grid-template-columns:1fr}}@media(max-width:420px){.pet-body{padding-right:12px}.filter-dropdown summary{align-items:flex-start;flex-direction:column}.detail-media .views-badge,.detail-media .photo-badge{top:7px;min-width:80px;min-height:24px;padding:0 8px;font-size:.68rem}.views-badge{left:7px}}</style>
   <style>.btn{font-size:.92rem;line-height:1}.btn.logout,.btn.back-report{background:#b93824;color:#fff;border-color:#b93824}.btn.logout:hover,.btn.back-report:hover{background:#922b1b}.btn.call{background:#0d83f2;color:#fff;border-color:#0d83f2}.btn.call:hover{background:#096dce}.btn.whatsapp{background:#128C7E;color:#fff;border-color:#128C7E}.btn.whatsapp:hover{background:#0f766b}.btn.share{background:#25d366;color:#fff;border-color:#25d366}.btn.share:hover{background:#20b858}.detail-owner-actions{display:flex;justify-content:flex-end;gap:10px;margin:0 0 14px}.detail-owner-actions form{display:flex;margin:0}.detail-owner-actions .btn{min-height:38px;padding:0 14px;border:1px solid var(--line);color:#fff}.detail-owner-actions .btn.edit{background:#176b87;border-color:#176b87}.detail-owner-actions .btn.edit:hover{background:#10546c}.detail-owner-actions .btn.delete{background:#b93824;border-color:#b93824}.detail-owner-actions .btn.delete:hover{background:#922b1b}.boost-copy{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:16px;padding:16px 18px}.boost-copy form{margin:0}.boost-copy .btn.boost{min-width:190px;min-height:48px;box-shadow:0 12px 28px rgba(246,166,35,.22)}@media(max-width:840px){.detail-owner-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.detail-owner-actions .btn,.detail-owner-actions form{width:100%}.boost-copy{grid-template-columns:1fr;gap:14px}.boost-copy .btn.boost,.boost-copy form{width:100%}}@media(max-width:420px){.detail-owner-actions .btn{min-height:42px}.boost-copy{padding:14px}.boost-copy h2{font-size:1.05rem}.boost-copy .btn.boost{min-height:46px}}</style>
-  <style>.heatmap-page{display:grid;gap:18px}.heatmap-stats{grid-template-columns:repeat(4,minmax(0,1fr));margin:0}.heatmap-panel{padding:0;overflow:hidden}.heatmap-canvas{width:100%;height:min(72vh,720px);min-height:460px}.heatmap-list{margin-top:4px}.heatmap-list .mini-list{gap:12px}.heatmap-list .mini-report{grid-template-columns:64px minmax(0,1fr);align-items:center;gap:14px;padding:10px;min-width:0}.heatmap-list .mini-report>span:not(.mini-thumb){min-width:0;display:block}.heatmap-list .mini-report img,.heatmap-list .mini-thumb{width:64px;height:64px;min-width:64px;border-radius:8px;object-fit:cover}.heatmap-list .mini-report strong{display:block;line-height:1.2}.heatmap-list .mini-report .meta{display:block;margin-top:3px;line-height:1.35;overflow-wrap:anywhere}.map-popup{width:190px;display:grid;gap:7px;color:#18212f}.map-popup-img{width:190px;height:140px;object-fit:cover;border-radius:8px;display:block;background:#edf3f7}.map-popup strong{font-size:.95rem;line-height:1.2}.map-popup span{color:#617084;line-height:1.3;overflow-wrap:anywhere}@media(max-width:820px){.heatmap-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.heatmap-canvas{height:68vh;min-height:420px}}@media(max-width:480px){.heatmap-stats{grid-template-columns:1fr}.heatmap-canvas{height:62vh;min-height:360px}.heatmap-list .mini-report{grid-template-columns:58px minmax(0,1fr);gap:12px}.heatmap-list .mini-report img,.heatmap-list .mini-thumb{width:58px;height:58px;min-width:58px}.map-popup,.map-popup-img{width:160px}.map-popup-img{height:118px}}</style>
+  <style>.heatmap-page{display:grid;gap:18px}.heatmap-stats{grid-template-columns:repeat(4,minmax(0,1fr));margin:0}.heatmap-panel{padding:0;overflow:hidden}.heatmap-canvas{width:100%;height:min(72vh,720px);min-height:460px}.heatmap-list{margin-top:4px}.heatmap-list .mini-list{gap:12px}.heatmap-list .mini-report{grid-template-columns:64px minmax(0,1fr);align-items:center;gap:14px;padding:10px;min-width:0}.heatmap-list .mini-report>span:not(.mini-thumb){min-width:0;display:block}.heatmap-list .mini-report img,.heatmap-list .mini-thumb{width:64px;height:64px;min-width:64px;border-radius:8px;object-fit:cover}.heatmap-list .mini-report strong{display:block;line-height:1.2}.heatmap-list .mini-report .meta{display:block;margin-top:3px;line-height:1.35;overflow-wrap:anywhere}.map-popup{width:190px;display:grid;gap:7px;color:#18212f}.map-popup-img{width:190px;height:140px;object-fit:cover;border-radius:8px;display:block;background:#edf3f7}.map-popup strong{font-size:.95rem;line-height:1.2}.map-popup span{color:#617084;line-height:1.3;overflow-wrap:anywhere}.sms-search{grid-template-columns:minmax(0,1fr) auto}.sms-copy-box{margin-top:14px;min-height:150px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;line-height:1.5}.sms-contact-list{display:grid;gap:8px;margin-top:14px}.sms-contact{display:grid;gap:3px;padding:10px;border:1px solid var(--line);border-radius:8px;background:#fbfdff}.sms-contact span{color:var(--muted);overflow-wrap:anywhere}@media(max-width:820px){.heatmap-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.heatmap-canvas{height:68vh;min-height:420px}.sms-search{grid-template-columns:1fr}}@media(max-width:480px){.heatmap-stats{grid-template-columns:1fr}.heatmap-canvas{height:62vh;min-height:360px}.heatmap-list .mini-report{grid-template-columns:58px minmax(0,1fr);gap:12px}.heatmap-list .mini-report img,.heatmap-list .mini-thumb{width:58px;height:58px;min-width:58px}.map-popup,.map-popup-img{width:160px}.map-popup-img{height:118px}}</style>
 </head>
 <body>
   <header class="topbar">
@@ -1053,7 +1087,7 @@ function view(string $view, array $vars): void {
     if ($view === 'perfil') { view_perfil($user, $reportes); return; }
     if ($view === 'tipo_reporte') { view_tipo_reporte(); return; }
     if ($view === 'reportar') { view_reportar($mascota, $editing, $mapsApiKey); return; }
-    if ($view === 'mapa_calor') { view_mapa_calor($reports, $stats, $mapsApiKey); return; }
+    if ($view === 'mapa_calor') { view_mapa_calor($reports, $stats, $mapsApiKey, $cityContacts); return; }
     if ($view === 'error') { view_error($title, $message); return; }
 }
 
@@ -1075,6 +1109,7 @@ document.querySelectorAll("[data-zoom-src]").forEach((image)=>image.addEventList
 document.querySelectorAll("[data-lightbox-close]").forEach((button)=>button.addEventListener("click",closeLightbox));lightbox?.addEventListener("click",(event)=>{if(event.target===lightbox)closeLightbox()});document.addEventListener("keydown",(event)=>{if(event.key==="Escape")closeLightbox()});
 document.querySelectorAll("[data-remove-image]").forEach((button)=>button.addEventListener("click",async(event)=>{event.preventDefault();const input=button.querySelector("input");const item=button.closest(".edit-image-item");if(input)input.checked=true;item?.classList.add("removing");if(!button.dataset.removeUrl)return;try{const response=await fetch(button.dataset.removeUrl,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({target:button.dataset.removeTarget,image:button.dataset.removeImageUrl||null})});if(!response.ok)throw new Error("remove failed")}catch(error){if(input)input.checked=false;item?.classList.remove("removing");alert("No se pudo eliminar la imagen. Intenta de nuevo.")}}));
 document.querySelectorAll("[data-copy-url]").forEach((button)=>button.addEventListener("click",async()=>{const url=button.dataset.copyUrl;if(!url)return;try{await navigator.clipboard.writeText(url)}catch(error){const input=document.createElement("input");input.value=url;document.body.appendChild(input);input.select();document.execCommand("copy");input.remove()}const original=button.textContent;button.textContent="Copiado";window.setTimeout(()=>{button.textContent=original},1600)}));
+document.querySelectorAll("[data-copy-sms]").forEach((button)=>button.addEventListener("click",async()=>{const box=document.querySelector("[data-sms-copy]");const text=box?.value||"";if(!text)return;try{await navigator.clipboard.writeText(text)}catch(error){box?.focus();box?.select();document.execCommand("copy")}const original=button.textContent;button.textContent="Copiado";window.setTimeout(()=>{button.textContent=original},1600)}));
 document.querySelectorAll("[data-native-share-button]").forEach((button)=>button.addEventListener("click",async()=>{const shareData={title:button.dataset.shareTitle||document.title,text:button.dataset.shareText||"",url:button.dataset.shareUrl||window.location.href};if(navigator.share){try{await navigator.share(shareData);return}catch(error){if(error?.name==="AbortError")return}}const original=button.textContent;button.textContent="Usa copiar enlace";window.setTimeout(()=>{button.textContent=original},1800)}));
 document.querySelectorAll("[data-max-files]").forEach((input)=>input.addEventListener("change",()=>{const maxFiles=Number(input.dataset.maxFiles||0);if(input.files.length>maxFiles){input.value="";alert(maxFiles>0?`Solo puedes seleccionar hasta ${maxFiles} imagenes.`:"Ya tienes el maximo de 3 fotos adicionales.")}}));
 document.querySelectorAll("[data-contact-toggle]").forEach((toggle)=>{const box=document.querySelector("[data-contact-own]");const input=document.querySelector("[data-contact-input]");const sync=()=>{if(!box)return;box.classList.toggle("show",toggle.checked);if(input){input.disabled=!toggle.checked;if(!toggle.checked)input.value=""}};toggle.addEventListener("change",sync);sync()});
@@ -1365,7 +1400,7 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
   </section>
 <?php }
 
-function view_mapa_calor(array $reports, array $stats, ?string $mapsApiKey): void {
+function view_mapa_calor(array $reports, array $stats, ?string $mapsApiKey, array $cityContacts): void {
     $points = [];
     foreach ($reports as $report) {
         $lat = (float)$report['ubicacion_lat'];
@@ -1397,6 +1432,21 @@ function view_mapa_calor(array $reports, array $stats, ?string $mapsApiKey): voi
     <section class="panel heatmap-list">
       <div class="section-head" style="margin-top:0;"><div><h2>Ultimas ubicaciones</h2><p>Datos privados para seguimiento interno.</p></div></div>
       <?php if ($reports): ?><div class="mini-list"><?php foreach (array_slice($reports, 0, 40) as $report): ?><div class="mini-report"><?php if (!empty($report['principal'])): ?><img src="<?= e($report['principal']) ?>" alt="<?= e($report['nombre'] ?: 'Reporte') ?>"><?php else: ?><span class="mini-thumb"><?= e(first_letter($report['nombre'] ?? '?')) ?></span><?php endif; ?><span><strong><?= e($report['nombre'] ?: 'Reporte') ?></strong><span class="meta"><?= e(report_type_value($report['tipo_reporte'] ?? '') === 'resguardo' ? 'Resguardo' : 'Extravio') ?> · <?= e($report['direccion'] ?: 'Sin direccion') ?></span></span></div><?php endforeach; ?></div><?php else: ?><div class="empty">Todavia no hay ubicaciones archivadas.</div><?php endif; ?>
+    </section>
+    <section class="panel sms-panel">
+      <div class="section-head" style="margin-top:0;"><div><h2>Telefonos por ciudad</h2><p>Busca numeros registrados asociados a reportes de esa ciudad.</p></div></div>
+      <form class="search-form sms-search" method="get" action="/mapa-calor">
+        <div class="field"><label for="ciudad">Ciudad o zona</label><input id="ciudad" name="ciudad" value="<?= e($cityContacts['city'] ?? '') ?>" placeholder="Ej. Juarez, San Felipe del Real"></div>
+        <button class="btn primary" type="submit">Buscar telefonos</button>
+      </form>
+      <?php if (($cityContacts['city'] ?? '') !== ''): ?>
+        <p class="filter-meta"><?= count($cityContacts['contacts']) ?> telefono<?= count($cityContacts['contacts']) === 1 ? '' : 's' ?> para <?= e($cityContacts['city']) ?>.</p>
+        <?php if ($cityContacts['contacts']): ?>
+          <textarea class="sms-copy-box" readonly data-sms-copy><?= e($cityContacts['sms']) ?></textarea>
+          <div class="actions"><button class="btn share" type="button" data-copy-sms>Copiar telefonos para SMS</button></div>
+          <div class="sms-contact-list"><?php foreach (array_slice($cityContacts['contacts'], 0, 80) as $contact): ?><div class="sms-contact"><strong><?= e($contact['sms']) ?></strong><span><?= e($contact['direccion']) ?></span></div><?php endforeach; ?></div>
+        <?php else: ?><div class="empty">No encontre telefonos asociados a esa ciudad.</div><?php endif; ?>
+      <?php endif; ?>
     </section>
   </section>
   <?php if ($mapsApiKey && $points): ?><script>
@@ -1490,6 +1540,7 @@ function route(): void {
                 'reports' => $heatmap['reports'],
                 'stats' => $heatmap['stats'],
                 'mapsApiKey' => envv('API_KEY'),
+                'cityContacts' => heatmap_city_contacts($_GET['ciudad'] ?? ''),
             ]);
             return;
         }
