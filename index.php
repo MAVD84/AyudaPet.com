@@ -815,7 +815,7 @@ function heatmap_city_contacts(?string $city): array {
     $stmt->execute(array_map(fn($term) => '%' . $term . '%', $terms));
     $seen = [];
     $contacts = [];
-    $excluded = array_merge(admin_phones(), [normalize_phone(DEFAULT_PUBLIC_CONTACT)]);
+    $excluded = array_filter([normalize_phone(DEFAULT_PUBLIC_CONTACT)]);
     foreach ($stmt->fetchAll() as $row) {
         foreach ([$row['reportado_por'] ?? null, $row['contacto'] ?? null] as $rawPhone) {
             $phone = normalize_phone($rawPhone);
