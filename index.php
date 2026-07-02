@@ -802,13 +802,17 @@ function heatmap_city_contacts(?string $city): array {
     ensure_archive_table();
     $city = trim((string)$city);
     if ($city === '') return ['city' => '', 'contacts' => [], 'sms' => ''];
+    $terms = preg_split('/\s+/', preg_replace('/[^\p{L}\p{N}]+/u', ' ', lower_text($city)) ?: '', -1, PREG_SPLIT_NO_EMPTY);
+    $terms = array_values(array_filter($terms, fn($term) => !in_array($term, ['cd', 'ciudad', 'mx', 'mexico'], true)));
+    if (!$terms) $terms = [$city];
+    $where = implode(' AND ', array_fill(0, count($terms), 'direccion LIKE ?'));
     $stmt = db()->prepare("SELECT reportado_por, contacto, direccion, COUNT(*) AS reportes, MAX(archivado_at) AS ultimo
         FROM mascotas_archivadas
-        WHERE direccion LIKE ?
+        WHERE {$where}
         GROUP BY reportado_por, contacto, direccion
         ORDER BY ultimo DESC
         LIMIT 600");
-    $stmt->execute(['%' . $city . '%']);
+    $stmt->execute(array_map(fn($term) => '%' . $term . '%', $terms));
     $seen = [];
     $contacts = [];
     $excluded = array_merge(admin_phones(), [normalize_phone(DEFAULT_PUBLIC_CONTACT)]);
@@ -1099,6 +1103,7 @@ CSS;
 
 function js(): string {
     return <<<'JS'
+function escapeHtml(value){return String(value||"").replace(/[&<>"']/g,(char)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[char]))}
 function formatLocalPhone(value){const digits=value.replace(/\D/g,"").slice(0,10);if(digits.length<=3)return digits;if(digits.length<=6)return `(${digits.slice(0,3)}) ${digits.slice(3)}`;return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`}
 document.querySelectorAll("[data-phone-input]").forEach((input)=>{input.addEventListener("input",()=>{input.value=formatLocalPhone(input.value)});input.form?.addEventListener("submit",()=>{input.value=input.value.replace(/\D/g,"").slice(0,10)})});
 document.querySelectorAll("[data-menu-open]").forEach((button)=>button.addEventListener("click",()=>document.body.classList.add("menu-open")));
@@ -1109,7 +1114,8 @@ document.querySelectorAll("[data-zoom-src]").forEach((image)=>image.addEventList
 document.querySelectorAll("[data-lightbox-close]").forEach((button)=>button.addEventListener("click",closeLightbox));lightbox?.addEventListener("click",(event)=>{if(event.target===lightbox)closeLightbox()});document.addEventListener("keydown",(event)=>{if(event.key==="Escape")closeLightbox()});
 document.querySelectorAll("[data-remove-image]").forEach((button)=>button.addEventListener("click",async(event)=>{event.preventDefault();const input=button.querySelector("input");const item=button.closest(".edit-image-item");if(input)input.checked=true;item?.classList.add("removing");if(!button.dataset.removeUrl)return;try{const response=await fetch(button.dataset.removeUrl,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({target:button.dataset.removeTarget,image:button.dataset.removeImageUrl||null})});if(!response.ok)throw new Error("remove failed")}catch(error){if(input)input.checked=false;item?.classList.remove("removing");alert("No se pudo eliminar la imagen. Intenta de nuevo.")}}));
 document.querySelectorAll("[data-copy-url]").forEach((button)=>button.addEventListener("click",async()=>{const url=button.dataset.copyUrl;if(!url)return;try{await navigator.clipboard.writeText(url)}catch(error){const input=document.createElement("input");input.value=url;document.body.appendChild(input);input.select();document.execCommand("copy");input.remove()}const original=button.textContent;button.textContent="Copiado";window.setTimeout(()=>{button.textContent=original},1600)}));
-document.querySelectorAll("[data-copy-sms]").forEach((button)=>button.addEventListener("click",async()=>{const box=document.querySelector("[data-sms-copy]");const text=box?.value||"";if(!text)return;try{await navigator.clipboard.writeText(text)}catch(error){box?.focus();box?.select();document.execCommand("copy")}const original=button.textContent;button.textContent="Copiado";window.setTimeout(()=>{button.textContent=original},1600)}));
+document.addEventListener("click",async(event)=>{const button=event.target.closest("[data-copy-sms]");if(!button)return;const box=document.querySelector("[data-sms-copy]");const text=box?.value||"";if(!text)return;try{await navigator.clipboard.writeText(text)}catch(error){box?.focus();box?.select();document.execCommand("copy")}const original=button.textContent;button.textContent="Copiado";window.setTimeout(()=>{button.textContent=original},1600)});
+document.querySelectorAll("[data-sms-search]").forEach((form)=>form.addEventListener("submit",async(event)=>{event.preventDefault();const input=form.querySelector("[name='ciudad']");const results=document.querySelector("[data-sms-results]");const city=(input?.value||"").trim();if(!results||!city)return;const button=form.querySelector("button[type='submit']");const original=button?.textContent||"";if(button){button.disabled=true;button.textContent="Buscando"}results.innerHTML='<div class="empty">Buscando telefonos...</div>';try{const response=await fetch(`/mapa-calor/contactos?ciudad=${encodeURIComponent(city)}`,{headers:{"Accept":"application/json"}});const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.message||"Error");const count=(data.contacts||[]).length;let html=`<p class="filter-meta">${count} telefono${count===1?"":"s"} para ${escapeHtml(data.city)}.</p>`;if(count){html+=`<textarea class="sms-copy-box" readonly data-sms-copy>${escapeHtml(data.sms||"")}</textarea><div class="actions"><button class="btn share" type="button" data-copy-sms>Copiar telefonos para SMS</button></div><div class="sms-contact-list">`;html+=(data.contacts||[]).slice(0,80).map((contact)=>`<div class="sms-contact"><strong>${escapeHtml(contact.sms)}</strong><span>${escapeHtml(contact.direccion)}</span></div>`).join("");html+="</div>"}else{html+='<div class="empty">No encontre telefonos asociados a esa ciudad.</div>'}results.innerHTML=html;history.replaceState(null,"",`/mapa-calor?ciudad=${encodeURIComponent(city)}`)}catch(error){results.innerHTML='<div class="empty">No se pudo buscar. Intenta de nuevo.</div>'}finally{if(button){button.disabled=false;button.textContent=original}}}));
 document.querySelectorAll("[data-native-share-button]").forEach((button)=>button.addEventListener("click",async()=>{const shareData={title:button.dataset.shareTitle||document.title,text:button.dataset.shareText||"",url:button.dataset.shareUrl||window.location.href};if(navigator.share){try{await navigator.share(shareData);return}catch(error){if(error?.name==="AbortError")return}}const original=button.textContent;button.textContent="Usa copiar enlace";window.setTimeout(()=>{button.textContent=original},1800)}));
 document.querySelectorAll("[data-max-files]").forEach((input)=>input.addEventListener("change",()=>{const maxFiles=Number(input.dataset.maxFiles||0);if(input.files.length>maxFiles){input.value="";alert(maxFiles>0?`Solo puedes seleccionar hasta ${maxFiles} imagenes.`:"Ya tienes el maximo de 3 fotos adicionales.")}}));
 document.querySelectorAll("[data-contact-toggle]").forEach((toggle)=>{const box=document.querySelector("[data-contact-own]");const input=document.querySelector("[data-contact-input]");const sync=()=>{if(!box)return;box.classList.toggle("show",toggle.checked);if(input){input.disabled=!toggle.checked;if(!toggle.checked)input.value=""}};toggle.addEventListener("change",sync);sync()});
@@ -1435,10 +1441,11 @@ function view_mapa_calor(array $reports, array $stats, ?string $mapsApiKey, arra
     </section>
     <section class="panel sms-panel">
       <div class="section-head" style="margin-top:0;"><div><h2>Telefonos por ciudad</h2><p>Busca numeros registrados asociados a reportes de esa ciudad.</p></div></div>
-      <form class="search-form sms-search" method="get" action="/mapa-calor">
+      <form class="search-form sms-search" method="get" action="/mapa-calor" data-sms-search>
         <div class="field"><label for="ciudad">Ciudad o zona</label><input id="ciudad" name="ciudad" value="<?= e($cityContacts['city'] ?? '') ?>" placeholder="Ej. Juarez, San Felipe del Real"></div>
         <button class="btn primary" type="submit">Buscar telefonos</button>
       </form>
+      <div data-sms-results>
       <?php if (($cityContacts['city'] ?? '') !== ''): ?>
         <p class="filter-meta"><?= count($cityContacts['contacts']) ?> telefono<?= count($cityContacts['contacts']) === 1 ? '' : 's' ?> para <?= e($cityContacts['city']) ?>.</p>
         <?php if ($cityContacts['contacts']): ?>
@@ -1447,6 +1454,7 @@ function view_mapa_calor(array $reports, array $stats, ?string $mapsApiKey, arra
           <div class="sms-contact-list"><?php foreach (array_slice($cityContacts['contacts'], 0, 80) as $contact): ?><div class="sms-contact"><strong><?= e($contact['sms']) ?></strong><span><?= e($contact['direccion']) ?></span></div><?php endforeach; ?></div>
         <?php else: ?><div class="empty">No encontre telefonos asociados a esa ciudad.</div><?php endif; ?>
       <?php endif; ?>
+      </div>
     </section>
   </section>
   <?php if ($mapsApiKey && $points): ?><script>
@@ -1542,6 +1550,19 @@ function route(): void {
                 'mapsApiKey' => envv('API_KEY'),
                 'cityContacts' => heatmap_city_contacts($_GET['ciudad'] ?? ''),
             ]);
+            return;
+        }
+
+        if ($path === '/mapa-calor/contactos') {
+            require_login();
+            header('Content-Type: application/json; charset=UTF-8');
+            if (!is_admin_user()) {
+                http_response_code(403);
+                echo json_encode(['ok' => false, 'message' => 'Sin permiso']);
+                return;
+            }
+            $contacts = heatmap_city_contacts($_GET['ciudad'] ?? '');
+            echo json_encode(['ok' => true] + $contacts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             return;
         }
 
