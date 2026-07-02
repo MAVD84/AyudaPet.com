@@ -24,3 +24,10 @@ define('STRIPE_PRICE_ID', '');
 
 define('BOOST_NOTIFY_EMAIL', '');
 define('MAIL_FROM', 'no-reply@ayudapet.com');
+define('SMTP_HOST', 'mail.ayudapet.com');
+define('SMTP_PORT', '587');
+define('SMTP_USER', 'no-reply@ayudapet.com');
+define('SMTP_PASS', '');
+define('SMTP_SECURE', 'tls');
+define('SMTP_FROM', 'no-reply@ayudapet.com');
+define('SMTP_FROM_NAME', 'AyudaPet');

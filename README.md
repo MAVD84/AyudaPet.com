@@ -38,6 +38,13 @@ STRIPE_PRICE_ID=
 
 BOOST_NOTIFY_EMAIL=
 MAIL_FROM=no-reply@ayudapet.com
+SMTP_HOST=mail.ayudapet.com
+SMTP_PORT=587
+SMTP_USER=no-reply@ayudapet.com
+SMTP_PASS=
+SMTP_SECURE=tls
+SMTP_FROM=no-reply@ayudapet.com
+SMTP_FROM_NAME=AyudaPet
 ```
 
 ## Base de datos
@@ -70,3 +77,4 @@ Necesitas un MySQL accesible y las variables de entorno `MYSQL_*`.
 - No subas archivos `.env` al repositorio.
 - Para impulsar anuncios, crea un producto/precio en Stripe por `$1,300 MXN`, usa ese `STRIPE_PRICE_ID` y configura el webhook a `https://ayudapet.com/stripe/webhook` escuchando `checkout.session.completed`.
 - `BOOST_NOTIFY_EMAIL` recibe un correo cada vez que un anuncio se activa como impulsado.
+- Para correos SMTP usa el email real creado en tu hosting. Normalmente `SMTP_PORT=587` con `SMTP_SECURE=tls`; si tu hosting indica puerto `465`, usa `SMTP_SECURE=ssl`.

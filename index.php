@@ -202,6 +202,77 @@ function create_boost_checkout(array $pet): string {
     return (string)$session['url'];
 }
 
+function smtp_read($socket): string {
+    $response = '';
+    while (($line = fgets($socket, 515)) !== false) {
+        $response .= $line;
+        if (isset($line[3]) && $line[3] === ' ') break;
+    }
+    return $response;
+}
+
+function smtp_command($socket, string $command, array $expected): string {
+    fwrite($socket, $command . "\r\n");
+    $response = smtp_read($socket);
+    $code = (int)substr($response, 0, 3);
+    if (!in_array($code, $expected, true)) {
+        throw new RuntimeException('SMTP error ' . trim($response));
+    }
+    return $response;
+}
+
+function mail_header_text(string $value): string {
+    if (function_exists('mb_encode_mimeheader')) {
+        return mb_encode_mimeheader($value, 'UTF-8');
+    }
+    return '=?UTF-8?B?' . base64_encode($value) . '?=';
+}
+
+function smtp_send_mail(string $to, string $subject, string $body, string $from, string $fromName): bool {
+    $host = envv('SMTP_HOST');
+    $user = envv('SMTP_USER');
+    $pass = envv('SMTP_PASS');
+    if (!$host || !$user || !$pass) return false;
+    $port = (int)envv('SMTP_PORT', '587');
+    $secure = lower_text((string)envv('SMTP_SECURE', 'tls'));
+    $remote = $secure === 'ssl' ? 'ssl://' . $host : $host;
+    $socket = fsockopen($remote, $port, $errno, $errstr, 20);
+    if (!$socket) throw new RuntimeException("SMTP conexion fallida: {$errstr}");
+    stream_set_timeout($socket, 20);
+    smtp_read($socket);
+    smtp_command($socket, 'EHLO ' . APP_DOMAIN, [250]);
+    if ($secure === 'tls') {
+        smtp_command($socket, 'STARTTLS', [220]);
+        if (!stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
+            throw new RuntimeException('SMTP no pudo iniciar TLS.');
+        }
+        smtp_command($socket, 'EHLO ' . APP_DOMAIN, [250]);
+    }
+    smtp_command($socket, 'AUTH LOGIN', [334]);
+    smtp_command($socket, base64_encode($user), [334]);
+    smtp_command($socket, base64_encode($pass), [235]);
+    smtp_command($socket, 'MAIL FROM:<' . $from . '>', [250]);
+    smtp_command($socket, 'RCPT TO:<' . $to . '>', [250, 251]);
+    smtp_command($socket, 'DATA', [354]);
+    $headers = [
+        'From: ' . mail_header_text($fromName) . ' <' . $from . '>',
+        'To: <' . $to . '>',
+        'Subject: ' . mail_header_text($subject),
+        'MIME-Version: 1.0',
+        'Content-Type: text/plain; charset=UTF-8',
+        'Content-Transfer-Encoding: 8bit',
+    ];
+    $message = implode("\r\n", $headers) . "\r\n\r\n" . str_replace(["\r\n", "\r"], "\n", $body);
+    $message = str_replace("\n.", "\n..", $message);
+    fwrite($socket, str_replace("\n", "\r\n", $message) . "\r\n.\r\n");
+    $response = smtp_read($socket);
+    $code = (int)substr($response, 0, 3);
+    smtp_command($socket, 'QUIT', [221]);
+    fclose($socket);
+    if ($code !== 250) throw new RuntimeException('SMTP no acepto el mensaje: ' . trim($response));
+    return true;
+}
+
 function send_boost_notification(array $pet, string $sessionId, string $boostedUntil): void {
     $to = envv('BOOST_NOTIFY_EMAIL');
     if (!$to || !filter_var($to, FILTER_VALIDATE_EMAIL)) return;
@@ -220,15 +291,14 @@ function send_boost_notification(array $pet, string $sessionId, string $boostedU
         '',
         'Ver reporte: ' . $url,
     ];
-    $from = envv('MAIL_FROM', 'no-reply@' . APP_DOMAIN);
-    $headers = [
-        'From: AyudaPet <' . $from . '>',
-        'Reply-To: ' . $from,
-        'Content-Type: text/plain; charset=UTF-8',
-    ];
-    if (!mail($to, $subject, implode("\n", $lines), implode("\r\n", $headers))) {
-        error_log('No se pudo enviar correo de anuncio impulsado a ' . $to);
+    $from = envv('SMTP_FROM', envv('MAIL_FROM', 'no-reply@' . APP_DOMAIN));
+    $fromName = envv('SMTP_FROM_NAME', 'AyudaPet');
+    try {
+        if (smtp_send_mail($to, $subject, implode("\n", $lines), $from, $fromName)) return;
+    } catch (Throwable $e) {
+        error_log('No se pudo enviar correo SMTP de anuncio impulsado: ' . $e->getMessage());
     }
+    error_log('Correo de anuncio impulsado no enviado: faltan variables SMTP o fallo el envio.');
 }
 
 function activate_boost(string $petId, string $sessionId): void {
