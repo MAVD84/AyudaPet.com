@@ -173,8 +173,9 @@ function report_type_label(?string $value): string {
 
 function report_status_label(array $pet): string {
     $type = report_type_value($pet['tipo_reporte'] ?? '');
-    if (!empty($pet['encontrado'])) return $type === 'resguardo' ? 'Resuelto' : 'Localizado';
-    return $type === 'resguardo' ? 'En resguardo' : 'Perdido';
+    $female = lower_text((string)($pet['genero'] ?? '')) === 'hembra';
+    if (!empty($pet['encontrado'])) return $female ? 'Localizada' : 'Localizado';
+    return $type === 'resguardo' ? ($female ? 'Resguardada' : 'Resguardado') : ($female ? 'Perdida' : 'Perdido');
 }
 
 function report_status_class(array $pet): string {
@@ -660,7 +661,7 @@ function view_index(array $mascotas, array $stats, array $filters): void { ?>
       </details>
     </aside>
   </section>
-  <section class="panel search-panel"><details class="filter-dropdown" <?= $activeFilter ? 'open' : '' ?>><summary><span>Buscar y filtrar</span></summary><form class="search-form" method="get" action="/"><div class="field"><label for="q">Buscar</label><input id="q" name="q" value="<?= e($filters['q']) ?>" placeholder="Nombre, direccion o contacto"></div><div class="field"><label for="estado">Estado</label><select id="estado" name="estado"><?php foreach (['todos'=>'Todos','perdidos'=>'Perdidos','resguardo'=>'En resguardo','localizados'=>'Localizados'] as $value => $label): ?><option value="<?= e($value) ?>" <?= $filters['estado'] === $value ? 'selected' : '' ?>><?= e($label) ?></option><?php endforeach; ?></select></div><button class="btn primary" type="submit">Buscar</button></form><p class="filter-meta"><?= e($filters['resultados']) ?> resultado<?= $filters['resultados'] == 1 ? '' : 's' ?></p></details></section>
+  <section class="panel search-panel"><details class="filter-dropdown" <?= $activeFilter ? 'open' : '' ?>><summary><span>Buscar y filtrar</span></summary><form class="search-form" method="get" action="/"><div class="field"><label for="q">Buscar</label><input id="q" name="q" value="<?= e($filters['q']) ?>" placeholder="Nombre, direccion o contacto"></div><div class="field"><label for="estado">Estado</label><select id="estado" name="estado"><?php foreach (['todos'=>'Todos','perdidos'=>'Perdidos','resguardo'=>'Resguardados','localizados'=>'Localizados'] as $value => $label): ?><option value="<?= e($value) ?>" <?= $filters['estado'] === $value ? 'selected' : '' ?>><?= e($label) ?></option><?php endforeach; ?></select></div><button class="btn primary" type="submit">Buscar</button></form><p class="filter-meta"><?= e($filters['resultados']) ?> resultado<?= $filters['resultados'] == 1 ? '' : 's' ?></p></details></section>
   <div class="section-head"><div><h2>Reportes recientes</h2><p>Informacion publica enviada por la comunidad.</p></div></div>
   <?php if ($mascotas): ?><section class="grid">
     <?php foreach ($mascotas as $pet): ?>
@@ -774,8 +775,8 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
     $fechaLabel = $isResguardo ? 'Fecha de resguardo' : 'Fecha de extravio';
     $direccionLabel = $isResguardo ? 'Direccion donde se encontro' : 'Direccion de extravio';
     $nombrePlaceholder = $isResguardo ? 'Si no se sabe, dejalo en blanco' : '';
-    $estadoLabel = $isResguardo ? 'Resuelto' : 'Localizado';
-    $estadoHint = $isResguardo ? 'Activalo cuando la mascota ya fue entregada o el caso se resolvio' : 'Activalo cuando la mascota ya fue encontrada';
+    $estadoLabel = 'Localizado';
+    $estadoHint = $isResguardo ? 'Activalo cuando la mascota ya fue entregada o localizada por su familia' : 'Activalo cuando la mascota ya fue encontrada';
     [$edadNumero, $edadUnidad] = age_input_parts($mascota['edad'] ?? '');
     $recompensaInput = money_input_value($mascota['recompensa'] ?? '');
     $collarActual = lower_text($mascota['collar'] ?? '');
