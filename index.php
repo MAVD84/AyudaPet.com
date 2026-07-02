@@ -223,6 +223,11 @@ function stripe_enabled(): bool {
     return (bool)(envv('STRIPE_SECRET_KEY') && envv('STRIPE_PRICE_ID'));
 }
 
+function boost_button_enabled(): bool {
+    $value = lower_text(trim((string)envv('BOOST_BUTTON_ENABLED', 'true')));
+    return !in_array($value, ['0', 'false', 'off', 'no'], true);
+}
+
 function stripe_request(string $method, string $endpoint, array $params = []): array {
     $secret = envv('STRIPE_SECRET_KEY');
     if (!$secret) throw new RuntimeException('Falta STRIPE_SECRET_KEY en el .env.');
@@ -254,6 +259,7 @@ function stripe_request(string $method, string $endpoint, array $params = []): a
 }
 
 function create_boost_checkout(array $pet): string {
+    if (!boost_button_enabled()) throw new RuntimeException('El impulso automatico esta desactivado.');
     if (!stripe_enabled()) throw new RuntimeException('Stripe todavia no esta configurado.');
     $session = stripe_request('POST', 'checkout/sessions', [
         'mode' => 'payment',
@@ -1288,7 +1294,7 @@ function view_detalle(array $mascota, bool $isOwner, array $share, ?string $mapU
     <article class="detail-info">
       <?php if ($isOwner): ?><div class="detail-owner-actions"><a class="btn edit" href="/mascotas/<?= e($mascota['id']) ?>/editar">Editar</a><form method="post" action="/mascotas/<?= e($mascota['id']) ?>/eliminar" onsubmit="return confirm('Eliminar este reporte?');"><button class="btn delete" type="submit">Eliminar</button></form></div><?php endif; ?>
       <?php if ($boostedUntil): ?><div class="boost-panel"><span class="badge boost-badge">Impulsado</span><strong>Activo hasta <?= e($boostedUntil) ?></strong></div><?php endif; ?>
-      <?php if ($isOwner && !$boostedUntil): ?><div class="boost-copy"><div><h2>Impulsa tu anuncio por 10 dias.</h2><p>Lo destacamos en AyudaPet y tambien enviamos tu reporte directo a celulares de personas cercanas a la zona donde se perdio tu mascota.</p><strong><?= e(BOOST_PRICE_LABEL) ?> por <?= e(BOOST_DAYS) ?> dias</strong></div><form method="post" action="/mascotas/<?= e($mascota['id']) ?>/impulsar"><button class="btn boost" type="submit">Impulsar ahora</button></form></div><?php endif; ?>
+      <?php if ($isOwner && !$boostedUntil && boost_button_enabled()): ?><div class="boost-copy"><div><h2>Impulsa tu anuncio por 10 dias.</h2><p>Lo destacamos en AyudaPet y tambien enviamos tu reporte directo a celulares de personas cercanas a la zona donde se perdio tu mascota.</p><strong><?= e(BOOST_PRICE_LABEL) ?> por <?= e(BOOST_DAYS) ?> dias</strong></div><form method="post" action="/mascotas/<?= e($mascota['id']) ?>/impulsar"><button class="btn boost" type="submit">Impulsar ahora</button></form></div><?php endif; ?>
       <div class="info-list"><?php info_row('Tipo de reporte', report_type_label($mascota['tipo_reporte'] ?? 'extravio')); info_row('Fecha', $mascota['fecha']); info_row('Nombre de mascota', $mascota['nombre']); info_row('Descripcion', $mascota['descripcion']); ?></div>
       <div class="split-info"><?php foreach ([['Tipo de mascota','tipo_mascota'],['Edad','edad'],['Raza','raza'],['Genero','genero'],['Color','color'],['Collar','collar'],['Docil','docil']] as [$label,$key]) info_row($label, $mascota[$key]); ?></div>
       <?php if ($mapUrl): ?><div class="map-frame"><iframe src="<?= e($mapUrl) ?>" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen title="Mapa de direccion de extravio"></iframe></div><?php endif; ?>
@@ -1878,6 +1884,7 @@ function route(): void {
             $pet = get_mascota($m[1]);
             if (!$pet) { render('error', ['title' => 'Reporte no encontrado', 'message' => 'El reporte solicitado no existe.'], 404); return; }
             if (!owns_report($pet)) { render('error', ['title' => 'Sin permiso', 'message' => 'Solo puedes impulsar tus propios reportes.'], 403); return; }
+            if (!boost_button_enabled()) { flash('El impulso automatico esta desactivado temporalmente.', 'warning'); redirect_to('/mascotas/' . $pet['id']); }
             if (is_boosted($pet)) { flash('Este reporte ya esta impulsado.', 'success'); redirect_to('/mascotas/' . $pet['id']); }
             $checkoutUrl = create_boost_checkout($pet);
             redirect_to($checkoutUrl);
