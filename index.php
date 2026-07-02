@@ -551,6 +551,7 @@ function render(string $view, array $data = [], int $status = 200): void {
         <a class="btn ghost <?= $active('/login') ?>" href="/login">Entrar</a>
         <a class="btn ghost <?= $active('/registro') ?>" href="/registro">Crear cuenta</a>
         <a class="btn ghost <?= $active('/') ?>" href="/">Reportes</a>
+        <a class="btn donate" href="https://donate.stripe.com/6oU3cpg1T0Y60sOerJ3ks00" target="_blank" rel="noopener">Donar</a>
       <?php endif; ?>
     </div>
     <div class="menu-foot">Registro exclusivo con telefono mexicano.</div>
@@ -617,7 +618,7 @@ document.querySelectorAll("[data-native-share-button]").forEach((button)=>button
 document.querySelectorAll("[data-max-files]").forEach((input)=>input.addEventListener("change",()=>{const maxFiles=Number(input.dataset.maxFiles||0);if(input.files.length>maxFiles){input.value="";alert(maxFiles>0?`Solo puedes seleccionar hasta ${maxFiles} imagenes.`:"Ya tienes el maximo de 3 fotos adicionales.")}}));
 document.querySelectorAll("[data-contact-toggle]").forEach((toggle)=>{const box=document.querySelector("[data-contact-own]");const input=document.querySelector("[data-contact-input]");const sync=()=>{if(!box)return;box.classList.toggle("show",toggle.checked);if(input){input.disabled=!toggle.checked;if(!toggle.checked)input.value=""}};toggle.addEventListener("change",sync);sync()});
 document.querySelectorAll("[data-money-input]").forEach((input)=>{const preview=document.querySelector("[data-money-preview]");const sync=()=>{if(!preview)return;const amount=Number(String(input.value||"").replace(/\D/g,""));preview.textContent=amount>0?`$${amount.toLocaleString("es-MX")} M.N.`:"Se mostrara como $1,000 M.N."};input.addEventListener("input",sync);sync()});
-(()=>{const modal=document.querySelector("[data-donation-modal]");if(!modal)return;const key="ayudapet_donation_prompt";const close=()=>{modal.classList.remove("open");modal.setAttribute("aria-hidden","true")};try{if(localStorage.getItem(key))return}catch(error){}window.setTimeout(()=>{modal.classList.add("open");modal.setAttribute("aria-hidden","false")},500);modal.querySelector("[data-donation-no]")?.addEventListener("click",()=>{try{localStorage.setItem(key,"no")}catch(error){}close()});modal.querySelector("[data-donation-yes]")?.addEventListener("click",()=>{try{localStorage.setItem(key,"yes")}catch(error){}});})();
+(()=>{const modal=document.querySelector("[data-donation-modal]");if(!modal)return;const path=window.location.pathname;if(path==="/reportar"||/\/mascotas\/[a-f0-9]{32}\/editar$/.test(path))return;const key="ayudapet_donation_prompt";const close=()=>{modal.classList.remove("open");modal.setAttribute("aria-hidden","true")};try{if(localStorage.getItem(key))return}catch(error){}window.setTimeout(()=>{modal.classList.add("open");modal.setAttribute("aria-hidden","false")},180000);modal.querySelector("[data-donation-no]")?.addEventListener("click",()=>{try{localStorage.setItem(key,"no")}catch(error){}close()});modal.querySelector("[data-donation-yes]")?.addEventListener("click",()=>{try{localStorage.setItem(key,"yes")}catch(error){}});})();
 JS;
 }
 
