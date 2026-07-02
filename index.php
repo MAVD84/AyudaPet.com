@@ -228,11 +228,11 @@ function mail_header_text(string $value): string {
     return '=?UTF-8?B?' . base64_encode($value) . '?=';
 }
 
-function smtp_send_mail(string $to, string $subject, string $body, string $from, string $fromName): bool {
+function smtp_send_mail(string $to, string $subject, string $body, string $from, string $fromName): void {
     $host = envv('SMTP_HOST');
     $user = envv('SMTP_USER');
     $pass = envv('SMTP_PASS');
-    if (!$host || !$user || !$pass) return false;
+    if (!$host || !$user || !$pass) throw new RuntimeException('Faltan SMTP_HOST, SMTP_USER o SMTP_PASS.');
     $port = (int)envv('SMTP_PORT', '587');
     $secure = lower_text((string)envv('SMTP_SECURE', 'tls'));
     $remote = $secure === 'ssl' ? 'ssl://' . $host : $host;
@@ -270,15 +270,33 @@ function smtp_send_mail(string $to, string $subject, string $body, string $from,
     smtp_command($socket, 'QUIT', [221]);
     fclose($socket);
     if ($code !== 250) throw new RuntimeException('SMTP no acepto el mensaje: ' . trim($response));
-    return true;
+}
+
+function send_notification_email(string $subject, array $lines): array {
+    $to = envv('BOOST_NOTIFY_EMAIL');
+    if (!$to || !filter_var($to, FILTER_VALIDATE_EMAIL)) return [false, 'BOOST_NOTIFY_EMAIL no es valido o esta vacio.'];
+    $from = envv('SMTP_FROM', envv('MAIL_FROM', 'no-reply@' . APP_DOMAIN));
+    $fromName = envv('SMTP_FROM_NAME', 'AyudaPet');
+    try {
+        smtp_send_mail($to, $subject, implode("\n", $lines), $from, $fromName);
+        return [true, 'Correo enviado por SMTP a ' . $to . '.'];
+    } catch (Throwable $e) {
+        error_log('No se pudo enviar correo SMTP de anuncio impulsado: ' . $e->getMessage());
+        $headers = [
+            'From: ' . $fromName . ' <' . $from . '>',
+            'Reply-To: ' . $from,
+            'Content-Type: text/plain; charset=UTF-8',
+        ];
+        if (mail($to, $subject, implode("\n", $lines), implode("\r\n", $headers))) {
+            return [true, 'SMTP fallo, pero se envio con mail() de PHP a ' . $to . '. Error SMTP: ' . $e->getMessage()];
+        }
+        return [false, $e->getMessage()];
+    }
 }
 
 function send_boost_notification(array $pet, string $sessionId, string $boostedUntil): void {
-    $to = envv('BOOST_NOTIFY_EMAIL');
-    if (!$to || !filter_var($to, FILTER_VALIDATE_EMAIL)) return;
-    $subject = 'Nuevo anuncio impulsado en AyudaPet';
     $url = full_url('/mascotas/' . $pet['id']);
-    $lines = [
+    [$sent, $message] = send_notification_email('Nuevo anuncio impulsado en AyudaPet', [
         'Se activo un anuncio impulsado en AyudaPet.',
         '',
         'Mascota: ' . ($pet['nombre'] ?? 'Sin nombre'),
@@ -290,15 +308,8 @@ function send_boost_notification(array $pet, string $sessionId, string $boostedU
         'Stripe session: ' . $sessionId,
         '',
         'Ver reporte: ' . $url,
-    ];
-    $from = envv('SMTP_FROM', envv('MAIL_FROM', 'no-reply@' . APP_DOMAIN));
-    $fromName = envv('SMTP_FROM_NAME', 'AyudaPet');
-    try {
-        if (smtp_send_mail($to, $subject, implode("\n", $lines), $from, $fromName)) return;
-    } catch (Throwable $e) {
-        error_log('No se pudo enviar correo SMTP de anuncio impulsado: ' . $e->getMessage());
-    }
-    error_log('Correo de anuncio impulsado no enviado: faltan variables SMTP o fallo el envio.');
+    ]);
+    if (!$sent) error_log('Correo de anuncio impulsado no enviado: ' . $message);
 }
 
 function activate_boost(string $petId, string $sessionId): void {
@@ -1309,6 +1320,21 @@ function route(): void {
             if (($_POST['new_password'] ?? '') !== ($_POST['confirm_password'] ?? '') || strlen((string)($_POST['new_password'] ?? '')) < 8) { flash('Revisa la nueva contrasena.', 'error'); redirect_to('/perfil'); }
             db()->prepare('UPDATE usuarios SET password_hash = ? WHERE telefono = ?')->execute([password_hash((string)$_POST['new_password'], PASSWORD_DEFAULT), current_user_phone()]);
             flash('Contrasena actualizada.', 'success'); redirect_to('/perfil');
+        }
+
+        if ($path === '/correo/prueba') {
+            require_login();
+            [$sent, $message] = send_notification_email('Prueba de correo AyudaPet', [
+                'Esta es una prueba de correo desde AyudaPet.',
+                '',
+                'Usuario de prueba: ' . current_user_phone(),
+                'Fecha: ' . date('Y-m-d H:i:s'),
+            ]);
+            render('error', [
+                'title' => $sent ? 'Correo enviado' : 'Correo no enviado',
+                'message' => $message,
+            ], $sent ? 200 : 500);
+            return;
         }
 
         if ($path === '/reportar') {
