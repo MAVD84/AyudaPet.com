@@ -864,6 +864,24 @@ function contact_rows_to_sms(array $rows): array {
     return $contacts;
 }
 
+function location_term_aliases(string $term): array {
+    $aliases = [
+        'chihuahua' => ['chihuahua', 'chih'],
+        'chih' => ['chih', 'chihuahua'],
+        'tamaulipas' => ['tamaulipas', 'tamps'],
+        'tamps' => ['tamps', 'tamaulipas'],
+        'nuevo' => ['nuevo'],
+        'leon' => ['leon'],
+        'nuevo leon' => ['nuevo leon', 'nl', 'n l'],
+        'coahuila' => ['coahuila', 'coah'],
+        'sonora' => ['sonora', 'son'],
+        'durango' => ['durango', 'dgo'],
+        'sinaloa' => ['sinaloa', 'sin'],
+        'jalisco' => ['jalisco', 'jal'],
+    ];
+    return array_values(array_unique($aliases[$term] ?? [$term]));
+}
+
 function heatmap_city_contacts(?string $city): array {
     ensure_archive_table();
     $city = trim((string)$city);
@@ -871,18 +889,24 @@ function heatmap_city_contacts(?string $city): array {
     $terms = preg_split('/\s+/', preg_replace('/[^\p{L}\p{N}]+/u', ' ', lower_text($city)) ?: '', -1, PREG_SPLIT_NO_EMPTY);
     $terms = array_values(array_filter($terms, fn($term) => !in_array($term, ['cd', 'ciudad', 'mx', 'mexico'], true)));
     if (!$terms) $terms = [$city];
-    $where = implode(' AND ', array_fill(0, count($terms), '(direccion LIKE ? OR direccion_completa LIKE ?)'));
+    $groups = [];
+    $params = [];
+    foreach ($terms as $term) {
+        $parts = [];
+        foreach (location_term_aliases($term) as $alias) {
+            $parts[] = '(direccion LIKE ? OR direccion_completa LIKE ?)';
+            $params[] = '%' . $alias . '%';
+            $params[] = '%' . $alias . '%';
+        }
+        $groups[] = '(' . implode(' OR ', $parts) . ')';
+    }
+    $where = implode(' AND ', $groups);
     $stmt = db()->prepare("SELECT reportado_por, contacto, direccion, direccion_completa, COUNT(*) AS reportes, MAX(archivado_at) AS ultimo
         FROM mascotas_archivadas
         WHERE {$where}
         GROUP BY reportado_por, contacto, direccion, direccion_completa
         ORDER BY ultimo DESC
         LIMIT 600");
-    $params = [];
-    foreach ($terms as $term) {
-        $params[] = '%' . $term . '%';
-        $params[] = '%' . $term . '%';
-    }
     $stmt->execute($params);
     $contacts = contact_rows_to_sms($stmt->fetchAll());
     $source = 'texto';
