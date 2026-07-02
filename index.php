@@ -39,6 +39,7 @@ const APP_NAME = 'AyudaPet';
 const APP_DOMAIN = 'ayudapet.com';
 const MAX_SECONDARY_IMAGES = 3;
 const DEFAULT_PUBLIC_CONTACT = '+526567787712';
+const DEFAULT_ADMIN_PHONE = '6567787712';
 const BOOST_DAYS = 10;
 const BOOST_PRICE_LABEL = '$1,300 M.N.';
 
@@ -581,6 +582,21 @@ function normalize_phone(?string $raw): ?string {
     return preg_match('/^[2-9][0-9]{9}$/', $digits) ? $digits : null;
 }
 
+function admin_phones(): array {
+    $raw = envv('ADMIN_PHONES', envv('ADMIN_PHONE', DEFAULT_ADMIN_PHONE));
+    $phones = [];
+    foreach (preg_split('/[\s,;]+/', (string)$raw) as $phone) {
+        $normalized = normalize_phone($phone);
+        if ($normalized) $phones[] = $normalized;
+    }
+    return array_values(array_unique($phones));
+}
+
+function is_admin_user(): bool {
+    $phone = current_user_phone();
+    return $phone !== null && in_array($phone, admin_phones(), true);
+}
+
 function phone_digits(?string $raw): string {
     $digits = preg_replace('/\D+/', '', $raw ?? '');
     if (strlen($digits) === 12 && starts_with($digits, '52')) return substr($digits, 2);
@@ -762,6 +778,24 @@ function sync_report_archives(int $limit = 500): array {
         }
     }
     return ['checked' => count($pets), 'synced' => $synced, 'failed' => $failed];
+}
+
+function heatmap_reports(): array {
+    ensure_archive_table();
+    $stmt = db()->query("SELECT id, nombre, tipo_reporte, tipo_mascota, direccion, ubicacion_lat, ubicacion_lng, encontrado, creado_at, archivado_at
+        FROM mascotas_archivadas
+        WHERE ubicacion_lat IS NOT NULL AND ubicacion_lng IS NOT NULL
+        ORDER BY archivado_at DESC
+        LIMIT 2000");
+    $reports = $stmt->fetchAll();
+    $stats = ['total' => count($reports), 'extravio' => 0, 'resguardo' => 0, 'en_casa' => 0];
+    foreach ($reports as $report) {
+        $type = report_type_value($report['tipo_reporte'] ?? '');
+        if ($type === 'resguardo') $stats['resguardo']++;
+        else $stats['extravio']++;
+        if (!empty($report['encontrado'])) $stats['en_casa']++;
+    }
+    return ['reports' => $reports, 'stats' => $stats];
 }
 
 function pet_secondaries(array $pet): array {
@@ -947,6 +981,7 @@ function render(string $view, array $data = [], int $status = 200): void {
   <style><?= css() ?></style>
   <style>.switch input:checked~.switch-ui{background:var(--green)}.switch input:checked~.switch-ui:before{transform:translateX(22px)}.inline-fields{display:grid;grid-template-columns:88px minmax(0,132px);gap:8px;align-items:center}.inline-fields select,.inline-fields input{min-width:0}.pet-body{padding-right:20px}.btn.facebook{background:#1877f2;color:#fff;border-color:#1877f2}.btn.facebook:hover{background:#145dbd}.btn.donate{background:#22607a;color:#fff;border-color:#22607a}.btn.donate:hover{background:#18475c}.btn.boost{background:#f6a623;color:#18212f;border-color:#f6a623}.btn.boost:hover{background:#e99612}.badge.rescue{background:#fff8e8;color:var(--amber)}.boost-badge{width:max-content;background:#fff4d8;color:#8a570b}.pet-card.boosted{border-color:#f0c56f;box-shadow:0 16px 42px rgba(164,102,20,.16)}.boost-panel,.boost-copy{margin-bottom:16px;padding:14px;border:1px solid #f0c56f;border-radius:8px;background:#fffaf0}.boost-panel{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.boost-copy h2{margin:0 0 8px;font-size:1.15rem}.boost-copy p{margin:0 0 10px;color:var(--muted);line-height:1.5}.filter-dropdown{position:relative}.filter-dropdown summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:14px;padding-right:32px;cursor:pointer;font-weight:900}.filter-dropdown summary::-webkit-details-marker{display:none}.filter-dropdown summary:after{content:"+";position:absolute;top:0;right:0;color:var(--muted);font-size:1.25rem;line-height:1}.filter-dropdown[open] summary:after{content:"-"}.filter-dropdown .search-form{margin-top:16px}.modal-page{min-height:calc(100vh - 170px);display:grid;place-items:center;padding:clamp(16px,4vw,34px)}.report-type-modal{width:min(680px,100%);padding:clamp(20px,4vw,34px)}.report-type-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:20px}.report-type-option{display:grid;gap:8px;padding:18px;border:1px solid var(--line);border-radius:8px;background:#fbfdff}.report-type-option:hover{border-color:var(--brand);box-shadow:0 12px 28px rgba(20,32,48,.08)}.report-type-option strong{font-size:1.05rem}.report-type-option span{color:var(--muted);line-height:1.45}.donation-modal{position:fixed;inset:0;z-index:90;display:none;place-items:center;padding:18px;background:rgba(10,16,24,.48)}.donation-modal.open{display:grid}.donation-dialog{width:min(460px,100%);padding:24px;border:1px solid var(--line);border-radius:8px;background:#fff;box-shadow:0 24px 80px rgba(20,32,48,.22)}.donation-dialog h2{margin:0;font-size:1.6rem}.donation-dialog p:not(.eyebrow){color:var(--muted);line-height:1.55}.detail-media .views-badge,.detail-media .photo-badge{top:10px;min-width:86px;min-height:28px;padding:0 10px;font-size:.78rem;line-height:1;align-items:center;justify-content:center;text-align:center}.views-badge{position:absolute;left:10px;box-shadow:0 10px 24px rgba(20,32,48,.16);background:rgba(255,255,255,.94);color:var(--ink)}@media(max-width:640px){.report-type-actions{grid-template-columns:1fr}}@media(max-width:420px){.pet-body{padding-right:12px}.filter-dropdown summary{align-items:flex-start;flex-direction:column}.detail-media .views-badge,.detail-media .photo-badge{top:7px;min-width:80px;min-height:24px;padding:0 8px;font-size:.68rem}.views-badge{left:7px}}</style>
   <style>.btn{font-size:.92rem;line-height:1}.btn.logout,.btn.back-report{background:#b93824;color:#fff;border-color:#b93824}.btn.logout:hover,.btn.back-report:hover{background:#922b1b}.btn.call{background:#0d83f2;color:#fff;border-color:#0d83f2}.btn.call:hover{background:#096dce}.btn.whatsapp{background:#128C7E;color:#fff;border-color:#128C7E}.btn.whatsapp:hover{background:#0f766b}.btn.share{background:#25d366;color:#fff;border-color:#25d366}.btn.share:hover{background:#20b858}.detail-owner-actions{display:flex;justify-content:flex-end;gap:10px;margin:0 0 14px}.detail-owner-actions form{display:flex;margin:0}.detail-owner-actions .btn{min-height:38px;padding:0 14px;border:1px solid var(--line);color:#fff}.detail-owner-actions .btn.edit{background:#176b87;border-color:#176b87}.detail-owner-actions .btn.edit:hover{background:#10546c}.detail-owner-actions .btn.delete{background:#b93824;border-color:#b93824}.detail-owner-actions .btn.delete:hover{background:#922b1b}.boost-copy{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:16px;padding:16px 18px}.boost-copy form{margin:0}.boost-copy .btn.boost{min-width:190px;min-height:48px;box-shadow:0 12px 28px rgba(246,166,35,.22)}@media(max-width:840px){.detail-owner-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.detail-owner-actions .btn,.detail-owner-actions form{width:100%}.boost-copy{grid-template-columns:1fr;gap:14px}.boost-copy .btn.boost,.boost-copy form{width:100%}}@media(max-width:420px){.detail-owner-actions .btn{min-height:42px}.boost-copy{padding:14px}.boost-copy h2{font-size:1.05rem}.boost-copy .btn.boost{min-height:46px}}</style>
+  <style>.heatmap-page{display:grid;gap:18px}.heatmap-stats{grid-template-columns:repeat(4,minmax(0,1fr));margin:0}.heatmap-panel{padding:0;overflow:hidden}.heatmap-canvas{width:100%;height:min(72vh,720px);min-height:460px}.heatmap-list{margin-top:4px}.heatmap-list .mini-report{grid-template-columns:42px minmax(0,1fr)}@media(max-width:820px){.heatmap-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.heatmap-canvas{height:68vh;min-height:420px}}@media(max-width:480px){.heatmap-stats{grid-template-columns:1fr}.heatmap-canvas{height:62vh;min-height:360px}}</style>
 </head>
 <body>
   <header class="topbar">
@@ -967,6 +1002,7 @@ function render(string $view, array $data = [], int $status = 200): void {
         <a class="btn ghost <?= $active('/perfil') ?>" href="/perfil">Mi perfil</a>
         <a class="btn ghost <?= $active('/reportar') ?>" href="/reportar">Reportar mascota</a>
         <a class="btn ghost <?= $active('/') ?>" href="/">Reportes</a>
+        <?php if (is_admin_user()): ?><a class="btn ghost <?= $active('/mapa-calor') ?>" href="/mapa-calor">Mapa de calor</a><?php endif; ?>
         <a class="btn facebook" href="https://www.facebook.com/AyudaPet26" target="_blank" rel="noopener">Facebook</a>
         <a class="btn donate" href="https://donate.stripe.com/6oU3cpg1T0Y60sOerJ3ks00" target="_blank" rel="noopener">Donar</a>
         <a class="btn logout" href="/logout">Cerrar sesion</a>
@@ -1017,6 +1053,7 @@ function view(string $view, array $vars): void {
     if ($view === 'perfil') { view_perfil($user, $reportes); return; }
     if ($view === 'tipo_reporte') { view_tipo_reporte(); return; }
     if ($view === 'reportar') { view_reportar($mascota, $editing, $mapsApiKey); return; }
+    if ($view === 'mapa_calor') { view_mapa_calor($reports, $stats, $mapsApiKey); return; }
     if ($view === 'error') { view_error($title, $message); return; }
 }
 
@@ -1328,6 +1365,65 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
   </section>
 <?php }
 
+function view_mapa_calor(array $reports, array $stats, ?string $mapsApiKey): void {
+    $points = [];
+    foreach ($reports as $report) {
+        $lat = (float)$report['ubicacion_lat'];
+        $lng = (float)$report['ubicacion_lng'];
+        if (!$lat || !$lng) continue;
+        $points[] = [
+            'lat' => $lat,
+            'lng' => $lng,
+            'nombre' => (string)($report['nombre'] ?? 'Reporte'),
+            'direccion' => (string)($report['direccion'] ?? ''),
+            'tipo' => report_type_value($report['tipo_reporte'] ?? ''),
+        ];
+    }
+    $centerLat = $points ? array_sum(array_column($points, 'lat')) / count($points) : 31.6904;
+    $centerLng = $points ? array_sum(array_column($points, 'lng')) / count($points) : -106.4245;
+    ?>
+  <section class="heatmap-page">
+    <div class="section-head"><div><p class="eyebrow" style="color:var(--brand);">Privado</p><h1>Mapa de calor</h1><p>Incidencias guardadas desde reportes activos y archivados.</p></div></div>
+    <section class="stats heatmap-stats">
+      <div class="stat"><strong><?= e($stats['total']) ?></strong><span>puntos</span></div>
+      <div class="stat"><strong><?= e($stats['extravio']) ?></strong><span>extravios</span></div>
+      <div class="stat"><strong><?= e($stats['resguardo']) ?></strong><span>resguardos</span></div>
+      <div class="stat"><strong><?= e($stats['en_casa']) ?></strong><span>en casa</span></div>
+    </section>
+    <section class="panel heatmap-panel">
+      <?php if ($mapsApiKey && $points): ?><div id="heatmap" class="heatmap-canvas"></div><?php elseif (!$mapsApiKey): ?><div class="empty">Falta API_KEY en el .env para cargar Google Maps.</div><?php else: ?><div class="empty">Todavia no hay reportes con coordenadas para mostrar.</div><?php endif; ?>
+    </section>
+    <section class="panel heatmap-list">
+      <div class="section-head" style="margin-top:0;"><div><h2>Ultimas ubicaciones</h2><p>Datos privados para seguimiento interno.</p></div></div>
+      <?php if ($reports): ?><div class="mini-list"><?php foreach (array_slice($reports, 0, 40) as $report): ?><div class="mini-report"><span class="mini-thumb"><?= e(first_letter($report['nombre'] ?? '?')) ?></span><span><strong><?= e($report['nombre'] ?: 'Reporte') ?></strong><br><span class="meta"><?= e(report_type_value($report['tipo_reporte'] ?? '') === 'resguardo' ? 'Resguardo' : 'Extravio') ?> · <?= e($report['direccion'] ?: 'Sin direccion') ?></span></span></div><?php endforeach; ?></div><?php else: ?><div class="empty">Todavia no hay ubicaciones archivadas.</div><?php endif; ?>
+    </section>
+  </section>
+  <?php if ($mapsApiKey && $points): ?><script>
+    window.initHeatmap = function () {
+      const points = <?= json_encode($points, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+      const escapeHtml = (value) => String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char]));
+      const map = new google.maps.Map(document.getElementById("heatmap"), {
+        center: { lat: <?= json_encode($centerLat) ?>, lng: <?= json_encode($centerLng) ?> },
+        zoom: points.length > 1 ? 12 : 14,
+        mapTypeId: "roadmap",
+        streetViewControl: false,
+        fullscreenControl: true,
+      });
+      const heatmap = new google.maps.visualization.HeatmapLayer({
+        data: points.map((point) => new google.maps.LatLng(point.lat, point.lng)),
+        map,
+        radius: 34,
+        opacity: 0.72,
+      });
+      points.slice(0, 80).forEach((point) => {
+        const marker = new google.maps.Marker({ position: { lat: point.lat, lng: point.lng }, map, title: point.nombre });
+        const info = new google.maps.InfoWindow({ content: `<strong>${escapeHtml(point.nombre)}</strong><br>${escapeHtml(point.direccion)}` });
+        marker.addListener("click", () => info.open({ anchor: marker, map }));
+      });
+    };
+  </script><script src="https://maps.googleapis.com/maps/api/js?key=<?= urlencode($mapsApiKey) ?>&libraries=visualization&callback=initHeatmap" async defer></script><?php endif; ?>
+<?php }
+
 function input_field(string $name, string $label, array $data, string $placeholder = ''): void {
     echo '<div class="field"><label for="' . e($name) . '">' . e($label) . '</label><input id="' . e($name) . '" name="' . e($name) . '" value="' . e($data[$name] ?? '') . '" placeholder="' . e($placeholder) . '"></div>';
 }
@@ -1358,6 +1454,23 @@ function route(): void {
             header('Content-Type: text/plain; charset=UTF-8');
             echo 'boost_checked=' . $result['checked'] . ' boost_sent=' . $result['sent'] . ' boost_failed=' . $result['failed']
                 . ' archive_checked=' . $archives['checked'] . ' archive_synced=' . $archives['synced'] . ' archive_failed=' . $archives['failed'];
+            return;
+        }
+
+        if ($path === '/mapa-calor') {
+            require_login();
+            if (!is_admin_user()) {
+                render('error', ['title' => 'Sin permiso', 'message' => 'Esta pagina es privada.'], 403);
+                return;
+            }
+            sync_report_archives();
+            $heatmap = heatmap_reports();
+            render('mapa_calor', [
+                'title' => 'Mapa de calor',
+                'reports' => $heatmap['reports'],
+                'stats' => $heatmap['stats'],
+                'mapsApiKey' => envv('API_KEY'),
+            ]);
             return;
         }
 
