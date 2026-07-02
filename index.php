@@ -1409,19 +1409,37 @@ function view_mapa_calor(array $reports, array $stats, ?string $mapsApiKey): voi
         streetViewControl: false,
         fullscreenControl: true,
       });
-      const heatmap = new google.maps.visualization.HeatmapLayer({
-        data: points.map((point) => new google.maps.LatLng(point.lat, point.lng)),
-        map,
-        radius: 34,
-        opacity: 0.72,
+      points.forEach((point) => {
+        new google.maps.Circle({
+          strokeColor: "#e85035",
+          strokeOpacity: 0.78,
+          strokeWeight: 1,
+          fillColor: "#e85035",
+          fillOpacity: 0.24,
+          map,
+          center: { lat: point.lat, lng: point.lng },
+          radius: 420,
+        });
       });
-      points.slice(0, 80).forEach((point) => {
-        const marker = new google.maps.Marker({ position: { lat: point.lat, lng: point.lng }, map, title: point.nombre });
+      points.slice(0, 120).forEach((point) => {
+        const marker = new google.maps.Marker({
+          position: { lat: point.lat, lng: point.lng },
+          map,
+          title: point.nombre,
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 7,
+            fillColor: "#e85035",
+            fillOpacity: 1,
+            strokeColor: "#ffffff",
+            strokeWeight: 2,
+          },
+        });
         const info = new google.maps.InfoWindow({ content: `<strong>${escapeHtml(point.nombre)}</strong><br>${escapeHtml(point.direccion)}` });
         marker.addListener("click", () => info.open({ anchor: marker, map }));
       });
     };
-  </script><script src="https://maps.googleapis.com/maps/api/js?key=<?= urlencode($mapsApiKey) ?>&libraries=visualization&callback=initHeatmap" async defer></script><?php endif; ?>
+  </script><script src="https://maps.googleapis.com/maps/api/js?key=<?= urlencode($mapsApiKey) ?>&callback=initHeatmap" async defer></script><?php endif; ?>
 <?php }
 
 function input_field(string $name, string $label, array $data, string $placeholder = ''): void {
