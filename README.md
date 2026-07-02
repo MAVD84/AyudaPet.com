@@ -81,3 +81,4 @@ Necesitas un MySQL accesible y las variables de entorno `MYSQL_*`.
 - Para correos SMTP usa el email real creado en tu hosting. Normalmente `SMTP_PORT=587` con `SMTP_SECURE=tls`; si tu hosting indica puerto `465`, usa `SMTP_SECURE=ssl`.
 - Para probar correo inicia sesion y abre `/correo/prueba`; la pagina muestra si SMTP envio o el error exacto.
 - Para avisar impulsos vencidos, configura un cron que abra `https://ayudapet.com/cron/boosts?token=TU_CRON_SECRET` una vez por hora o una vez al dia.
+- Si el hosting usa cron por archivo, programa `/usr/bin/php /home/sites/36b/5/5bebbea9cb/public_html/cron-boosts.php` una vez por hora.

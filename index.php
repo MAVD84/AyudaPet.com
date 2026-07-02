@@ -1490,4 +1490,6 @@ function route(): void {
     }
 }
 
-route();
+if (!defined('AYUDAPET_SKIP_ROUTE')) {
+    route();
+}
