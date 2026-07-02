@@ -798,25 +798,45 @@ function heatmap_reports(): array {
     return ['reports' => $reports, 'stats' => $stats];
 }
 
-function heatmap_city_contacts(?string $city): array {
-    ensure_archive_table();
-    $city = trim((string)$city);
-    if ($city === '') return ['city' => '', 'contacts' => [], 'sms' => ''];
-    $terms = preg_split('/\s+/', preg_replace('/[^\p{L}\p{N}]+/u', ' ', lower_text($city)) ?: '', -1, PREG_SPLIT_NO_EMPTY);
-    $terms = array_values(array_filter($terms, fn($term) => !in_array($term, ['cd', 'ciudad', 'mx', 'mexico'], true)));
-    if (!$terms) $terms = [$city];
-    $where = implode(' AND ', array_fill(0, count($terms), 'direccion LIKE ?'));
-    $stmt = db()->prepare("SELECT reportado_por, contacto, direccion, COUNT(*) AS reportes, MAX(archivado_at) AS ultimo
-        FROM mascotas_archivadas
-        WHERE {$where}
-        GROUP BY reportado_por, contacto, direccion
-        ORDER BY ultimo DESC
-        LIMIT 600");
-    $stmt->execute(array_map(fn($term) => '%' . $term . '%', $terms));
+function google_geocode_area(string $query): ?array {
+    $key = envv('API_KEY');
+    if (!$key || trim($query) === '' || !function_exists('curl_init')) return null;
+    $url = 'https://maps.googleapis.com/maps/api/geocode/json?' . http_build_query([
+        'address' => $query . ', Mexico',
+        'components' => 'country:MX',
+        'key' => $key,
+    ]);
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 8,
+    ]);
+    $body = curl_exec($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+    if ($body === false || $status < 200 || $status >= 300) return null;
+    $data = json_decode((string)$body, true);
+    $result = $data['results'][0] ?? null;
+    $location = $result['geometry']['location'] ?? null;
+    if (($data['status'] ?? '') !== 'OK' || !$location || !isset($location['lat'], $location['lng'])) return null;
+    $types = $result['types'] ?? [];
+    $radius = 45;
+    if (in_array('administrative_area_level_1', $types, true)) $radius = 360;
+    elseif (in_array('administrative_area_level_2', $types, true)) $radius = 120;
+    elseif (in_array('postal_code', $types, true) || in_array('neighborhood', $types, true)) $radius = 18;
+    return [
+        'lat' => (float)$location['lat'],
+        'lng' => (float)$location['lng'],
+        'radius_km' => $radius,
+        'label' => (string)($result['formatted_address'] ?? $query),
+    ];
+}
+
+function contact_rows_to_sms(array $rows): array {
     $seen = [];
     $contacts = [];
     $excluded = array_filter([normalize_phone(DEFAULT_PUBLIC_CONTACT)]);
-    foreach ($stmt->fetchAll() as $row) {
+    foreach ($rows as $row) {
         foreach ([$row['reportado_por'] ?? null, $row['contacto'] ?? null] as $rawPhone) {
             $phone = normalize_phone($rawPhone);
             if (!$phone || isset($seen[$phone]) || in_array($phone, $excluded, true)) continue;
@@ -829,10 +849,44 @@ function heatmap_city_contacts(?string $city): array {
             ];
         }
     }
+    return $contacts;
+}
+
+function heatmap_city_contacts(?string $city): array {
+    ensure_archive_table();
+    $city = trim((string)$city);
+    if ($city === '') return ['city' => '', 'contacts' => [], 'sms' => '', 'source' => ''];
+    $terms = preg_split('/\s+/', preg_replace('/[^\p{L}\p{N}]+/u', ' ', lower_text($city)) ?: '', -1, PREG_SPLIT_NO_EMPTY);
+    $terms = array_values(array_filter($terms, fn($term) => !in_array($term, ['cd', 'ciudad', 'mx', 'mexico'], true)));
+    if (!$terms) $terms = [$city];
+    $where = implode(' AND ', array_fill(0, count($terms), 'direccion LIKE ?'));
+    $stmt = db()->prepare("SELECT reportado_por, contacto, direccion, COUNT(*) AS reportes, MAX(archivado_at) AS ultimo
+        FROM mascotas_archivadas
+        WHERE {$where}
+        GROUP BY reportado_por, contacto, direccion
+        ORDER BY ultimo DESC
+        LIMIT 600");
+    $stmt->execute(array_map(fn($term) => '%' . $term . '%', $terms));
+    $contacts = contact_rows_to_sms($stmt->fetchAll());
+    $source = 'texto';
+    if (!$contacts && ($area = google_geocode_area($city))) {
+        $stmt = db()->prepare("SELECT reportado_por, contacto, direccion, COUNT(*) AS reportes, MAX(archivado_at) AS ultimo,
+            (6371 * ACOS(LEAST(1, GREATEST(-1, COS(RADIANS(?)) * COS(RADIANS(ubicacion_lat)) * COS(RADIANS(ubicacion_lng) - RADIANS(?)) + SIN(RADIANS(?)) * SIN(RADIANS(ubicacion_lat)))))) AS distance_km
+            FROM mascotas_archivadas
+            WHERE ubicacion_lat IS NOT NULL AND ubicacion_lng IS NOT NULL
+            GROUP BY reportado_por, contacto, direccion, ubicacion_lat, ubicacion_lng
+            HAVING distance_km <= ?
+            ORDER BY distance_km ASC
+            LIMIT 600");
+        $stmt->execute([$area['lat'], $area['lng'], $area['lat'], $area['radius_km']]);
+        $contacts = contact_rows_to_sms($stmt->fetchAll());
+        $source = 'coordenadas: ' . $area['label'] . ' (' . $area['radius_km'] . ' km)';
+    }
     return [
         'city' => $city,
         'contacts' => $contacts,
         'sms' => implode("\n", array_column($contacts, 'sms')),
+        'source' => $source,
     ];
 }
 
@@ -1115,7 +1169,7 @@ document.querySelectorAll("[data-lightbox-close]").forEach((button)=>button.addE
 document.querySelectorAll("[data-remove-image]").forEach((button)=>button.addEventListener("click",async(event)=>{event.preventDefault();const input=button.querySelector("input");const item=button.closest(".edit-image-item");if(input)input.checked=true;item?.classList.add("removing");if(!button.dataset.removeUrl)return;try{const response=await fetch(button.dataset.removeUrl,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({target:button.dataset.removeTarget,image:button.dataset.removeImageUrl||null})});if(!response.ok)throw new Error("remove failed")}catch(error){if(input)input.checked=false;item?.classList.remove("removing");alert("No se pudo eliminar la imagen. Intenta de nuevo.")}}));
 document.querySelectorAll("[data-copy-url]").forEach((button)=>button.addEventListener("click",async()=>{const url=button.dataset.copyUrl;if(!url)return;try{await navigator.clipboard.writeText(url)}catch(error){const input=document.createElement("input");input.value=url;document.body.appendChild(input);input.select();document.execCommand("copy");input.remove()}const original=button.textContent;button.textContent="Copiado";window.setTimeout(()=>{button.textContent=original},1600)}));
 document.addEventListener("click",async(event)=>{const button=event.target.closest("[data-copy-sms]");if(!button)return;const box=document.querySelector("[data-sms-copy]");const text=box?.value||"";if(!text)return;try{await navigator.clipboard.writeText(text)}catch(error){box?.focus();box?.select();document.execCommand("copy")}const original=button.textContent;button.textContent="Copiado";window.setTimeout(()=>{button.textContent=original},1600)});
-document.querySelectorAll("[data-sms-search]").forEach((form)=>form.addEventListener("submit",async(event)=>{event.preventDefault();const input=form.querySelector("[name='ciudad']");const results=document.querySelector("[data-sms-results]");const city=(input?.value||"").trim();if(!results||!city)return;const button=form.querySelector("button[type='submit']");const original=button?.textContent||"";if(button){button.disabled=true;button.textContent="Buscando"}results.innerHTML='<div class="empty">Buscando telefonos...</div>';try{const response=await fetch(`/mapa-calor/contactos?ciudad=${encodeURIComponent(city)}`,{headers:{"Accept":"application/json"}});const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.message||"Error");const count=(data.contacts||[]).length;let html=`<p class="filter-meta">${count} telefono${count===1?"":"s"} para ${escapeHtml(data.city)}.</p>`;if(count){html+=`<textarea class="sms-copy-box" readonly data-sms-copy>${escapeHtml(data.sms||"")}</textarea><div class="actions"><button class="btn share" type="button" data-copy-sms>Copiar telefonos para SMS</button></div><div class="sms-contact-list">`;html+=(data.contacts||[]).slice(0,80).map((contact)=>`<div class="sms-contact"><strong>${escapeHtml(contact.sms)}</strong><span>${escapeHtml(contact.direccion)}</span></div>`).join("");html+="</div>"}else{html+='<div class="empty">No encontre telefonos asociados a esa ciudad.</div>'}results.innerHTML=html;history.replaceState(null,"",`/mapa-calor?ciudad=${encodeURIComponent(city)}`)}catch(error){results.innerHTML='<div class="empty">No se pudo buscar. Intenta de nuevo.</div>'}finally{if(button){button.disabled=false;button.textContent=original}}}));
+document.querySelectorAll("[data-sms-search]").forEach((form)=>form.addEventListener("submit",async(event)=>{event.preventDefault();const input=form.querySelector("[name='ciudad']");const results=document.querySelector("[data-sms-results]");const city=(input?.value||"").trim();if(!results||!city)return;const button=form.querySelector("button[type='submit']");const original=button?.textContent||"";if(button){button.disabled=true;button.textContent="Buscando"}results.innerHTML='<div class="empty">Buscando telefonos...</div>';try{const response=await fetch(`/mapa-calor/contactos?ciudad=${encodeURIComponent(city)}`,{headers:{"Accept":"application/json"}});const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.message||"Error");const count=(data.contacts||[]).length;let html=`<p class="filter-meta">${count} telefono${count===1?"":"s"} para ${escapeHtml(data.city)}${data.source?` · ${escapeHtml(data.source)}`:""}.</p>`;if(count){html+=`<textarea class="sms-copy-box" readonly data-sms-copy>${escapeHtml(data.sms||"")}</textarea><div class="actions"><button class="btn share" type="button" data-copy-sms>Copiar telefonos para SMS</button></div><div class="sms-contact-list">`;html+=(data.contacts||[]).slice(0,80).map((contact)=>`<div class="sms-contact"><strong>${escapeHtml(contact.sms)}</strong><span>${escapeHtml(contact.direccion)}</span></div>`).join("");html+="</div>"}else{html+='<div class="empty">No encontre telefonos asociados a esa ciudad.</div>'}results.innerHTML=html;history.replaceState(null,"",`/mapa-calor?ciudad=${encodeURIComponent(city)}`)}catch(error){results.innerHTML='<div class="empty">No se pudo buscar. Intenta de nuevo.</div>'}finally{if(button){button.disabled=false;button.textContent=original}}}));
 document.querySelectorAll("[data-native-share-button]").forEach((button)=>button.addEventListener("click",async()=>{const shareData={title:button.dataset.shareTitle||document.title,text:button.dataset.shareText||"",url:button.dataset.shareUrl||window.location.href};if(navigator.share){try{await navigator.share(shareData);return}catch(error){if(error?.name==="AbortError")return}}const original=button.textContent;button.textContent="Usa copiar enlace";window.setTimeout(()=>{button.textContent=original},1800)}));
 document.querySelectorAll("[data-max-files]").forEach((input)=>input.addEventListener("change",()=>{const maxFiles=Number(input.dataset.maxFiles||0);if(input.files.length>maxFiles){input.value="";alert(maxFiles>0?`Solo puedes seleccionar hasta ${maxFiles} imagenes.`:"Ya tienes el maximo de 3 fotos adicionales.")}}));
 document.querySelectorAll("[data-contact-toggle]").forEach((toggle)=>{const box=document.querySelector("[data-contact-own]");const input=document.querySelector("[data-contact-input]");const sync=()=>{if(!box)return;box.classList.toggle("show",toggle.checked);if(input){input.disabled=!toggle.checked;if(!toggle.checked)input.value=""}};toggle.addEventListener("change",sync);sync()});
@@ -1447,7 +1501,7 @@ function view_mapa_calor(array $reports, array $stats, ?string $mapsApiKey, arra
       </form>
       <div data-sms-results>
       <?php if (($cityContacts['city'] ?? '') !== ''): ?>
-        <p class="filter-meta"><?= count($cityContacts['contacts']) ?> telefono<?= count($cityContacts['contacts']) === 1 ? '' : 's' ?> para <?= e($cityContacts['city']) ?>.</p>
+        <p class="filter-meta"><?= count($cityContacts['contacts']) ?> telefono<?= count($cityContacts['contacts']) === 1 ? '' : 's' ?> para <?= e($cityContacts['city']) ?><?= !empty($cityContacts['source']) ? ' · ' . e($cityContacts['source']) : '' ?>.</p>
         <?php if ($cityContacts['contacts']): ?>
           <textarea class="sms-copy-box" readonly data-sms-copy><?= e($cityContacts['sms']) ?></textarea>
           <div class="actions"><button class="btn share" type="button" data-copy-sms>Copiar telefonos para SMS</button></div>
