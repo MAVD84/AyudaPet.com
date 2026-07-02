@@ -444,7 +444,7 @@ function age_input_parts(?string $value): array {
 
 function views_label($value): string {
     $count = max(0, (int)$value);
-    return $count . ' ' . ($count === 1 ? 'vista' : 'vistas');
+    return number_format($count, 0, '.', ',') . ' ' . ($count === 1 ? 'vista' : 'vistas');
 }
 
 function geo_value(?string $value, float $min, float $max): ?string {
