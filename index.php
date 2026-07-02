@@ -108,6 +108,12 @@ function ensure_report_columns(): void {
     if (empty($existing['tipo_mascota'])) {
         db()->exec('ALTER TABLE mascotas ADD COLUMN tipo_mascota VARCHAR(40) NULL');
     }
+    if (empty($existing['ubicacion_lat'])) {
+        db()->exec('ALTER TABLE mascotas ADD COLUMN ubicacion_lat DECIMAL(9,6) NULL');
+    }
+    if (empty($existing['ubicacion_lng'])) {
+        db()->exec('ALTER TABLE mascotas ADD COLUMN ubicacion_lng DECIMAL(9,6) NULL');
+    }
 }
 
 function e($value): string {
@@ -148,6 +154,13 @@ function age_input_parts(?string $value): array {
 function views_label($value): string {
     $count = max(0, (int)$value);
     return $count . ' ' . ($count === 1 ? 'vista' : 'vistas');
+}
+
+function geo_value(?string $value, float $min, float $max): ?string {
+    if ($value === null || trim($value) === '') return null;
+    $number = (float)$value;
+    if ($number < $min || $number > $max) return null;
+    return number_format(round($number, 3), 3, '.', '');
 }
 
 function report_type_value(?string $value): string {
@@ -447,6 +460,8 @@ function report_payload(string $id, ?array $existing = null): array {
         'collar' => post_value('collar'),
         'docil' => post_value('docil'),
         'direccion' => post_value('direccion'),
+        'ubicacion_lat' => geo_value(post_value('ubicacion_lat'), -90, 90),
+        'ubicacion_lng' => geo_value(post_value('ubicacion_lng'), -180, 180),
         'calles' => null,
         'dueno' => null,
         'recompensa' => $reportType === 'resguardo' ? null : money_display(post_value('recompensa')),
@@ -458,8 +473,8 @@ function create_report(): string {
     ensure_report_columns();
     $id = bin2hex(random_bytes(16));
     $data = report_payload($id);
-    $sql = 'INSERT INTO mascotas (id, reportado_por, tipo_reporte, tipo_mascota, nombre, descripcion, contacto, principal, secundarias, fecha, edad, raza, genero, color, collar, docil, direccion, calles, dueno, recompensa, encontrado)
-            VALUES (:id, :reportado_por, :tipo_reporte, :tipo_mascota, :nombre, :descripcion, :contacto, :principal, :secundarias, :fecha, :edad, :raza, :genero, :color, :collar, :docil, :direccion, :calles, :dueno, :recompensa, :encontrado)';
+    $sql = 'INSERT INTO mascotas (id, reportado_por, tipo_reporte, tipo_mascota, nombre, descripcion, contacto, principal, secundarias, fecha, edad, raza, genero, color, collar, docil, direccion, ubicacion_lat, ubicacion_lng, calles, dueno, recompensa, encontrado)
+            VALUES (:id, :reportado_por, :tipo_reporte, :tipo_mascota, :nombre, :descripcion, :contacto, :principal, :secundarias, :fecha, :edad, :raza, :genero, :color, :collar, :docil, :direccion, :ubicacion_lat, :ubicacion_lng, :calles, :dueno, :recompensa, :encontrado)';
     $stmt = db()->prepare($sql);
     $stmt->execute(['id' => $id, 'reportado_por' => current_user_phone()] + $data);
     return $id;
@@ -777,7 +792,7 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
     <?php input_field('color','Color',$mascota); ?>
     <div class="field"><label for="collar">Collar</label><select id="collar" name="collar"><option value="">Seleccionar</option><?php foreach (['Si','No'] as $opt): ?><option <?= $collarActual === lower_text($opt) || ($opt === 'Si' && $collarActual === 'sí') ? 'selected' : '' ?>><?= e($opt) ?></option><?php endforeach; ?></select></div>
     <div class="field"><label for="docil">Docil</label><select id="docil" name="docil"><option value="">Seleccionar</option><?php foreach (['Si','No'] as $opt): ?><option <?= $docilActual === lower_text($opt) || ($opt === 'Si' && $docilActual === 'sí') ? 'selected' : '' ?>><?= e($opt) ?></option><?php endforeach; ?></select></div>
-    <div class="field full"><label for="direccion"><?= e($direccionLabel) ?></label><input id="direccion" name="direccion" value="<?= e($mascota['direccion'] ?? '') ?>" autocomplete="off" data-address-autocomplete></div>
+    <div class="field full"><label for="direccion"><?= e($direccionLabel) ?></label><input id="direccion" name="direccion" value="<?= e($mascota['direccion'] ?? '') ?>" autocomplete="off" data-address-autocomplete><input type="hidden" name="ubicacion_lat" value="<?= e($mascota['ubicacion_lat'] ?? '') ?>" data-address-lat><input type="hidden" name="ubicacion_lng" value="<?= e($mascota['ubicacion_lng'] ?? '') ?>" data-address-lng></div>
     <?php if (!$isResguardo): ?><div class="field"><label for="recompensa">Recompensa</label><input id="recompensa" name="recompensa" type="number" min="0" step="1" inputmode="numeric" value="<?= e($recompensaInput) ?>" placeholder="1000" data-money-input><span class="hint" data-money-preview><?= e(money_display($recompensaInput) ?: 'Se mostrara como $1,000 M.N.') ?></span></div><?php endif; ?>
     <?php $usesOwnContact = !empty($mascota['contacto']) && $mascota['contacto'] !== DEFAULT_PUBLIC_CONTACT; ?>
     <div class="field">
@@ -804,10 +819,12 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
   <?php if ($mapsApiKey): ?><script>
     window.initAddressAutocomplete = function () {
       const input = document.querySelector("[data-address-autocomplete]");
+      const latInput = document.querySelector("[data-address-lat]");
+      const lngInput = document.querySelector("[data-address-lng]");
       if (!input || !window.google?.maps?.places) return;
       const autocomplete = new google.maps.places.Autocomplete(input, {
         componentRestrictions: { country: "mx" },
-        fields: ["address_components", "formatted_address", "name"],
+        fields: ["address_components", "formatted_address", "geometry", "name"],
         types: ["address"],
       });
 
@@ -850,6 +867,18 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
         });
       };
 
+      const setCoordinates = (place) => {
+        if (!latInput || !lngInput) return;
+        const location = place.geometry?.location;
+        if (!location) {
+          latInput.value = "";
+          lngInput.value = "";
+          return;
+        }
+        latInput.value = Number(location.lat()).toFixed(3);
+        lngInput.value = Number(location.lng()).toFixed(3);
+      };
+
       let selectedPrivateAddress = input.value;
 
       const applySelectedPlace = () => {
@@ -860,6 +889,7 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
         }
         selectedPrivateAddress = privateAddress(place);
         input.value = selectedPrivateAddress;
+        setCoordinates(place);
         input.dispatchEvent(new Event("change", { bubbles: true }));
         closeSuggestions();
       };
@@ -867,6 +897,8 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
       autocomplete.addListener("place_changed", applySelectedPlace);
       input.addEventListener("input", () => {
         if (input.value !== selectedPrivateAddress) {
+          if (latInput) latInput.value = "";
+          if (lngInput) lngInput.value = "";
           openSuggestions();
         }
       });

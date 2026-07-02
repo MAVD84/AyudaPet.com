@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS mascotas (
   collar VARCHAR(120) NULL,
   docil VARCHAR(120) NULL,
   direccion VARCHAR(500) NULL,
+  ubicacion_lat DECIMAL(9,6) NULL,
+  ubicacion_lng DECIMAL(9,6) NULL,
   calles VARCHAR(240) NULL,
   dueno VARCHAR(160) NULL,
   recompensa VARCHAR(160) NULL,
