@@ -158,6 +158,9 @@ function stripe_request(string $method, string $endpoint, array $params = []): a
     $secret = envv('STRIPE_SECRET_KEY');
     if (!$secret) throw new RuntimeException('Falta STRIPE_SECRET_KEY en el .env.');
     $url = 'https://api.stripe.com/v1/' . ltrim($endpoint, '/');
+    if ($method === 'GET' && $params) {
+        $url .= '?' . http_build_query($params);
+    }
     $ch = curl_init($url);
     $options = [
         CURLOPT_RETURNTRANSFER => true,
@@ -187,7 +190,7 @@ function create_boost_checkout(array $pet): string {
         'mode' => 'payment',
         'line_items[0][price]' => envv('STRIPE_PRICE_ID'),
         'line_items[0][quantity]' => '1',
-        'success_url' => full_url('/mascotas/' . $pet['id']) . '?impulso=exito',
+        'success_url' => full_url('/mascotas/' . $pet['id']) . '?impulso=exito&session_id={CHECKOUT_SESSION_ID}',
         'cancel_url' => full_url('/mascotas/' . $pet['id']) . '?impulso=cancelado',
         'metadata[pet_id]' => $pet['id'],
         'metadata[owner_phone]' => $pet['reportado_por'],
@@ -197,6 +200,21 @@ function create_boost_checkout(array $pet): string {
     db()->prepare('UPDATE mascotas SET stripe_session_id = ?, stripe_payment_status = ? WHERE id = ? AND reportado_por = ?')
         ->execute([$session['id'], $session['payment_status'] ?? 'pending', $pet['id'], current_user_phone()]);
     return (string)$session['url'];
+}
+
+function activate_boost(string $petId, string $sessionId): void {
+    ensure_report_columns();
+    db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . BOOST_DAYS . ' DAY), stripe_session_id = ?, stripe_payment_status = ? WHERE id = ?')
+        ->execute([$sessionId, 'paid', $petId]);
+}
+
+function confirm_boost_checkout(string $petId, string $sessionId): bool {
+    if (!stripe_enabled() || $sessionId === '') return false;
+    $session = stripe_request('GET', 'checkout/sessions/' . rawurlencode($sessionId));
+    $sessionPetId = (string)($session['metadata']['pet_id'] ?? '');
+    if (($session['payment_status'] ?? '') !== 'paid' || $sessionPetId !== $petId) return false;
+    activate_boost($petId, (string)($session['id'] ?? $sessionId));
+    return true;
 }
 
 function stripe_signature_valid(string $payload, string $header, string $secret): bool {
@@ -236,9 +254,7 @@ function handle_stripe_webhook(): void {
         $petId = (string)($session['metadata']['pet_id'] ?? '');
         $sessionId = (string)($session['id'] ?? '');
         if ($petId && ($session['payment_status'] ?? '') === 'paid') {
-            ensure_report_columns();
-            db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . BOOST_DAYS . ' DAY), stripe_session_id = ?, stripe_payment_status = ? WHERE id = ?')
-                ->execute([$sessionId, 'paid', $petId]);
+            activate_boost($petId, $sessionId);
         }
     }
     http_response_code(200);
@@ -1207,7 +1223,16 @@ function route(): void {
         if (preg_match('#^/mascotas/([a-f0-9]{32})$#', $path, $m)) {
             $pet = get_mascota($m[1]);
             if (!$pet) { render('error', ['title' => 'Reporte no encontrado', 'message' => 'El reporte solicitado no existe.'], 404); return; }
-            if (($_GET['impulso'] ?? '') === 'exito') { flash('Pago recibido. Stripe confirmara el impulso en unos momentos.', 'success'); redirect_to('/mascotas/' . $pet['id']); }
+            if (($_GET['impulso'] ?? '') === 'exito') {
+                try {
+                    $confirmed = confirm_boost_checkout($pet['id'], (string)($_GET['session_id'] ?? ''));
+                    flash($confirmed ? 'Tu anuncio ya esta impulsado por 10 dias.' : 'Pago recibido. Stripe confirmara el impulso en unos momentos.', 'success');
+                } catch (Throwable $e) {
+                    error_log('No se pudo confirmar impulso Stripe: ' . $e->getMessage());
+                    flash('Pago recibido. Stripe confirmara el impulso en unos momentos.', 'success');
+                }
+                redirect_to('/mascotas/' . $pet['id']);
+            }
             if (($_GET['impulso'] ?? '') === 'cancelado') { flash('Pago cancelado. Tu reporte no fue impulsado.', 'warning'); redirect_to('/mascotas/' . $pet['id']); }
             increment_report_views($pet['id']);
             $pet['vistas'] = ((int)($pet['vistas'] ?? 0)) + 1;
