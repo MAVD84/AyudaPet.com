@@ -130,6 +130,54 @@ function ensure_report_columns(): void {
     }
 }
 
+function ensure_archive_table(): void {
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    ensure_report_columns();
+    db()->exec("CREATE TABLE IF NOT EXISTS mascotas_archivadas (
+        archive_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        id CHAR(32) NOT NULL,
+        reportado_por VARCHAR(10) NOT NULL,
+        archivado_por VARCHAR(10) NULL,
+        archivado_motivo VARCHAR(80) NOT NULL DEFAULT 'deleted_by_owner',
+        tipo_reporte VARCHAR(30) NULL,
+        tipo_mascota VARCHAR(40) NULL,
+        nombre VARCHAR(160) NOT NULL,
+        descripcion TEXT NULL,
+        contacto VARCHAR(160) NULL,
+        principal VARCHAR(500) NULL,
+        secundarias JSON NULL,
+        fecha VARCHAR(40) NULL,
+        edad VARCHAR(120) NULL,
+        raza VARCHAR(160) NULL,
+        genero VARCHAR(80) NULL,
+        color VARCHAR(120) NULL,
+        collar VARCHAR(120) NULL,
+        docil VARCHAR(120) NULL,
+        direccion VARCHAR(500) NULL,
+        ubicacion_lat DECIMAL(9,6) NULL,
+        ubicacion_lng DECIMAL(9,6) NULL,
+        calles VARCHAR(240) NULL,
+        dueno VARCHAR(160) NULL,
+        recompensa VARCHAR(160) NULL,
+        encontrado TINYINT(1) NOT NULL DEFAULT 0,
+        vistas INT UNSIGNED NOT NULL DEFAULT 0,
+        impulsado_hasta DATETIME NULL,
+        stripe_session_id VARCHAR(255) NULL,
+        stripe_payment_status VARCHAR(50) NULL,
+        boost_expired_notified_at DATETIME NULL,
+        creado_at TIMESTAMP NULL,
+        actualizado_at TIMESTAMP NULL,
+        archivado_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        snapshot_json JSON NULL,
+        INDEX idx_archivadas_reporte (id),
+        INDEX idx_archivadas_usuario (reportado_por),
+        INDEX idx_archivadas_archivado_at (archivado_at),
+        INDEX idx_archivadas_ubicacion (ubicacion_lat, ubicacion_lng)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+}
+
 function e($value): string {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
@@ -660,6 +708,29 @@ function get_mascota(string $id): ?array {
 function increment_report_views(string $id): void {
     ensure_report_columns();
     db()->prepare('UPDATE mascotas SET vistas = vistas + 1 WHERE id = ?')->execute([$id]);
+}
+
+function archive_report(array $pet, string $reason = 'deleted_by_owner'): void {
+    ensure_archive_table();
+    $fields = [
+        'id', 'reportado_por', 'tipo_reporte', 'tipo_mascota', 'nombre', 'descripcion', 'contacto',
+        'principal', 'secundarias', 'fecha', 'edad', 'raza', 'genero', 'color', 'collar', 'docil',
+        'direccion', 'ubicacion_lat', 'ubicacion_lng', 'calles', 'dueno', 'recompensa', 'encontrado',
+        'vistas', 'impulsado_hasta', 'stripe_session_id', 'stripe_payment_status',
+        'boost_expired_notified_at', 'creado_at', 'actualizado_at'
+    ];
+    $columns = array_merge(['archivado_por', 'archivado_motivo'], $fields, ['snapshot_json']);
+    $params = array_map(fn($column) => ':' . $column, $columns);
+    $data = [
+        'archivado_por' => current_user_phone(),
+        'archivado_motivo' => $reason,
+        'snapshot_json' => json_encode($pet, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+    ];
+    foreach ($fields as $field) {
+        $data[$field] = $pet[$field] ?? null;
+    }
+    $sql = 'INSERT INTO mascotas_archivadas (' . implode(', ', $columns) . ') VALUES (' . implode(', ', $params) . ')';
+    db()->prepare($sql)->execute($data);
 }
 
 function pet_secondaries(array $pet): array {
@@ -1466,8 +1537,22 @@ function route(): void {
 
         if (preg_match('#^/mascotas/([a-f0-9]{32})/eliminar$#', $path, $m) && $method === 'POST') {
             require_login();
-            db()->prepare('DELETE FROM mascotas WHERE id = ? AND reportado_por = ?')->execute([$m[1], current_user_phone()]);
-            flash('Reporte eliminado.', 'success');
+            $pet = get_mascota($m[1]);
+            if (!$pet) { render('error', ['title' => 'Reporte no encontrado', 'message' => 'El reporte solicitado no existe.'], 404); return; }
+            if (!owns_report($pet)) { render('error', ['title' => 'Sin permiso', 'message' => 'Solo puedes eliminar tus propios reportes.'], 403); return; }
+            ensure_archive_table();
+            $pdo = db();
+            try {
+                $pdo->beginTransaction();
+                archive_report($pet, 'deleted_by_owner');
+                $pdo->prepare('DELETE FROM mascotas WHERE id = ? AND reportado_por = ?')->execute([$pet['id'], current_user_phone()]);
+                $pdo->commit();
+                flash('Reporte eliminado. La informacion quedo archivada para historial y mapa de calor.', 'success');
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                flash('No se pudo eliminar el reporte porque no se pudo archivar la informacion.', 'error');
+                redirect_to('/mascotas/' . $pet['id']);
+            }
             redirect_to('/');
         }
 
