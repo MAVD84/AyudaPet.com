@@ -744,6 +744,26 @@ function archive_report(array $pet, string $reason = 'deleted_by_owner'): void {
     db()->prepare($sql)->execute($data);
 }
 
+function sync_report_archives(int $limit = 500): array {
+    ensure_archive_table();
+    $stmt = db()->prepare('SELECT * FROM mascotas ORDER BY creado_at DESC LIMIT ?');
+    $stmt->bindValue(1, max(1, min(2000, $limit)), PDO::PARAM_INT);
+    $stmt->execute();
+    $pets = $stmt->fetchAll();
+    $synced = 0;
+    $failed = 0;
+    foreach ($pets as $pet) {
+        try {
+            archive_report($pet, 'cron_snapshot');
+            $synced++;
+        } catch (Throwable $e) {
+            $failed++;
+            error_log('No se pudo sincronizar el archivo del reporte ' . ($pet['id'] ?? '') . ': ' . $e->getMessage());
+        }
+    }
+    return ['checked' => count($pets), 'synced' => $synced, 'failed' => $failed];
+}
+
 function pet_secondaries(array $pet): array {
     $items = json_decode((string)($pet['secundarias'] ?? '[]'), true);
     return is_array($items) ? array_values(array_filter($items, 'is_string')) : [];
@@ -1334,8 +1354,10 @@ function route(): void {
                 return;
             }
             $result = process_expired_boosts();
+            $archives = sync_report_archives();
             header('Content-Type: text/plain; charset=UTF-8');
-            echo 'checked=' . $result['checked'] . ' sent=' . $result['sent'] . ' failed=' . $result['failed'];
+            echo 'boost_checked=' . $result['checked'] . ' boost_sent=' . $result['sent'] . ' boost_failed=' . $result['failed']
+                . ' archive_checked=' . $archives['checked'] . ' archive_synced=' . $archives['synced'] . ' archive_failed=' . $archives['failed'];
             return;
         }
 
