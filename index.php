@@ -889,6 +889,8 @@ function heatmap_city_contacts(?string $city): array {
     $terms = preg_split('/\s+/', preg_replace('/[^\p{L}\p{N}]+/u', ' ', lower_text($city)) ?: '', -1, PREG_SPLIT_NO_EMPTY);
     $terms = array_values(array_filter($terms, fn($term) => !in_array($term, ['cd', 'ciudad', 'mx', 'mexico'], true)));
     if (!$terms) $terms = [$city];
+    $postalCode = preg_match('/\b\d{5}\b/', $city, $m) ? $m[0] : null;
+    if ($postalCode) $terms = [$postalCode];
     $groups = [];
     $params = [];
     foreach ($terms as $term) {
@@ -1548,9 +1550,9 @@ function view_mapa_calor(array $reports, array $stats, ?string $mapsApiKey, arra
       <?php if ($reports): ?><div class="mini-list"><?php foreach (array_slice($reports, 0, 40) as $report): ?><div class="mini-report"><?php if (!empty($report['principal'])): ?><img src="<?= e($report['principal']) ?>" alt="<?= e($report['nombre'] ?: 'Reporte') ?>"><?php else: ?><span class="mini-thumb"><?= e(first_letter($report['nombre'] ?? '?')) ?></span><?php endif; ?><span><strong><?= e($report['nombre'] ?: 'Reporte') ?></strong><span class="meta"><?= e(report_type_value($report['tipo_reporte'] ?? '') === 'resguardo' ? 'Resguardo' : 'Extravio') ?> · <?= e(($report['direccion_completa'] ?? '') ?: ($report['direccion'] ?? 'Sin direccion')) ?></span></span></div><?php endforeach; ?></div><?php else: ?><div class="empty">Todavia no hay ubicaciones archivadas.</div><?php endif; ?>
     </section>
     <section class="panel sms-panel">
-      <div class="section-head" style="margin-top:0;"><div><h2>Telefonos por ciudad</h2><p>Busca numeros registrados asociados a reportes de esa ciudad.</p></div></div>
+      <div class="section-head" style="margin-top:0;"><div><h2>Telefonos por zona</h2><p>Busca numeros registrados por ciudad, estado, colonia o codigo postal.</p></div></div>
       <form class="search-form sms-search" method="get" action="/mapa-calor" data-sms-search>
-        <div class="field"><label for="ciudad">Ciudad o zona</label><input id="ciudad" name="ciudad" value="<?= e($cityContacts['city'] ?? '') ?>" placeholder="Ej. Juarez, San Felipe del Real"></div>
+        <div class="field"><label for="ciudad">Ciudad, estado, colonia o CP</label><input id="ciudad" name="ciudad" value="<?= e($cityContacts['city'] ?? '') ?>" placeholder="Ej. Juarez, Chihuahua, 32177"></div>
         <button class="btn primary" type="submit">Buscar telefonos</button>
       </form>
       <div data-sms-results>
