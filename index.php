@@ -171,11 +171,16 @@ function ensure_archive_table(): void {
         actualizado_at TIMESTAMP NULL,
         archivado_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         snapshot_json JSON NULL,
-        INDEX idx_archivadas_reporte (id),
+        UNIQUE KEY uniq_archivadas_reporte (id),
         INDEX idx_archivadas_usuario (reportado_por),
         INDEX idx_archivadas_archivado_at (archivado_at),
         INDEX idx_archivadas_ubicacion (ubicacion_lat, ubicacion_lng)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $indexes = db()->query("SHOW INDEX FROM mascotas_archivadas WHERE Key_name = 'uniq_archivadas_reporte'")->fetchAll();
+    if (!$indexes) {
+        db()->exec('DELETE older FROM mascotas_archivadas older JOIN mascotas_archivadas newer ON older.id = newer.id AND older.archive_id < newer.archive_id');
+        db()->exec('ALTER TABLE mascotas_archivadas ADD UNIQUE KEY uniq_archivadas_reporte (id)');
+    }
 }
 
 function e($value): string {
@@ -729,7 +734,13 @@ function archive_report(array $pet, string $reason = 'deleted_by_owner'): void {
     foreach ($fields as $field) {
         $data[$field] = $pet[$field] ?? null;
     }
-    $sql = 'INSERT INTO mascotas_archivadas (' . implode(', ', $columns) . ') VALUES (' . implode(', ', $params) . ')';
+    $updates = [];
+    foreach (array_diff($columns, ['id']) as $column) {
+        $updates[] = "{$column} = VALUES({$column})";
+    }
+    $updates[] = 'archivado_at = CURRENT_TIMESTAMP';
+    $sql = 'INSERT INTO mascotas_archivadas (' . implode(', ', $columns) . ') VALUES (' . implode(', ', $params) . ')
+            ON DUPLICATE KEY UPDATE ' . implode(', ', $updates);
     db()->prepare($sql)->execute($data);
 }
 
@@ -840,6 +851,12 @@ function create_report(): string {
             VALUES (:id, :reportado_por, :tipo_reporte, :tipo_mascota, :nombre, :descripcion, :contacto, :principal, :secundarias, :fecha, :edad, :raza, :genero, :color, :collar, :docil, :direccion, :ubicacion_lat, :ubicacion_lng, :calles, :dueno, :recompensa, :encontrado)';
     $stmt = db()->prepare($sql);
     $stmt->execute(['id' => $id, 'reportado_por' => current_user_phone()] + $data);
+    try {
+        $pet = get_mascota($id);
+        if ($pet) archive_report($pet, 'created_snapshot');
+    } catch (Throwable $e) {
+        error_log('No se pudo archivar el reporte creado ' . $id . ': ' . $e->getMessage());
+    }
     return $id;
 }
 
@@ -850,6 +867,12 @@ function update_report(string $id, array $existing): void {
     foreach ($data as $key => $_) $sets[] = "{$key} = :{$key}";
     $stmt = db()->prepare('UPDATE mascotas SET ' . implode(', ', $sets) . ' WHERE id = :id AND reportado_por = :reportado_por');
     $stmt->execute($data + ['id' => $id, 'reportado_por' => current_user_phone()]);
+    try {
+        $pet = get_mascota($id);
+        if ($pet) archive_report($pet, 'updated_snapshot');
+    } catch (Throwable $e) {
+        error_log('No se pudo actualizar el archivo del reporte ' . $id . ': ' . $e->getMessage());
+    }
 }
 
 function remove_report_image(string $id, array $pet, string $target, ?string $image): void {

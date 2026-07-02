@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS mascotas_archivadas (
   actualizado_at TIMESTAMP NULL,
   archivado_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   snapshot_json JSON NULL,
-  INDEX idx_archivadas_reporte (id),
+  UNIQUE KEY uniq_archivadas_reporte (id),
   INDEX idx_archivadas_usuario (reportado_por),
   INDEX idx_archivadas_archivado_at (archivado_at),
   INDEX idx_archivadas_ubicacion (ubicacion_lat, ubicacion_lng)
