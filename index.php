@@ -465,7 +465,7 @@ function report_type_label(?string $value): string {
 function report_status_label(array $pet): string {
     $type = report_type_value($pet['tipo_reporte'] ?? '');
     $female = lower_text((string)($pet['genero'] ?? '')) === 'hembra';
-    if (!empty($pet['encontrado'])) return $female ? 'Localizada' : 'Localizado';
+    if (!empty($pet['encontrado'])) return 'En casa';
     return $type === 'resguardo' ? ($female ? 'Resguardada' : 'Resguardado') : ($female ? 'Perdida' : 'Perdido');
 }
 
@@ -1071,8 +1071,8 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
     $fechaLabel = $isResguardo ? 'Fecha de resguardo' : 'Fecha de extravio';
     $direccionLabel = $isResguardo ? 'Direccion donde se encontro' : 'Direccion de extravio';
     $nombrePlaceholder = $isResguardo ? 'Si no se sabe, dejalo en blanco' : '';
-    $estadoLabel = 'Localizado';
-    $estadoHint = $isResguardo ? 'Activalo cuando la mascota ya fue entregada o localizada por su familia' : 'Activalo cuando la mascota ya fue encontrada';
+    $estadoLabel = 'En casa';
+    $estadoHint = $isResguardo ? 'Activalo cuando la mascota ya fue entregada a su familia' : 'Activalo cuando la mascota ya volvio a casa';
     [$edadNumero, $edadUnidad] = age_input_parts($mascota['edad'] ?? '');
     $recompensaInput = money_input_value($mascota['recompensa'] ?? '');
     $collarActual = lower_text($mascota['collar'] ?? '');
