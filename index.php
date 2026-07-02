@@ -854,14 +854,14 @@ function render(string $view, array $data = [], int $status = 200): void {
         <a class="btn ghost <?= $active('/reportar') ?>" href="/reportar">Reportar mascota</a>
         <a class="btn ghost <?= $active('/') ?>" href="/">Reportes</a>
         <a class="btn facebook" href="https://www.facebook.com/AyudaPet26" target="_blank" rel="noopener">Facebook</a>
-        <a class="btn donate" href="https://donate.stripe.com/6oU3cpg1T0Y60sOerJ3ks00" target="_blank" rel="noopener">Donar</a>
+        <a class="btn donate" href="https://donate.stripe.com/6oU3cpg1T0Y60sOerJ3ks00" target="_blank" rel="noopener">Ap&oacute;yanos</a>
         <a class="btn logout" href="/logout">Cerrar sesion</a>
       <?php else: ?>
         <a class="btn ghost <?= $active('/login') ?>" href="/login">Entrar</a>
         <a class="btn ghost <?= $active('/registro') ?>" href="/registro">Crear cuenta</a>
         <a class="btn ghost <?= $active('/') ?>" href="/">Reportes</a>
         <a class="btn facebook" href="https://www.facebook.com/AyudaPet26" target="_blank" rel="noopener">Facebook</a>
-        <a class="btn donate" href="https://donate.stripe.com/6oU3cpg1T0Y60sOerJ3ks00" target="_blank" rel="noopener">Donar</a>
+        <a class="btn donate" href="https://donate.stripe.com/6oU3cpg1T0Y60sOerJ3ks00" target="_blank" rel="noopener">Ap&oacute;yanos</a>
       <?php endif; ?>
     </div>
     <div class="menu-foot">Registro exclusivo con telefono mexicano.</div>
