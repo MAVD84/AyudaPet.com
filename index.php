@@ -202,10 +202,46 @@ function create_boost_checkout(array $pet): string {
     return (string)$session['url'];
 }
 
+function send_boost_notification(array $pet, string $sessionId, string $boostedUntil): void {
+    $to = envv('BOOST_NOTIFY_EMAIL');
+    if (!$to || !filter_var($to, FILTER_VALIDATE_EMAIL)) return;
+    $subject = 'Nuevo anuncio impulsado en AyudaPet';
+    $url = full_url('/mascotas/' . $pet['id']);
+    $lines = [
+        'Se activo un anuncio impulsado en AyudaPet.',
+        '',
+        'Mascota: ' . ($pet['nombre'] ?? 'Sin nombre'),
+        'Tipo de reporte: ' . report_type_label($pet['tipo_reporte'] ?? 'extravio'),
+        'Telefono del usuario: ' . ($pet['reportado_por'] ?? ''),
+        'Contacto publico: ' . ($pet['contacto'] ?? ''),
+        'Direccion: ' . ($pet['direccion'] ?? ''),
+        'Activo hasta: ' . $boostedUntil,
+        'Stripe session: ' . $sessionId,
+        '',
+        'Ver reporte: ' . $url,
+    ];
+    $from = envv('MAIL_FROM', 'no-reply@' . APP_DOMAIN);
+    $headers = [
+        'From: AyudaPet <' . $from . '>',
+        'Reply-To: ' . $from,
+        'Content-Type: text/plain; charset=UTF-8',
+    ];
+    if (!mail($to, $subject, implode("\n", $lines), implode("\r\n", $headers))) {
+        error_log('No se pudo enviar correo de anuncio impulsado a ' . $to);
+    }
+}
+
 function activate_boost(string $petId, string $sessionId): void {
     ensure_report_columns();
+    $pet = get_mascota($petId);
+    if (!$pet) return;
+    $alreadyNotified = is_boosted($pet) && ($pet['stripe_session_id'] ?? '') === $sessionId && ($pet['stripe_payment_status'] ?? '') === 'paid';
     db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . BOOST_DAYS . ' DAY), stripe_session_id = ?, stripe_payment_status = ? WHERE id = ?')
         ->execute([$sessionId, 'paid', $petId]);
+    if (!$alreadyNotified) {
+        $updated = get_mascota($petId);
+        send_boost_notification($updated ?: $pet, $sessionId, (string)(($updated['impulsado_hasta'] ?? null) ?: date('Y-m-d H:i:s', strtotime('+' . BOOST_DAYS . ' days'))));
+    }
 }
 
 function confirm_boost_checkout(string $petId, string $sessionId): bool {

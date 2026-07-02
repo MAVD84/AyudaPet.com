@@ -21,3 +21,6 @@ define('API_KEY', '');
 define('STRIPE_SECRET_KEY', '');
 define('STRIPE_WEBHOOK_SECRET', '');
 define('STRIPE_PRICE_ID', '');
+
+define('BOOST_NOTIFY_EMAIL', '');
+define('MAIL_FROM', 'no-reply@ayudapet.com');
