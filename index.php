@@ -991,11 +991,21 @@ function heatmap_reports(): array {
         LIMIT 4000");
     $rawReports = $stmt->fetchAll();
     $reports = [];
-    $seen = [];
+    $seenIds = [];
+    $seenFingerprints = [];
     foreach ($rawReports as $report) {
-        $id = (string)($report['id'] ?? '');
-        if ($id !== '' && isset($seen[$id])) continue;
-        if ($id !== '') $seen[$id] = true;
+        $id = lower_text(trim((string)($report['id'] ?? '')));
+        $address = lower_text(trim((string)(($report['direccion_completa'] ?? '') ?: ($report['direccion'] ?? ''))));
+        $fingerprint = implode('|', [
+            lower_text(trim((string)($report['nombre'] ?? ''))),
+            $address,
+            round((float)($report['ubicacion_lat'] ?? 0), 4),
+            round((float)($report['ubicacion_lng'] ?? 0), 4),
+            trim((string)($report['principal'] ?? '')),
+        ]);
+        if (($id !== '' && isset($seenIds[$id])) || isset($seenFingerprints[$fingerprint])) continue;
+        if ($id !== '') $seenIds[$id] = true;
+        $seenFingerprints[$fingerprint] = true;
         $reports[] = $report;
         if (count($reports) >= 2000) break;
     }
