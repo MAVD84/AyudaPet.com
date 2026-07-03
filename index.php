@@ -261,6 +261,13 @@ function boost_button_enabled(): bool {
     return !in_array($value, ['0', 'false', 'off', 'no'], true);
 }
 
+function donate_button_enabled(): bool {
+    $value = app_setting('donate_button_enabled');
+    if ($value === null) $value = envv('DONATE_BUTTON_ENABLED', 'true');
+    $value = lower_text(trim((string)$value));
+    return !in_array($value, ['0', 'false', 'off', 'no'], true);
+}
+
 function stripe_request(string $method, string $endpoint, array $params = []): array {
     $secret = envv('STRIPE_SECRET_KEY');
     if (!$secret) throw new RuntimeException('Falta STRIPE_SECRET_KEY en el .env.');
@@ -1216,16 +1223,16 @@ function render(string $view, array $data = [], int $status = 200): void {
         <a class="btn ghost <?= $active('/perfil') ?>" href="/perfil">Mi perfil</a>
         <a class="btn ghost <?= $active('/reportar') ?>" href="/reportar">Reportar mascota</a>
         <a class="btn ghost <?= $active('/') ?>" href="/">Reportes</a>
-        <?php if (is_admin_user()): ?><a class="btn ghost <?= $active('/mapa-calor') ?>" href="/mapa-calor">Mapa de calor</a><form class="menu-setting" method="post" action="/admin/boost-button"><input type="hidden" name="enabled" value="0"><input type="hidden" name="next" value="<?= e($_SERVER['REQUEST_URI'] ?? '/') ?>"><label class="switch"><span class="switch-text"><span>Impulso automatico</span><small><?= boost_button_enabled() ? 'Boton activo' : 'WhatsApp manual' ?></small></span><input type="checkbox" name="enabled" value="1" <?= boost_button_enabled() ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form><?php endif; ?>
+        <?php if (is_admin_user()): ?><a class="btn ghost <?= $active('/mapa-calor') ?>" href="/mapa-calor">Mapa de calor</a><form class="menu-setting" method="post" action="/admin/boost-button"><input type="hidden" name="enabled" value="0"><input type="hidden" name="next" value="<?= e($_SERVER['REQUEST_URI'] ?? '/') ?>"><label class="switch"><span class="switch-text"><span>Impulso automatico</span><small><?= boost_button_enabled() ? 'Boton activo' : 'WhatsApp manual' ?></small></span><input type="checkbox" name="enabled" value="1" <?= boost_button_enabled() ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form><form class="menu-setting" method="post" action="/admin/donate-button"><input type="hidden" name="enabled" value="0"><input type="hidden" name="next" value="<?= e($_SERVER['REQUEST_URI'] ?? '/') ?>"><label class="switch"><span class="switch-text"><span>Boton donar</span><small><?= donate_button_enabled() ? 'Visible' : 'Oculto' ?></small></span><input type="checkbox" name="enabled" value="1" <?= donate_button_enabled() ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form><?php endif; ?>
         <a class="btn facebook" href="https://www.facebook.com/AyudaPet26" target="_blank" rel="noopener">Facebook</a>
-        <a class="btn donate" href="https://donate.stripe.com/6oU3cpg1T0Y60sOerJ3ks00" target="_blank" rel="noopener">Donar</a>
+        <?php if (donate_button_enabled()): ?><a class="btn donate" href="https://donate.stripe.com/6oU3cpg1T0Y60sOerJ3ks00" target="_blank" rel="noopener">Donar</a><?php endif; ?>
         <a class="btn logout" href="/logout">Cerrar sesion</a>
       <?php else: ?>
         <a class="btn ghost <?= $active('/login') ?>" href="/login">Entrar</a>
         <a class="btn ghost <?= $active('/registro') ?>" href="/registro">Crear cuenta</a>
         <a class="btn ghost <?= $active('/') ?>" href="/">Reportes</a>
         <a class="btn facebook" href="https://www.facebook.com/AyudaPet26" target="_blank" rel="noopener">Facebook</a>
-        <a class="btn donate" href="https://donate.stripe.com/6oU3cpg1T0Y60sOerJ3ks00" target="_blank" rel="noopener">Donar</a>
+        <?php if (donate_button_enabled()): ?><a class="btn donate" href="https://donate.stripe.com/6oU3cpg1T0Y60sOerJ3ks00" target="_blank" rel="noopener">Donar</a><?php endif; ?>
       <?php endif; ?>
     </div>
     <div class="menu-foot">Registro exclusivo con telefono mexicano.</div>
@@ -1236,14 +1243,14 @@ function render(string $view, array $data = [], int $status = 200): void {
     <?php endforeach; ?>
     <?php view($view, get_defined_vars()); ?>
   </main>
-  <div class="donation-modal" data-donation-modal aria-hidden="true">
+  <?php if (donate_button_enabled()): ?><div class="donation-modal" data-donation-modal aria-hidden="true">
     <section class="donation-dialog" role="dialog" aria-modal="true" aria-labelledby="donation-title">
       <p class="eyebrow" style="color:var(--brand);">AyudaPet</p>
       <h2 id="donation-title">Quieres apoyar con un donativo?</h2>
       <p>Tu apoyo ayuda a mantener activa la plataforma para reportes de mascotas perdidas y en resguardo.</p>
       <div class="actions"><a class="btn primary" href="https://donate.stripe.com/6oU3cpg1T0Y60sOerJ3ks00" data-donation-yes>Si, donar</a><button class="btn" type="button" data-donation-no>No gracias</button></div>
     </section>
-  </div>
+  </div><?php endif; ?>
   <footer>AyudaPet &copy; <?= e($year) ?> | ayudapet.com</footer>
   <div class="lightbox" data-lightbox aria-hidden="true">
     <button class="lightbox-close" type="button" data-lightbox-close aria-label="Cerrar imagen">&times;</button>
@@ -1868,6 +1875,18 @@ function route(): void {
             $enabled = ($_POST['enabled'] ?? '0') === '1';
             set_app_setting('boost_button_enabled', $enabled ? 'true' : 'false');
             flash($enabled ? 'Boton de impulso activado.' : 'Boton de impulso desactivado.', 'success');
+            redirect_to(safe_next($_POST['next'] ?? '/'));
+        }
+
+        if ($path === '/admin/donate-button' && $method === 'POST') {
+            require_login();
+            if (!is_admin_user()) {
+                render('error', ['title' => 'Sin permiso', 'message' => 'Esta accion es privada.'], 403);
+                return;
+            }
+            $enabled = ($_POST['enabled'] ?? '0') === '1';
+            set_app_setting('donate_button_enabled', $enabled ? 'true' : 'false');
+            flash($enabled ? 'Boton de donar activado.' : 'Boton de donar oculto.', 'success');
             redirect_to(safe_next($_POST['next'] ?? '/'));
         }
 
