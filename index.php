@@ -947,14 +947,58 @@ function sync_report_archives(int $limit = 500): array {
     return ['checked' => count($pets), 'synced' => $synced, 'failed' => $failed];
 }
 
+function backfill_missing_report_coordinates(int $limit = 25): void {
+    if (!envv('API_KEY')) return;
+    ensure_report_columns();
+    $stmt = db()->prepare("SELECT id, direccion, direccion_completa FROM mascotas
+        WHERE (ubicacion_lat IS NULL OR ubicacion_lng IS NULL)
+          AND direccion IS NOT NULL AND direccion <> ''
+        ORDER BY actualizado_at DESC
+        LIMIT ?");
+    $stmt->bindValue(1, $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    foreach ($stmt->fetchAll() as $pet) {
+        try {
+            $geo = google_geocode_area((string)(($pet['direccion_completa'] ?? '') ?: ($pet['direccion'] ?? '')));
+            if (!$geo) continue;
+            db()->prepare('UPDATE mascotas SET ubicacion_lat = ?, ubicacion_lng = ?, direccion_completa = COALESCE(NULLIF(direccion_completa, \'\'), ?) WHERE id = ?')
+                ->execute([
+                    round((float)$geo['lat'], 6),
+                    round((float)$geo['lng'], 6),
+                    $geo['label'] ?? null,
+                    $pet['id'],
+                ]);
+        } catch (Throwable $e) {
+            error_log('No se pudo completar coordenadas para reporte ' . ($pet['id'] ?? '') . ': ' . $e->getMessage());
+        }
+    }
+}
+
 function heatmap_reports(): array {
+    ensure_report_columns();
     ensure_archive_table();
-    $stmt = db()->query("SELECT id, nombre, tipo_reporte, tipo_mascota, direccion, direccion_completa, principal, ubicacion_lat, ubicacion_lng, encontrado, creado_at, archivado_at
-        FROM mascotas_archivadas
-        WHERE ubicacion_lat IS NOT NULL AND ubicacion_lng IS NOT NULL
-        ORDER BY archivado_at DESC
-        LIMIT 2000");
-    $reports = $stmt->fetchAll();
+    backfill_missing_report_coordinates();
+    $stmt = db()->query("SELECT * FROM (
+            SELECT id, nombre, tipo_reporte, tipo_mascota, direccion, direccion_completa, principal, ubicacion_lat, ubicacion_lng, encontrado, creado_at, actualizado_at AS orden_at, NULL AS archivado_at, 0 AS source_order
+            FROM mascotas
+            WHERE ubicacion_lat IS NOT NULL AND ubicacion_lng IS NOT NULL
+            UNION ALL
+            SELECT id, nombre, tipo_reporte, tipo_mascota, direccion, direccion_completa, principal, ubicacion_lat, ubicacion_lng, encontrado, creado_at, archivado_at AS orden_at, archivado_at, 1 AS source_order
+            FROM mascotas_archivadas
+            WHERE ubicacion_lat IS NOT NULL AND ubicacion_lng IS NOT NULL
+        ) ubicaciones
+        ORDER BY source_order ASC, orden_at DESC
+        LIMIT 4000");
+    $rawReports = $stmt->fetchAll();
+    $reports = [];
+    $seen = [];
+    foreach ($rawReports as $report) {
+        $id = (string)($report['id'] ?? '');
+        if ($id !== '' && isset($seen[$id])) continue;
+        if ($id !== '') $seen[$id] = true;
+        $reports[] = $report;
+        if (count($reports) >= 2000) break;
+    }
     $stats = ['total' => count($reports), 'extravio' => 0, 'resguardo' => 0, 'en_casa' => 0];
     foreach ($reports as $report) {
         $type = report_type_value($report['tipo_reporte'] ?? '');
@@ -1135,6 +1179,16 @@ function report_payload(string $id, ?array $existing = null): array {
     if (!$direccionCompleta && $direccion && $direccion === ($existing['direccion'] ?? null)) {
         $direccionCompleta = $existing['direccion_completa'] ?? null;
     }
+    $ubicacionLat = geo_value(post_value('ubicacion_lat'), -90, 90);
+    $ubicacionLng = geo_value(post_value('ubicacion_lng'), -180, 180);
+    if (($ubicacionLat === null || $ubicacionLng === null) && $direccion) {
+        $geo = google_geocode_area($direccionCompleta ?: $direccion);
+        if ($geo) {
+            $ubicacionLat = round((float)$geo['lat'], 6);
+            $ubicacionLng = round((float)$geo['lng'], 6);
+            if (!$direccionCompleta) $direccionCompleta = $geo['label'] ?? null;
+        }
+    }
 
     $principal = !empty($_POST['remove_principal']) ? null : ($existing['principal'] ?? null);
     if (isset($_FILES['principal'])) {
@@ -1188,8 +1242,8 @@ function report_payload(string $id, ?array $existing = null): array {
         'docil' => post_value('docil'),
         'direccion' => $direccion,
         'direccion_completa' => $direccionCompleta,
-        'ubicacion_lat' => geo_value(post_value('ubicacion_lat'), -90, 90),
-        'ubicacion_lng' => geo_value(post_value('ubicacion_lng'), -180, 180),
+        'ubicacion_lat' => $ubicacionLat,
+        'ubicacion_lng' => $ubicacionLng,
         'calles' => null,
         'dueno' => null,
         'recompensa' => $reportType === 'resguardo' ? null : money_display(post_value('recompensa')),
