@@ -45,6 +45,7 @@ const BOOST_DAYS = 10;
 const BOOST_PRICE_CENTS = 130000;
 const BOOST_PRICE_LABEL = '$1,300 M.N.';
 const BOOST_PRODUCT_IMAGE_URL = 'https://ayudapet.com/uploads/images/product.jpeg';
+const DEFAULT_OG_IMAGE = '/static/og-social.jpg';
 
 date_default_timezone_set(getenv('APP_TIMEZONE') ?: 'America/Matamoros');
 
@@ -681,6 +682,61 @@ function meta_image_info(string $url): array {
     ];
 }
 
+function local_public_path(?string $urlOrPath): ?string {
+    $path = parse_url((string)$urlOrPath, PHP_URL_PATH);
+    if (!$path) return null;
+    $file = __DIR__ . '/' . ltrim($path, '/');
+    $realBase = realpath(__DIR__);
+    $realFile = is_file($file) ? realpath($file) : null;
+    if (!$realBase || !$realFile || !starts_with($realFile, $realBase)) return null;
+    return $realFile;
+}
+
+function create_social_image(?string $sourceUrlOrPath, string $targetPublicPath): ?string {
+    if (!function_exists('imagecreatefromstring') || !function_exists('imagejpeg')) return null;
+    $source = local_public_path($sourceUrlOrPath);
+    if (!$source || !is_readable($source)) return null;
+    $target = __DIR__ . '/' . ltrim($targetPublicPath, '/');
+    $dir = dirname($target);
+    if (!is_dir($dir) && !mkdir($dir, 0755, true)) return null;
+    $raw = @file_get_contents($source);
+    if ($raw === false) return null;
+    $image = @imagecreatefromstring($raw);
+    if (!$image) return null;
+    $canvasW = 1200;
+    $canvasH = 630;
+    $canvas = imagecreatetruecolor($canvasW, $canvasH);
+    $white = imagecolorallocate($canvas, 255, 255, 255);
+    imagefilledrectangle($canvas, 0, 0, $canvasW, $canvasH, $white);
+    $srcW = imagesx($image);
+    $srcH = imagesy($image);
+    if ($srcW > 0 && $srcH > 0) {
+        $scale = min($canvasW / $srcW, $canvasH / $srcH);
+        $dstW = (int)round($srcW * $scale);
+        $dstH = (int)round($srcH * $scale);
+        $dstX = (int)floor(($canvasW - $dstW) / 2);
+        $dstY = (int)floor(($canvasH - $dstH) / 2);
+        imagecopyresampled($canvas, $image, $dstX, $dstY, 0, 0, $dstW, $dstH, $srcW, $srcH);
+    }
+    $saved = imagejpeg($canvas, $target, 86);
+    imagedestroy($image);
+    imagedestroy($canvas);
+    return $saved ? $targetPublicPath : null;
+}
+
+function pet_social_image(array $pet): string {
+    $principal = trim((string)($pet['principal'] ?? ''));
+    if ($principal === '') return full_url(DEFAULT_OG_IMAGE);
+    $id = preg_replace('/[^a-f0-9]/i', '', (string)($pet['id'] ?? ''));
+    if ($id) {
+        $target = '/uploads/reportes/' . $id . '/og.jpg';
+        if (is_file(__DIR__ . $target) || create_social_image($principal, $target)) {
+            return full_url($target);
+        }
+    }
+    return absolute_url($principal, DEFAULT_OG_IMAGE);
+}
+
 function redirect_to(string $path): void {
     header('Location: ' . $path);
     exit;
@@ -1212,7 +1268,9 @@ function upload_image(array $file, string $reportId, string $label): ?string {
     if (!move_uploaded_file($file['tmp_name'], $target)) {
         throw new RuntimeException('No se pudo guardar la imagen.');
     }
-    return '/uploads/reportes/' . $reportId . '/' . $name;
+    $publicPath = '/uploads/reportes/' . $reportId . '/' . $name;
+    if ($label === 'principal') create_social_image($publicPath, '/uploads/reportes/' . $reportId . '/og.jpg');
+    return $publicPath;
 }
 
 function report_payload(string $id, ?array $existing = null): array {
@@ -1358,7 +1416,7 @@ function render(string $view, array $data = [], int $status = 200): void {
     $metaDescription = meta_text($metaDescription ?? 'AyudaPet conecta reportes de mascotas perdidas y localizadas para que vuelvan a casa mas rapido.');
     $metaUrl = absolute_url($metaUrl ?? '/', '/');
     $canonicalUrl = absolute_url($canonicalUrl ?? $metaUrl, '/');
-    $metaImage = absolute_url($metaImage ?? '/static/og_image.png', '/static/og_image.png');
+    $metaImage = absolute_url($metaImage ?? DEFAULT_OG_IMAGE, DEFAULT_OG_IMAGE);
     $metaImageAlt = meta_text($metaImageAlt ?? $metaTitle, 120);
     $metaImageInfo = meta_image_info($metaImage);
     $ogType = $ogType ?? 'website';
@@ -1381,6 +1439,7 @@ function render(string $view, array $data = [], int $status = 200): void {
   <meta property="og:description" content="<?= e($metaDescription) ?>">
   <meta property="og:url" content="<?= e($metaUrl) ?>">
   <meta property="og:image" content="<?= e($metaImage) ?>">
+  <meta property="og:image:url" content="<?= e($metaImage) ?>">
   <meta property="og:image:secure_url" content="<?= e($metaImage) ?>">
   <meta property="og:image:alt" content="<?= e($metaImageAlt) ?>">
   <?php if (!empty($metaImageInfo['width']) && !empty($metaImageInfo['height'])): ?><meta property="og:image:width" content="<?= e($metaImageInfo['width']) ?>">
@@ -1392,6 +1451,7 @@ function render(string $view, array $data = [], int $status = 200): void {
   <meta name="twitter:description" content="<?= e($metaDescription) ?>">
   <meta name="twitter:image" content="<?= e($metaImage) ?>">
   <meta name="twitter:image:alt" content="<?= e($metaImageAlt) ?>">
+  <meta itemprop="image" content="<?= e($metaImage) ?>">
   <link rel="icon" type="image/png" href="/static/logo.png">
   <link rel="apple-touch-icon" href="/static/logo.png">
   <style><?= css() ?></style>
@@ -1974,7 +2034,7 @@ function render_mascota_detail_page(array $pet, bool $skipViewIncrement = false)
         'metaDescription' => ($pet['descripcion'] ?: 'Reporte de mascota en AyudaPet.') . ($pet['direccion'] ? ' Ubicacion: ' . $pet['direccion'] . '.' : ''),
         'metaUrl' => $shareUrl,
         'canonicalUrl' => $detailUrl,
-        'metaImage' => $pet['principal'] ?: full_url('/static/og_image.png'),
+        'metaImage' => pet_social_image($pet),
         'metaImageAlt' => 'Foto de ' . ($pet['nombre'] ?: 'mascota') . ' en AyudaPet',
         'ogType' => 'article',
         'mascota' => $pet,
