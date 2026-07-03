@@ -791,6 +791,19 @@ function get_mascota(string $id): ?array {
     return $pet ?: null;
 }
 
+function pet_short_code(array $pet): string {
+    return substr((string)($pet['id'] ?? ''), 0, 8);
+}
+
+function get_mascota_by_short_code(string $code): ?array {
+    if (!preg_match('/^[a-f0-9]{8,16}$/', $code)) return null;
+    ensure_report_columns();
+    $stmt = db()->prepare('SELECT * FROM mascotas WHERE id LIKE ? ORDER BY creado_at DESC LIMIT 2');
+    $stmt->execute([$code . '%']);
+    $pets = $stmt->fetchAll();
+    return count($pets) === 1 ? $pets[0] : null;
+}
+
 function increment_report_views(string $id): void {
     ensure_report_columns();
     db()->prepare('UPDATE mascotas SET vistas = vistas + 1 WHERE id = ?')->execute([$id]);
@@ -1911,6 +1924,12 @@ function route(): void {
             return;
         }
 
+        if (preg_match('#^/m/([a-f0-9]{8,16})$#', $path, $m)) {
+            $pet = get_mascota_by_short_code($m[1]);
+            if (!$pet) { render('error', ['title' => 'Reporte no encontrado', 'message' => 'El enlace corto no existe o ya no esta disponible.'], 404); return; }
+            redirect_to('/mascotas/' . $pet['id']);
+        }
+
         if (preg_match('#^/mascotas/([a-f0-9]{32})$#', $path, $m)) {
             $pet = get_mascota($m[1]);
             if (!$pet) { render('error', ['title' => 'Reporte no encontrado', 'message' => 'El reporte solicitado no existe.'], 404); return; }
@@ -1929,6 +1948,7 @@ function route(): void {
             $pet['vistas'] = ((int)($pet['vistas'] ?? 0)) + 1;
             $status = report_status_label($pet);
             $detailUrl = full_url('/mascotas/' . $pet['id']);
+            $shareUrl = full_url('/m/' . pet_short_code($pet));
             $mapUrl = null;
             if (envv('API_KEY') && $pet['direccion']) $mapUrl = 'https://www.google.com/maps/embed/v1/place?key=' . urlencode(envv('API_KEY')) . '&q=' . urlencode($pet['direccion'] . ', Mexico');
             render('detalle', [
@@ -1941,7 +1961,7 @@ function route(): void {
                 'isOwner' => owns_report($pet),
                 'canManage' => can_manage_report($pet),
                 'mapUrl' => $mapUrl,
-                'share' => ['url' => $detailUrl, 'text' => "{$status}: {$pet['nombre']} en AyudaPet", 'message' => "{$status}: {$pet['nombre']} en AyudaPet {$detailUrl}"],
+                'share' => ['url' => $shareUrl, 'text' => "{$status}: {$pet['nombre']} en AyudaPet", 'message' => "{$status}: {$pet['nombre']} en AyudaPet {$shareUrl}"],
             ]);
             return;
         }
