@@ -18,9 +18,9 @@ define('LABSMOBILE_DEFAULT_COUNTRY_CODE', '52');
 
 define('API_KEY', '');
 
-define('STRIPE_SECRET_KEY', '');
-define('STRIPE_WEBHOOK_SECRET', '');
-define('STRIPE_PRICE_ID', '');
+define('PAYPAL_CLIENT_ID', '');
+define('PAYPAL_SECRET', '');
+define('PAYPAL_MODE', 'live');
 
 define('BOOST_NOTIFY_EMAIL', '');
 define('MAIL_FROM', 'no-reply@ayudapet.com');

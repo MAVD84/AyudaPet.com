@@ -124,6 +124,12 @@ function ensure_report_columns(): void {
     if (empty($existing['impulsado_hasta'])) {
         db()->exec('ALTER TABLE mascotas ADD COLUMN impulsado_hasta DATETIME NULL');
     }
+    if (empty($existing['paypal_order_id'])) {
+        db()->exec('ALTER TABLE mascotas ADD COLUMN paypal_order_id VARCHAR(255) NULL');
+    }
+    if (empty($existing['paypal_payment_status'])) {
+        db()->exec('ALTER TABLE mascotas ADD COLUMN paypal_payment_status VARCHAR(50) NULL');
+    }
     if (empty($existing['stripe_session_id'])) {
         db()->exec('ALTER TABLE mascotas ADD COLUMN stripe_session_id VARCHAR(255) NULL');
     }
@@ -170,6 +176,8 @@ function ensure_archive_table(): void {
         encontrado TINYINT(1) NOT NULL DEFAULT 0,
         vistas INT UNSIGNED NOT NULL DEFAULT 0,
         impulsado_hasta DATETIME NULL,
+        paypal_order_id VARCHAR(255) NULL,
+        paypal_payment_status VARCHAR(50) NULL,
         stripe_session_id VARCHAR(255) NULL,
         stripe_payment_status VARCHAR(50) NULL,
         boost_expired_notified_at DATETIME NULL,
@@ -189,6 +197,12 @@ function ensure_archive_table(): void {
     }
     if (empty($existing['direccion_completa'])) {
         db()->exec('ALTER TABLE mascotas_archivadas ADD COLUMN direccion_completa VARCHAR(700) NULL AFTER direccion');
+    }
+    if (empty($existing['paypal_order_id'])) {
+        db()->exec('ALTER TABLE mascotas_archivadas ADD COLUMN paypal_order_id VARCHAR(255) NULL AFTER impulsado_hasta');
+    }
+    if (empty($existing['paypal_payment_status'])) {
+        db()->exec('ALTER TABLE mascotas_archivadas ADD COLUMN paypal_payment_status VARCHAR(50) NULL AFTER paypal_order_id');
     }
     $indexes = db()->query("SHOW INDEX FROM mascotas_archivadas WHERE Key_name = 'uniq_archivadas_reporte'")->fetchAll();
     if (!$indexes) {
@@ -250,8 +264,8 @@ function boosted_until_label(array $pet): ?string {
     return $timestamp ? date('d/m/Y', $timestamp) : null;
 }
 
-function stripe_enabled(): bool {
-    return (bool)(envv('STRIPE_SECRET_KEY') && envv('STRIPE_PRICE_ID'));
+function paypal_enabled(): bool {
+    return (bool)(envv('PAYPAL_CLIENT_ID') && envv('PAYPAL_SECRET'));
 }
 
 function boost_button_enabled(): bool {
@@ -268,22 +282,52 @@ function donate_button_enabled(): bool {
     return !in_array($value, ['0', 'false', 'off', 'no'], true);
 }
 
-function stripe_request(string $method, string $endpoint, array $params = []): array {
-    $secret = envv('STRIPE_SECRET_KEY');
-    if (!$secret) throw new RuntimeException('Falta STRIPE_SECRET_KEY en el .env.');
-    $url = 'https://api.stripe.com/v1/' . ltrim($endpoint, '/');
-    if ($method === 'GET' && $params) {
-        $url .= '?' . http_build_query($params);
+function paypal_base_url(): string {
+    return lower_text((string)envv('PAYPAL_MODE', 'live')) === 'sandbox'
+        ? 'https://api-m.sandbox.paypal.com'
+        : 'https://api-m.paypal.com';
+}
+
+function paypal_access_token(): string {
+    $clientId = envv('PAYPAL_CLIENT_ID');
+    $secret = envv('PAYPAL_SECRET');
+    if (!$clientId || !$secret) throw new RuntimeException('Faltan PAYPAL_CLIENT_ID o PAYPAL_SECRET en el .env.');
+    $ch = curl_init(paypal_base_url() . '/v1/oauth2/token');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => 'grant_type=client_credentials',
+        CURLOPT_USERPWD => $clientId . ':' . $secret,
+        CURLOPT_HTTPHEADER => ['Accept: application/json', 'Accept-Language: es_MX'],
+        CURLOPT_TIMEOUT => 20,
+    ]);
+    $body = curl_exec($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $error = curl_error($ch);
+    curl_close($ch);
+    $json = json_decode((string)$body, true);
+    if ($body === false || $status < 200 || $status >= 300 || empty($json['access_token'])) {
+        $message = is_array($json) && isset($json['error_description']) ? $json['error_description'] : ($error ?: 'PayPal no pudo autenticar la solicitud.');
+        throw new RuntimeException($message);
     }
-    $ch = curl_init($url);
+    return (string)$json['access_token'];
+}
+
+function paypal_request(string $method, string $endpoint, array $payload = []): array {
+    $ch = curl_init(paypal_base_url() . '/' . ltrim($endpoint, '/'));
+    $headers = [
+        'Authorization: Bearer ' . paypal_access_token(),
+        'Content-Type: application/json',
+        'PayPal-Request-Id: ' . bin2hex(random_bytes(16)),
+    ];
     $options = [
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_USERPWD => $secret . ':',
-        CURLOPT_TIMEOUT => 20,
+        CURLOPT_CUSTOMREQUEST => $method,
+        CURLOPT_HTTPHEADER => $headers,
+        CURLOPT_TIMEOUT => 25,
     ];
-    if ($method === 'POST') {
-        $options[CURLOPT_POST] = true;
-        $options[CURLOPT_POSTFIELDS] = http_build_query($params);
+    if ($payload) {
+        $options[CURLOPT_POSTFIELDS] = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
     curl_setopt_array($ch, $options);
     $body = curl_exec($ch);
@@ -292,7 +336,7 @@ function stripe_request(string $method, string $endpoint, array $params = []): a
     curl_close($ch);
     $json = json_decode((string)$body, true);
     if ($body === false || $status < 200 || $status >= 300) {
-        $message = is_array($json) && isset($json['error']['message']) ? $json['error']['message'] : ($error ?: 'Stripe no pudo procesar la solicitud.');
+        $message = is_array($json) && isset($json['message']) ? $json['message'] : ($error ?: 'PayPal no pudo procesar la solicitud.');
         throw new RuntimeException($message);
     }
     return is_array($json) ? $json : [];
@@ -300,21 +344,44 @@ function stripe_request(string $method, string $endpoint, array $params = []): a
 
 function create_boost_checkout(array $pet): string {
     if (!boost_button_enabled()) throw new RuntimeException('El impulso automatico esta desactivado.');
-    if (!stripe_enabled()) throw new RuntimeException('Stripe todavia no esta configurado.');
-    $session = stripe_request('POST', 'checkout/sessions', [
-        'mode' => 'payment',
-        'line_items[0][price]' => envv('STRIPE_PRICE_ID'),
-        'line_items[0][quantity]' => '1',
-        'success_url' => full_url('/mascotas/' . $pet['id']) . '?impulso=exito&session_id={CHECKOUT_SESSION_ID}',
-        'cancel_url' => full_url('/mascotas/' . $pet['id']) . '?impulso=cancelado',
-        'metadata[pet_id]' => $pet['id'],
-        'metadata[owner_phone]' => $pet['reportado_por'],
-        'metadata[boost_days]' => (string)BOOST_DAYS,
+    if (!paypal_enabled()) throw new RuntimeException('PayPal todavia no esta configurado.');
+    $order = paypal_request('POST', 'v2/checkout/orders', [
+        'intent' => 'CAPTURE',
+        'purchase_units' => [[
+            'reference_id' => $pet['id'],
+            'custom_id' => $pet['id'],
+            'description' => 'Impulsa tu anuncio por ' . BOOST_DAYS . ' dias',
+            'amount' => [
+                'currency_code' => 'MXN',
+                'value' => number_format(BOOST_PRICE_CENTS / 100, 2, '.', ''),
+            ],
+        ]],
+        'payment_source' => [
+            'paypal' => [
+                'experience_context' => [
+                    'brand_name' => 'AyudaPet',
+                    'locale' => 'es-MX',
+                    'landing_page' => 'LOGIN',
+                    'shipping_preference' => 'NO_SHIPPING',
+                    'user_action' => 'PAY_NOW',
+                    'return_url' => full_url('/paypal/return?pet_id=' . urlencode($pet['id'])),
+                    'cancel_url' => full_url('/paypal/cancel?pet_id=' . urlencode($pet['id'])),
+                ],
+            ],
+        ],
     ]);
-    if (empty($session['id']) || empty($session['url'])) throw new RuntimeException('Stripe no regreso una sesion valida.');
-    db()->prepare('UPDATE mascotas SET stripe_session_id = ?, stripe_payment_status = ? WHERE id = ? AND reportado_por = ?')
-        ->execute([$session['id'], $session['payment_status'] ?? 'pending', $pet['id'], current_user_phone()]);
-    return (string)$session['url'];
+    $orderId = (string)($order['id'] ?? '');
+    $approveUrl = '';
+    foreach (($order['links'] ?? []) as $link) {
+        if (($link['rel'] ?? '') === 'approve' && !empty($link['href'])) {
+            $approveUrl = (string)$link['href'];
+            break;
+        }
+    }
+    if (!$orderId || !$approveUrl) throw new RuntimeException('PayPal no regreso una orden valida.');
+    db()->prepare('UPDATE mascotas SET paypal_order_id = ?, paypal_payment_status = ? WHERE id = ? AND reportado_por = ?')
+        ->execute([$orderId, (string)($order['status'] ?? 'CREATED'), $pet['id'], current_user_phone()]);
+    return $approveUrl;
 }
 
 function smtp_read($socket): string {
@@ -409,7 +476,7 @@ function send_notification_email(string $subject, array $lines): array {
     }
 }
 
-function send_boost_notification(array $pet, string $sessionId, string $boostedUntil): void {
+function send_boost_notification(array $pet, string $paymentId, string $boostedUntil): void {
     $url = full_url('/mascotas/' . $pet['id']);
     [$sent, $message] = send_notification_email('Nuevo anuncio impulsado en AyudaPet', [
         'Se activo un anuncio impulsado en AyudaPet.',
@@ -420,7 +487,7 @@ function send_boost_notification(array $pet, string $sessionId, string $boostedU
         'Contacto publico: ' . public_contact_value($pet['contacto'] ?? null),
         'Direccion: ' . ($pet['direccion'] ?? ''),
         'Activo hasta: ' . $boostedUntil,
-        'Stripe session: ' . $sessionId,
+        'PayPal order: ' . $paymentId,
         '',
         'Ver reporte: ' . $url,
     ]);
@@ -438,7 +505,7 @@ function send_boost_expired_notification(array $pet): bool {
         'Contacto publico: ' . public_contact_value($pet['contacto'] ?? null),
         'Direccion: ' . ($pet['direccion'] ?? ''),
         'Estuvo activo hasta: ' . ($pet['impulsado_hasta'] ?? ''),
-        'Stripe session: ' . ($pet['stripe_session_id'] ?? ''),
+        'PayPal order: ' . (($pet['paypal_order_id'] ?? '') ?: ($pet['stripe_session_id'] ?? '')),
         '',
         'Ver reporte: ' . $url,
     ]);
@@ -448,7 +515,7 @@ function send_boost_expired_notification(array $pet): bool {
 
 function process_expired_boosts(int $limit = 50): array {
     ensure_report_columns();
-    $stmt = db()->prepare("SELECT * FROM mascotas WHERE impulsado_hasta IS NOT NULL AND impulsado_hasta <= NOW() AND stripe_payment_status IN ('paid', 'manual') AND boost_expired_notified_at IS NULL ORDER BY impulsado_hasta ASC LIMIT ?");
+    $stmt = db()->prepare("SELECT * FROM mascotas WHERE impulsado_hasta IS NOT NULL AND impulsado_hasta <= NOW() AND (paypal_payment_status IN ('COMPLETED', 'manual') OR stripe_payment_status IN ('paid', 'manual')) AND boost_expired_notified_at IS NULL ORDER BY impulsado_hasta ASC LIMIT ?");
     $stmt->bindValue(1, max(1, min(100, $limit)), PDO::PARAM_INT);
     $stmt->execute();
     $pets = $stmt->fetchAll();
@@ -465,70 +532,35 @@ function process_expired_boosts(int $limit = 50): array {
     return ['checked' => count($pets), 'sent' => $sent, 'failed' => $failed];
 }
 
-function activate_boost(string $petId, string $sessionId): void {
+function activate_boost(string $petId, string $paymentId, string $provider = 'paypal'): void {
     ensure_report_columns();
     $pet = get_mascota($petId);
     if (!$pet) return;
-    $alreadyNotified = is_boosted($pet) && ($pet['stripe_session_id'] ?? '') === $sessionId && ($pet['stripe_payment_status'] ?? '') === 'paid';
-    db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . BOOST_DAYS . ' DAY), stripe_session_id = ?, stripe_payment_status = ?, boost_expired_notified_at = NULL WHERE id = ?')
-        ->execute([$sessionId, 'paid', $petId]);
+    $alreadyNotified = is_boosted($pet) && (($pet['paypal_order_id'] ?? '') === $paymentId || ($pet['stripe_session_id'] ?? '') === $paymentId);
+    if ($provider === 'legacy_stripe') {
+        db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . BOOST_DAYS . ' DAY), stripe_session_id = ?, stripe_payment_status = ?, boost_expired_notified_at = NULL WHERE id = ?')
+            ->execute([$paymentId, 'paid', $petId]);
+    } else {
+        db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . BOOST_DAYS . ' DAY), paypal_order_id = ?, paypal_payment_status = ?, boost_expired_notified_at = NULL WHERE id = ?')
+            ->execute([$paymentId, 'COMPLETED', $petId]);
+    }
     if (!$alreadyNotified) {
         $updated = get_mascota($petId);
-        send_boost_notification($updated ?: $pet, $sessionId, (string)(($updated['impulsado_hasta'] ?? null) ?: date('Y-m-d H:i:s', strtotime('+' . BOOST_DAYS . ' days'))));
+        send_boost_notification($updated ?: $pet, $paymentId, (string)(($updated['impulsado_hasta'] ?? null) ?: date('Y-m-d H:i:s', strtotime('+' . BOOST_DAYS . ' days'))));
     }
 }
 
-function confirm_boost_checkout(string $petId, string $sessionId): bool {
-    if (!stripe_enabled() || $sessionId === '') return false;
-    $session = stripe_request('GET', 'checkout/sessions/' . rawurlencode($sessionId));
-    $sessionPetId = (string)($session['metadata']['pet_id'] ?? '');
-    if (($session['payment_status'] ?? '') !== 'paid' || $sessionPetId !== $petId) return false;
-    activate_boost($petId, (string)($session['id'] ?? $sessionId));
+function capture_paypal_boost(string $petId, string $orderId): bool {
+    if (!paypal_enabled() || $orderId === '') return false;
+    $pet = get_mascota($petId);
+    if (!$pet || ($pet['paypal_order_id'] ?? '') !== $orderId) return false;
+    $capture = paypal_request('POST', 'v2/checkout/orders/' . rawurlencode($orderId) . '/capture');
+    if (($capture['status'] ?? '') !== 'COMPLETED') return false;
+    $purchase = $capture['purchase_units'][0] ?? [];
+    $capturePetId = (string)(($purchase['custom_id'] ?? '') ?: ($purchase['reference_id'] ?? ''));
+    if ($capturePetId !== $petId) return false;
+    activate_boost($petId, $orderId, 'paypal');
     return true;
-}
-
-function stripe_signature_valid(string $payload, string $header, string $secret): bool {
-    $timestamp = null;
-    $signatures = [];
-    foreach (explode(',', $header) as $part) {
-        [$key, $value] = array_pad(explode('=', trim($part), 2), 2, '');
-        if ($key === 't') $timestamp = $value;
-        if ($key === 'v1') $signatures[] = $value;
-    }
-    if (!$timestamp || !$signatures) return false;
-    if (abs(time() - (int)$timestamp) > 300) return false;
-    $expected = hash_hmac('sha256', $timestamp . '.' . $payload, $secret);
-    foreach ($signatures as $signature) {
-        if (hash_equals($expected, $signature)) return true;
-    }
-    return false;
-}
-
-function handle_stripe_webhook(): void {
-    $secret = envv('STRIPE_WEBHOOK_SECRET');
-    $payload = file_get_contents('php://input') ?: '';
-    $signature = $_SERVER['HTTP_STRIPE_SIGNATURE'] ?? '';
-    if (!$secret || !stripe_signature_valid($payload, $signature, $secret)) {
-        http_response_code(400);
-        echo 'invalid signature';
-        return;
-    }
-    $event = json_decode($payload, true);
-    if (!is_array($event)) {
-        http_response_code(400);
-        echo 'invalid payload';
-        return;
-    }
-    if (($event['type'] ?? '') === 'checkout.session.completed') {
-        $session = $event['data']['object'] ?? [];
-        $petId = (string)($session['metadata']['pet_id'] ?? '');
-        $sessionId = (string)($session['id'] ?? '');
-        if ($petId && ($session['payment_status'] ?? '') === 'paid') {
-            activate_boost($petId, $sessionId);
-        }
-    }
-    http_response_code(200);
-    echo 'ok';
 }
 
 function money_input_value(?string $value): string {
@@ -850,7 +882,7 @@ function archive_report(array $pet, string $reason = 'deleted_by_owner'): void {
         'id', 'reportado_por', 'tipo_reporte', 'tipo_mascota', 'nombre', 'descripcion', 'contacto',
         'principal', 'secundarias', 'fecha', 'edad', 'raza', 'genero', 'color', 'collar', 'docil',
         'direccion', 'direccion_completa', 'ubicacion_lat', 'ubicacion_lng', 'calles', 'dueno', 'recompensa', 'encontrado',
-        'vistas', 'impulsado_hasta', 'stripe_session_id', 'stripe_payment_status',
+        'vistas', 'impulsado_hasta', 'paypal_order_id', 'paypal_payment_status', 'stripe_session_id', 'stripe_payment_status',
         'boost_expired_notified_at', 'creado_at', 'actualizado_at'
     ];
     $columns = array_merge(['archivado_por', 'archivado_motivo'], $fields, ['snapshot_json']);
@@ -1753,11 +1785,6 @@ function route(): void {
     $path = path_only();
 
     try {
-        if ($path === '/stripe/webhook' && $method === 'POST') {
-            handle_stripe_webhook();
-            return;
-        }
-
         if ($path === '/cron/boosts') {
             $secret = envv('CRON_SECRET');
             $token = (string)($_GET['token'] ?? '');
@@ -1975,6 +2002,36 @@ function route(): void {
             return;
         }
 
+        if ($path === '/paypal/return') {
+            require_login();
+            $petId = (string)($_GET['pet_id'] ?? '');
+            $orderId = (string)($_GET['token'] ?? '');
+            if (!$petId || !$orderId) {
+                flash('PayPal no regreso los datos completos del pago.', 'error');
+                redirect_to('/');
+            }
+            $pet = get_mascota($petId);
+            if (!$pet || !can_manage_report($pet)) {
+                render('error', ['title' => 'Sin permiso', 'message' => 'No puedes confirmar este impulso.'], 403);
+                return;
+            }
+            try {
+                $confirmed = capture_paypal_boost($petId, $orderId);
+                flash($confirmed ? 'Tu anuncio ya esta impulsado por 10 dias.' : 'No se pudo confirmar el pago de PayPal.', $confirmed ? 'success' : 'error');
+            } catch (Throwable $e) {
+                error_log('No se pudo capturar impulso PayPal: ' . $e->getMessage());
+                flash('No se pudo confirmar el pago de PayPal. Intenta de nuevo o contactanos.', 'error');
+            }
+            redirect_to('/mascotas/' . $petId);
+        }
+
+        if ($path === '/paypal/cancel') {
+            require_login();
+            $petId = (string)($_GET['pet_id'] ?? '');
+            flash('Pago cancelado. Tu reporte no fue impulsado.', 'warning');
+            redirect_to($petId ? '/mascotas/' . $petId : '/');
+        }
+
         if ($path === '/reportar') {
             require_login();
             if ($method === 'POST') {
@@ -2000,17 +2057,6 @@ function route(): void {
         if (preg_match('#^/mascotas/([a-f0-9]{32})$#', $path, $m)) {
             $pet = get_mascota($m[1]);
             if (!$pet) { render('error', ['title' => 'Reporte no encontrado', 'message' => 'El reporte solicitado no existe.'], 404); return; }
-            if (($_GET['impulso'] ?? '') === 'exito') {
-                try {
-                    $confirmed = confirm_boost_checkout($pet['id'], (string)($_GET['session_id'] ?? ''));
-                    flash($confirmed ? 'Tu anuncio ya esta impulsado por 10 dias.' : 'Pago recibido. Stripe confirmara el impulso en unos momentos.', 'success');
-                } catch (Throwable $e) {
-                    error_log('No se pudo confirmar impulso Stripe: ' . $e->getMessage());
-                    flash('Pago recibido. Stripe confirmara el impulso en unos momentos.', 'success');
-                }
-                redirect_to('/mascotas/' . $pet['id']);
-            }
-            if (($_GET['impulso'] ?? '') === 'cancelado') { flash('Pago cancelado. Tu reporte no fue impulsado.', 'warning'); redirect_to('/mascotas/' . $pet['id']); }
             increment_report_views($pet['id']);
             $pet['vistas'] = ((int)($pet['vistas'] ?? 0)) + 1;
             $status = report_status_label($pet);
@@ -2054,11 +2100,11 @@ function route(): void {
             if (!$pet) { render('error', ['title' => 'Reporte no encontrado', 'message' => 'El reporte solicitado no existe.'], 404); return; }
             $enabled = ($_POST['enabled'] ?? '0') === '1';
             if ($enabled) {
-                db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . BOOST_DAYS . ' DAY), stripe_session_id = NULL, stripe_payment_status = ?, boost_expired_notified_at = NULL WHERE id = ?')
-                    ->execute(['manual', $pet['id']]);
+                db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . BOOST_DAYS . ' DAY), paypal_order_id = NULL, paypal_payment_status = ?, stripe_session_id = NULL, stripe_payment_status = ?, boost_expired_notified_at = NULL WHERE id = ?')
+                    ->execute(['manual', 'manual', $pet['id']]);
                 flash('Impulso manual activado por ' . BOOST_DAYS . ' dias.', 'success');
             } else {
-                db()->prepare('UPDATE mascotas SET impulsado_hasta = NULL, stripe_session_id = NULL, stripe_payment_status = NULL, boost_expired_notified_at = NULL WHERE id = ?')
+                db()->prepare('UPDATE mascotas SET impulsado_hasta = NULL, paypal_order_id = NULL, paypal_payment_status = NULL, stripe_session_id = NULL, stripe_payment_status = NULL, boost_expired_notified_at = NULL WHERE id = ?')
                     ->execute([$pet['id']]);
                 flash('Impulso manual desactivado.', 'success');
             }
