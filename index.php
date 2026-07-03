@@ -1222,7 +1222,7 @@ function render(string $view, array $data = [], int $status = 200): void {
       <?php if ($currentUser): ?>
         <a class="btn ghost <?= $active('/perfil') ?>" href="/perfil">Mi perfil</a>
         <a class="btn ghost <?= $active('/reportar') ?>" href="/reportar">Reportar mascota</a>
-        <a class="btn ghost <?= $active('/') ?>" href="/">Reportes</a>
+        <a class="btn ghost <?= $active('/') ?>" href="/#reportes-recientes">Reportes</a>
         <?php if (is_admin_user()): ?><a class="btn ghost <?= $active('/mapa-calor') ?>" href="/mapa-calor">Mapa de calor</a><form class="menu-setting" method="post" action="/admin/boost-button"><input type="hidden" name="enabled" value="0"><input type="hidden" name="next" value="<?= e($_SERVER['REQUEST_URI'] ?? '/') ?>"><label class="switch"><span class="switch-text"><span>Impulso automatico</span><small><?= boost_button_enabled() ? 'Boton activo' : 'WhatsApp manual' ?></small></span><input type="checkbox" name="enabled" value="1" <?= boost_button_enabled() ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form><form class="menu-setting" method="post" action="/admin/donate-button"><input type="hidden" name="enabled" value="0"><input type="hidden" name="next" value="<?= e($_SERVER['REQUEST_URI'] ?? '/') ?>"><label class="switch"><span class="switch-text"><span>Boton donar</span><small><?= donate_button_enabled() ? 'Visible' : 'Oculto' ?></small></span><input type="checkbox" name="enabled" value="1" <?= donate_button_enabled() ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form><?php endif; ?>
         <a class="btn facebook" href="https://www.facebook.com/AyudaPet26" target="_blank" rel="noopener">Facebook</a>
         <?php if (donate_button_enabled()): ?><a class="btn donate" href="https://donate.stripe.com/6oU3cpg1T0Y60sOerJ3ks00" target="_blank" rel="noopener">Donar</a><?php endif; ?>
@@ -1230,7 +1230,7 @@ function render(string $view, array $data = [], int $status = 200): void {
       <?php else: ?>
         <a class="btn ghost <?= $active('/login') ?>" href="/login">Entrar</a>
         <a class="btn ghost <?= $active('/registro') ?>" href="/registro">Crear cuenta</a>
-        <a class="btn ghost <?= $active('/') ?>" href="/">Reportes</a>
+        <a class="btn ghost <?= $active('/') ?>" href="/#reportes-recientes">Reportes</a>
         <a class="btn facebook" href="https://www.facebook.com/AyudaPet26" target="_blank" rel="noopener">Facebook</a>
         <?php if (donate_button_enabled()): ?><a class="btn donate" href="https://donate.stripe.com/6oU3cpg1T0Y60sOerJ3ks00" target="_blank" rel="noopener">Donar</a><?php endif; ?>
       <?php endif; ?>
