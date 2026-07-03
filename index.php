@@ -860,9 +860,33 @@ function save_user(string $phone, string $password, ?string $name = null): void 
     $stmt->execute([$phone, time(), $hash, $name]);
 }
 
+function dedupe_reports(array $reports, int $limit = 2000): array {
+    $clean = [];
+    $seenIds = [];
+    $seenFingerprints = [];
+    foreach ($reports as $report) {
+        $id = lower_text(trim((string)($report['id'] ?? '')));
+        $address = lower_text(trim((string)(($report['direccion_completa'] ?? '') ?: ($report['direccion'] ?? ''))));
+        $fingerprint = implode('|', [
+            lower_text(trim((string)($report['nombre'] ?? ''))),
+            $address,
+            round((float)($report['ubicacion_lat'] ?? 0), 4),
+            round((float)($report['ubicacion_lng'] ?? 0), 4),
+            trim((string)($report['principal'] ?? '')),
+        ]);
+        if (($id !== '' && isset($seenIds[$id])) || isset($seenFingerprints[$fingerprint])) continue;
+        if ($id !== '') $seenIds[$id] = true;
+        $seenFingerprints[$fingerprint] = true;
+        $clean[] = $report;
+        if (count($clean) >= $limit) break;
+    }
+    return $clean;
+}
+
 function list_mascotas(): array {
     ensure_report_columns();
-    return db()->query("SELECT * FROM mascotas ORDER BY CASE WHEN impulsado_hasta IS NOT NULL AND impulsado_hasta > NOW() THEN 0 ELSE 1 END, creado_at DESC LIMIT 80")->fetchAll();
+    $reports = db()->query("SELECT * FROM mascotas ORDER BY CASE WHEN impulsado_hasta IS NOT NULL AND impulsado_hasta > NOW() THEN 0 ELSE 1 END, creado_at DESC LIMIT 200")->fetchAll();
+    return dedupe_reports($reports, 80);
 }
 
 function list_user_reports(string $phone): array {
@@ -989,26 +1013,7 @@ function heatmap_reports(): array {
         ) ubicaciones
         ORDER BY source_order ASC, orden_at DESC
         LIMIT 4000");
-    $rawReports = $stmt->fetchAll();
-    $reports = [];
-    $seenIds = [];
-    $seenFingerprints = [];
-    foreach ($rawReports as $report) {
-        $id = lower_text(trim((string)($report['id'] ?? '')));
-        $address = lower_text(trim((string)(($report['direccion_completa'] ?? '') ?: ($report['direccion'] ?? ''))));
-        $fingerprint = implode('|', [
-            lower_text(trim((string)($report['nombre'] ?? ''))),
-            $address,
-            round((float)($report['ubicacion_lat'] ?? 0), 4),
-            round((float)($report['ubicacion_lng'] ?? 0), 4),
-            trim((string)($report['principal'] ?? '')),
-        ]);
-        if (($id !== '' && isset($seenIds[$id])) || isset($seenFingerprints[$fingerprint])) continue;
-        if ($id !== '') $seenIds[$id] = true;
-        $seenFingerprints[$fingerprint] = true;
-        $reports[] = $report;
-        if (count($reports) >= 2000) break;
-    }
+    $reports = dedupe_reports($stmt->fetchAll(), 2000);
     $stats = ['total' => count($reports), 'extravio' => 0, 'resguardo' => 0, 'en_casa' => 0];
     foreach ($reports as $report) {
         $type = report_type_value($report['tipo_reporte'] ?? '');
