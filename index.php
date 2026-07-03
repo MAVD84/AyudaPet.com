@@ -42,6 +42,7 @@ const DEFAULT_PUBLIC_CONTACT = '+526564252167';
 const OLD_PUBLIC_CONTACTS = ['+526567787712', '6567787712', '526567787712'];
 const DEFAULT_ADMIN_PHONE = '6564252167';
 const BOOST_DAYS = 10;
+const BOOST_PRICE_CENTS = 130000;
 const BOOST_PRICE_LABEL = '$1,300 M.N.';
 
 date_default_timezone_set(getenv('APP_TIMEZONE') ?: 'America/Matamoros');
