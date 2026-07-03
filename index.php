@@ -892,6 +892,30 @@ function dedupe_reports(array $reports, int $limit = 2000): array {
     return $clean;
 }
 
+function recent_duplicate_report_id(array $data, string $phone, int $minutes = 5): ?string {
+    ensure_report_columns();
+    $name = lower_text(trim((string)($data['nombre'] ?? '')));
+    $address = lower_text(trim((string)(($data['direccion_completa'] ?? '') ?: ($data['direccion'] ?? ''))));
+    if ($phone === '' || $name === '' || $address === '') return null;
+    $stmt = db()->prepare("SELECT id, nombre, direccion, direccion_completa, tipo_reporte, fecha
+        FROM mascotas
+        WHERE reportado_por = ?
+          AND creado_at >= DATE_SUB(NOW(), INTERVAL ? MINUTE)
+        ORDER BY creado_at DESC
+        LIMIT 20");
+    $stmt->execute([$phone, $minutes]);
+    foreach ($stmt->fetchAll() as $report) {
+        $sameName = lower_text(trim((string)($report['nombre'] ?? ''))) === $name;
+        $sameType = report_type_value($report['tipo_reporte'] ?? '') === report_type_value($data['tipo_reporte'] ?? '');
+        $sameDate = trim((string)($report['fecha'] ?? '')) === trim((string)($data['fecha'] ?? ''));
+        $existingAddress = lower_text(trim((string)(($report['direccion_completa'] ?? '') ?: ($report['direccion'] ?? ''))));
+        if ($sameName && $sameType && $sameDate && $existingAddress === $address) {
+            return (string)$report['id'];
+        }
+    }
+    return null;
+}
+
 function list_mascotas(): array {
     ensure_report_columns();
     $reports = db()->query("SELECT * FROM mascotas ORDER BY CASE WHEN impulsado_hasta IS NOT NULL AND impulsado_hasta > NOW() THEN 0 ELSE 1 END, creado_at DESC LIMIT 200")->fetchAll();
@@ -1279,6 +1303,8 @@ function create_report(): string {
     ensure_report_columns();
     $id = bin2hex(random_bytes(16));
     $data = report_payload($id);
+    $duplicateId = recent_duplicate_report_id($data, (string)current_user_phone());
+    if ($duplicateId) return $duplicateId;
     $sql = 'INSERT INTO mascotas (id, reportado_por, tipo_reporte, tipo_mascota, nombre, descripcion, contacto, principal, secundarias, fecha, edad, raza, genero, color, collar, docil, direccion, direccion_completa, ubicacion_lat, ubicacion_lng, calles, dueno, recompensa, encontrado)
             VALUES (:id, :reportado_por, :tipo_reporte, :tipo_mascota, :nombre, :descripcion, :contacto, :principal, :secundarias, :fecha, :edad, :raza, :genero, :color, :collar, :docil, :direccion, :direccion_completa, :ubicacion_lat, :ubicacion_lng, :calles, :dueno, :recompensa, :encontrado)';
     $stmt = db()->prepare($sql);
@@ -1482,6 +1508,7 @@ document.querySelectorAll("[data-sms-search]").forEach((form)=>form.addEventList
 document.querySelectorAll("[data-report-filter-form]").forEach((form)=>form.addEventListener("submit",(event)=>{event.preventDefault();const params=new URLSearchParams(new FormData(form));for(const [key,value] of Array.from(params.entries())){if(!String(value).trim()||(key==="estado"&&value==="todos"))params.delete(key)}const query=params.toString();window.location.href=`/${query?`?${query}`:""}#reportes-recientes`}));
 document.querySelectorAll("[data-native-share-button]").forEach((button)=>button.addEventListener("click",async()=>{const shareData={title:button.dataset.shareTitle||document.title,text:button.dataset.shareText||"",url:button.dataset.shareUrl||window.location.href};if(navigator.share){try{await navigator.share(shareData);return}catch(error){if(error?.name==="AbortError")return}}const original=button.textContent;button.textContent="Usa copiar enlace";window.setTimeout(()=>{button.textContent=original},1800)}));
 document.querySelectorAll("[data-max-files]").forEach((input)=>input.addEventListener("change",()=>{const maxFiles=Number(input.dataset.maxFiles||0);if(input.files.length>maxFiles){input.value="";alert(maxFiles>0?`Solo puedes seleccionar hasta ${maxFiles} imagenes.`:"Ya tienes el maximo de 3 fotos adicionales.")}}));
+document.querySelectorAll("[data-report-form]").forEach((form)=>form.addEventListener("submit",(event)=>{if(form.dataset.submitting==="1"){event.preventDefault();return}form.dataset.submitting="1";form.querySelectorAll("button[type='submit']").forEach((button)=>{button.disabled=true;button.textContent=button.textContent.includes("Guardar")?"Guardando...":"Publicando..."})}));
 document.querySelectorAll("[data-contact-toggle]").forEach((toggle)=>{const box=document.querySelector("[data-contact-own]");const input=document.querySelector("[data-contact-input]");const sync=()=>{if(!box)return;box.classList.toggle("show",toggle.checked);if(input){input.disabled=!toggle.checked;if(!toggle.checked)input.value=""}};toggle.addEventListener("change",sync);sync()});
 document.querySelectorAll("[data-money-input]").forEach((input)=>{const preview=document.querySelector("[data-money-preview]");const sync=()=>{if(!preview)return;const amount=Number(String(input.value||"").replace(/\D/g,""));preview.textContent=amount>0?`$${amount.toLocaleString("es-MX")} M.N.`:"Se mostrara como $1,000 M.N."};input.addEventListener("input",sync);sync()});
 (()=>{const modal=document.querySelector("[data-donation-modal]");if(!modal)return;const path=window.location.pathname;if(path==="/reportar"||/\/mascotas\/[a-f0-9]{32}\/editar$/.test(path))return;const key="ayudapet_donation_prompt";const close=()=>{modal.classList.remove("open");modal.setAttribute("aria-hidden","true")};try{if(localStorage.getItem(key))return}catch(error){}window.setTimeout(()=>{modal.classList.add("open");modal.setAttribute("aria-hidden","false")},180000);modal.querySelector("[data-donation-no]")?.addEventListener("click",()=>{try{localStorage.setItem(key,"no")}catch(error){}close()});modal.querySelector("[data-donation-yes]")?.addEventListener("click",()=>{try{localStorage.setItem(key,"yes")}catch(error){}});})();
@@ -1667,7 +1694,7 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
     $collarActual = lower_text($mascota['collar'] ?? '');
     $docilActual = lower_text($mascota['docil'] ?? '');
     ?>
-  <section class="form-wrap"><form class="form-panel" method="post" enctype="multipart/form-data"><input type="hidden" name="tipo_reporte" value="<?= e($tipoReporte) ?>"><p class="eyebrow" style="color:var(--brand);"><?= $editing ? report_type_label($tipoReporte) : 'Nuevo reporte' ?></p><h1><?= e($formTitle) ?></h1><div class="form-grid">
+  <section class="form-wrap"><form class="form-panel" method="post" enctype="multipart/form-data" data-report-form><input type="hidden" name="tipo_reporte" value="<?= e($tipoReporte) ?>"><p class="eyebrow" style="color:var(--brand);"><?= $editing ? report_type_label($tipoReporte) : 'Nuevo reporte' ?></p><h1><?= e($formTitle) ?></h1><div class="form-grid">
     <div class="field full"><label for="principal">Foto principal</label><?php if ($editing && $mascota['principal']): ?><div class="edit-images"><div class="edit-image-item"><img src="<?= e($mascota['principal']) ?>" alt="Foto principal actual"><label class="remove-image-check" title="Quitar" data-remove-image data-remove-url="/mascotas/<?= e($mascota['id']) ?>/imagenes/eliminar" data-remove-target="principal"><input type="checkbox" name="remove_principal"><span>&times;</span></label></div></div><?php endif; ?><input id="principal" name="principal" type="file" accept="image/*"></div>
     <div class="field full"><label>Fotos adicionales</label><?php if ($secundarias): ?><div class="edit-image-grid"><?php foreach ($secundarias as $image): ?><div class="edit-image-item"><img src="<?= e($image) ?>" alt="Foto secundaria actual"><label class="remove-image-check" title="Quitar" data-remove-image data-remove-url="/mascotas/<?= e($mascota['id']) ?>/imagenes/eliminar" data-remove-target="secundaria" data-remove-image-url="<?= e($image) ?>"><input type="checkbox" name="remove_secundarias[]" value="<?= e($image) ?>"><span>&times;</span></label></div><?php endforeach; ?></div><?php endif; ?><input name="secundarias[]" type="file" accept="image/*" multiple data-max-files="<?= e($slots) ?>"><span class="hint">Puedes seleccionar hasta 3 imagenes adicionales.</span></div>
     <div class="field"><label for="fecha"><?= e($fechaLabel) ?></label><input id="fecha" name="fecha" type="date" value="<?= e($mascota['fecha'] ?? '') ?>"></div>
