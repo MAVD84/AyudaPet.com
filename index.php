@@ -1843,6 +1843,35 @@ function view_error(string $title, string $message): void { ?>
   <section class="form-wrap"><div class="form-panel"><p class="eyebrow" style="color:var(--brand);">Aviso</p><h1><?= e($title) ?></h1><p class="meta"><?= e($message) ?></p><div class="actions"><a class="btn primary" href="/">Volver al inicio</a></div></div></section>
 <?php }
 
+function render_mascota_detail_page(array $pet, bool $skipViewIncrement = false): void {
+    if (!$skipViewIncrement) {
+        increment_report_views($pet['id']);
+        $pet['vistas'] = ((int)($pet['vistas'] ?? 0)) + 1;
+    }
+    $status = report_status_label($pet);
+    $detailUrl = full_url('/mascotas/' . $pet['id']);
+    $shareUrl = full_url('/m/' . pet_short_code($pet));
+    $mapUrl = null;
+    if (envv('API_KEY') && $pet['direccion']) {
+        $mapUrl = 'https://www.google.com/maps/embed/v1/place?key=' . urlencode(envv('API_KEY')) . '&q=' . urlencode($pet['direccion'] . ', Mexico');
+    }
+    render('detalle', [
+        'title' => "{$pet['nombre']} - {$status} | AyudaPet",
+        'metaTitle' => "{$pet['nombre']} - {$status} | AyudaPet",
+        'metaDescription' => ($pet['descripcion'] ?: 'Reporte de mascota en AyudaPet.') . ($pet['direccion'] ? ' Ubicacion: ' . $pet['direccion'] . '.' : ''),
+        'metaUrl' => $shareUrl,
+        'canonicalUrl' => $detailUrl,
+        'metaImage' => $pet['principal'] ?: full_url('/static/og_image.png'),
+        'metaImageAlt' => 'Foto de ' . ($pet['nombre'] ?: 'mascota') . ' en AyudaPet',
+        'ogType' => 'article',
+        'mascota' => $pet,
+        'isOwner' => owns_report($pet),
+        'canManage' => can_manage_report($pet),
+        'mapUrl' => $mapUrl,
+        'share' => ['url' => $shareUrl, 'text' => "{$status}: {$pet['nombre']} en AyudaPet", 'message' => "{$status}: {$pet['nombre']} en AyudaPet"],
+    ]);
+}
+
 function route(): void {
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
     $path = path_only();
@@ -2125,37 +2154,15 @@ function route(): void {
         if (preg_match('#^/m/([a-f0-9]{8,16})$#', $path, $m)) {
             $pet = get_mascota_by_short_code($m[1]);
             if (!$pet) { render('error', ['title' => 'Reporte no encontrado', 'message' => 'El enlace corto no existe o ya no esta disponible.'], 404); return; }
-            redirect_to('/mascotas/' . $pet['id']);
+            render_mascota_detail_page($pet);
+            return;
         }
 
         if (preg_match('#^/mascotas/([a-f0-9]{32})$#', $path, $m)) {
             $pet = get_mascota($m[1]);
             if (!$pet) { render('error', ['title' => 'Reporte no encontrado', 'message' => 'El reporte solicitado no existe.'], 404); return; }
             $skipViewIncrement = is_admin_user() && (($_GET['sin_contar_vista'] ?? '') === '1');
-            if (!$skipViewIncrement) {
-                increment_report_views($pet['id']);
-                $pet['vistas'] = ((int)($pet['vistas'] ?? 0)) + 1;
-            }
-            $status = report_status_label($pet);
-            $detailUrl = full_url('/mascotas/' . $pet['id']);
-            $shareUrl = full_url('/m/' . pet_short_code($pet));
-            $mapUrl = null;
-            if (envv('API_KEY') && $pet['direccion']) $mapUrl = 'https://www.google.com/maps/embed/v1/place?key=' . urlencode(envv('API_KEY')) . '&q=' . urlencode($pet['direccion'] . ', Mexico');
-            render('detalle', [
-                'title' => "{$pet['nombre']} - {$status} | AyudaPet",
-                'metaTitle' => "{$pet['nombre']} - {$status} | AyudaPet",
-                'metaDescription' => ($pet['descripcion'] ?: 'Reporte de mascota en AyudaPet.') . ($pet['direccion'] ? ' Ubicacion: ' . $pet['direccion'] . '.' : ''),
-                'metaUrl' => $shareUrl,
-                'canonicalUrl' => $detailUrl,
-                'metaImage' => $pet['principal'] ?: full_url('/static/og_image.png'),
-                'metaImageAlt' => 'Foto de ' . ($pet['nombre'] ?: 'mascota') . ' en AyudaPet',
-                'ogType' => 'article',
-                'mascota' => $pet,
-                'isOwner' => owns_report($pet),
-                'canManage' => can_manage_report($pet),
-                'mapUrl' => $mapUrl,
-                'share' => ['url' => $shareUrl, 'text' => "{$status}: {$pet['nombre']} en AyudaPet", 'message' => "{$status}: {$pet['nombre']} en AyudaPet {$shareUrl}"],
-            ]);
+            render_mascota_detail_page($pet, $skipViewIncrement);
             return;
         }
 
