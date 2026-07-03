@@ -2068,6 +2068,17 @@ function route(): void {
             return;
         }
 
+        if (preg_match('#^/mascotas/([a-fA-F0-9]{32})/vistas$#', $path, $m) && $method === 'POST') {
+            require_login();
+            if (!is_admin_user()) { render('error', ['title' => 'Sin permiso', 'message' => 'Esta accion es privada.'], 403); return; }
+            $petId = strtolower($m[1]);
+            $pet = get_mascota($petId);
+            if (!$pet) { render('error', ['title' => 'Reporte no encontrado', 'message' => 'El reporte solicitado no existe.'], 404); return; }
+            $views = max(0, (int)preg_replace('/\D/', '', (string)($_POST['vistas'] ?? '0')));
+            db()->prepare('UPDATE mascotas SET vistas = ? WHERE id = ?')->execute([$views, $pet['id']]);
+            flash('Vistas actualizadas.', 'success');
+            redirect_to('/mascotas/' . $pet['id'] . '?sin_contar_vista=1');
+        }
         if (preg_match('#^/m/([a-f0-9]{8,16})$#', $path, $m)) {
             $pet = get_mascota_by_short_code($m[1]);
             if (!$pet) { render('error', ['title' => 'Reporte no encontrado', 'message' => 'El enlace corto no existe o ya no esta disponible.'], 404); return; }
@@ -2077,8 +2088,11 @@ function route(): void {
         if (preg_match('#^/mascotas/([a-f0-9]{32})$#', $path, $m)) {
             $pet = get_mascota($m[1]);
             if (!$pet) { render('error', ['title' => 'Reporte no encontrado', 'message' => 'El reporte solicitado no existe.'], 404); return; }
-            increment_report_views($pet['id']);
-            $pet['vistas'] = ((int)($pet['vistas'] ?? 0)) + 1;
+            $skipViewIncrement = is_admin_user() && (($_GET['sin_contar_vista'] ?? '') === '1');
+            if (!$skipViewIncrement) {
+                increment_report_views($pet['id']);
+                $pet['vistas'] = ((int)($pet['vistas'] ?? 0)) + 1;
+            }
             $status = report_status_label($pet);
             $detailUrl = full_url('/mascotas/' . $pet['id']);
             $shareUrl = full_url('/m/' . pet_short_code($pet));
@@ -2113,16 +2127,7 @@ function route(): void {
             redirect_to($checkoutUrl);
         }
 
-        if (preg_match('#^/mascotas/([a-f0-9]{32})/vistas$#', $path, $m) && $method === 'POST') {
-            require_login();
-            if (!is_admin_user()) { render('error', ['title' => 'Sin permiso', 'message' => 'Esta accion es privada.'], 403); return; }
-            $pet = get_mascota($m[1]);
-            if (!$pet) { render('error', ['title' => 'Reporte no encontrado', 'message' => 'El reporte solicitado no existe.'], 404); return; }
-            $views = max(0, (int)preg_replace('/\D/', '', (string)($_POST['vistas'] ?? '0')));
-            db()->prepare('UPDATE mascotas SET vistas = ? WHERE id = ?')->execute([$views, $pet['id']]);
-            flash('Vistas actualizadas.', 'success');
-            redirect_to('/mascotas/' . $pet['id']);
-        }
+
         if (preg_match('#^/mascotas/([a-f0-9]{32})/impulso-manual$#', $path, $m) && $method === 'POST') {
             require_login();
             if (!is_admin_user()) { render('error', ['title' => 'Sin permiso', 'message' => 'Esta accion es privada.'], 403); return; }
