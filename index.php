@@ -1368,6 +1368,7 @@ function view_detalle(array $mascota, bool $isOwner, bool $canManage, array $sha
     </div>
     <article class="detail-info">
       <?php if ($canManage): ?><div class="detail-owner-actions"><a class="btn edit" href="/mascotas/<?= e($mascota['id']) ?>/editar">Editar</a><form method="post" action="/mascotas/<?= e($mascota['id']) ?>/eliminar" onsubmit="return confirm('Eliminar este reporte?');"><button class="btn delete" type="submit">Eliminar</button></form></div><?php endif; ?>
+      <?php if (is_admin_user()): ?><form class="boost-panel" method="post" action="/mascotas/<?= e($mascota['id']) ?>/impulso-manual"><input type="hidden" name="enabled" value="0"><label class="switch" style="width:100%;"><span class="switch-text"><span>Impulso manual</span><small><?= $boostedUntil ? 'Activo hasta ' . e($boostedUntil) : 'Activar por ' . e(BOOST_DAYS) . ' dias' ?></small></span><input type="checkbox" name="enabled" value="1" <?= $boostedUntil ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form><?php endif; ?>
       <?php if ($boostedUntil): ?><div class="boost-panel"><span class="badge boost-badge">Impulsado</span><strong>Activo hasta <?= e($boostedUntil) ?></strong></div><?php endif; ?>
       <?php if ($canManage && !$boostedUntil): ?><div class="boost-copy"><div><h2>Impulsa tu anuncio por 10 dias.</h2><p>Lo destacamos en AyudaPet y tambien enviamos tu reporte directo a celulares de personas cercanas a la zona donde se perdio tu mascota.</p><strong><?= e(BOOST_PRICE_LABEL) ?> por <?= e(BOOST_DAYS) ?> dias</strong></div><?php if (boost_button_enabled()): ?><form method="post" action="/mascotas/<?= e($mascota['id']) ?>/impulsar"><button class="btn boost" type="submit">Impulsar ahora</button></form><?php else: ?><a class="btn whatsapp" href="https://wa.me/526564252167?text=<?= urlencode('Quiero activar el impulso de mi reporte: ' . ($share['url'] ?? full_url('/mascotas/' . $mascota['id']))) ?>" target="_blank" rel="noopener">Activar por WhatsApp</a><?php endif; ?></div><?php endif; ?>
       <div class="info-list"><?php info_row('Tipo de reporte', report_type_label($mascota['tipo_reporte'] ?? 'extravio')); info_row('Fecha', $mascota['fecha']); info_row('Nombre de mascota', $mascota['nombre']); info_row('Descripcion', $mascota['descripcion']); ?></div>
@@ -1996,6 +1997,24 @@ function route(): void {
             if (is_boosted($pet)) { flash('Este reporte ya esta impulsado.', 'success'); redirect_to('/mascotas/' . $pet['id']); }
             $checkoutUrl = create_boost_checkout($pet);
             redirect_to($checkoutUrl);
+        }
+
+        if (preg_match('#^/mascotas/([a-f0-9]{32})/impulso-manual$#', $path, $m) && $method === 'POST') {
+            require_login();
+            if (!is_admin_user()) { render('error', ['title' => 'Sin permiso', 'message' => 'Esta accion es privada.'], 403); return; }
+            $pet = get_mascota($m[1]);
+            if (!$pet) { render('error', ['title' => 'Reporte no encontrado', 'message' => 'El reporte solicitado no existe.'], 404); return; }
+            $enabled = ($_POST['enabled'] ?? '0') === '1';
+            if ($enabled) {
+                db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . BOOST_DAYS . ' DAY), stripe_session_id = NULL, stripe_payment_status = ?, boost_expired_notified_at = NULL WHERE id = ?')
+                    ->execute(['manual', $pet['id']]);
+                flash('Impulso manual activado por ' . BOOST_DAYS . ' dias.', 'success');
+            } else {
+                db()->prepare('UPDATE mascotas SET impulsado_hasta = NULL, stripe_session_id = NULL, stripe_payment_status = NULL, boost_expired_notified_at = NULL WHERE id = ?')
+                    ->execute([$pet['id']]);
+                flash('Impulso manual desactivado.', 'success');
+            }
+            redirect_to('/mascotas/' . $pet['id']);
         }
 
         if (preg_match('#^/mascotas/([a-f0-9]{32})/editar$#', $path, $m)) {
