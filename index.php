@@ -346,16 +346,34 @@ function paypal_request(string $method, string $endpoint, array $payload = []): 
 function create_boost_checkout(array $pet): string {
     if (!boost_button_enabled()) throw new RuntimeException('El impulso automatico esta desactivado.');
     if (!paypal_enabled()) throw new RuntimeException('PayPal todavia no esta configurado.');
+    $boostAmount = number_format(BOOST_PRICE_CENTS / 100, 2, '.', '');
+    $boostLabel = 'Impulsa tu anuncio por ' . BOOST_DAYS . ' dias.';
     $order = paypal_request('POST', 'v2/checkout/orders', [
         'intent' => 'CAPTURE',
         'purchase_units' => [[
             'reference_id' => $pet['id'],
             'custom_id' => $pet['id'],
-            'description' => 'Impulsa tu anuncio por ' . BOOST_DAYS . ' dias',
+            'description' => $boostLabel,
             'amount' => [
                 'currency_code' => 'MXN',
-                'value' => number_format(BOOST_PRICE_CENTS / 100, 2, '.', ''),
+                'value' => $boostAmount,
+                'breakdown' => [
+                    'item_total' => [
+                        'currency_code' => 'MXN',
+                        'value' => $boostAmount,
+                    ],
+                ],
             ],
+            'items' => [[
+                'name' => $boostLabel,
+                'description' => 'Destacado en AyudaPet para el reporte de ' . ($pet['nombre'] ?: 'mascota'),
+                'quantity' => '1',
+                'unit_amount' => [
+                    'currency_code' => 'MXN',
+                    'value' => $boostAmount,
+                ],
+                'category' => 'DIGITAL_GOODS',
+            ]],
         ]],
         'payment_source' => [
             'paypal' => [
