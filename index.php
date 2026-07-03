@@ -980,6 +980,10 @@ function owns_report(?array $pet): bool {
     return $pet && current_user_phone() && $pet['reportado_por'] === current_user_phone();
 }
 
+function can_manage_report(?array $pet): bool {
+    return owns_report($pet) || ($pet && is_admin_user());
+}
+
 function upload_image(array $file, string $reportId, string $label): ?string {
     if (($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) return null;
     if (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
@@ -1099,7 +1103,7 @@ function update_report(string $id, array $existing): void {
     $sets = [];
     foreach ($data as $key => $_) $sets[] = "{$key} = :{$key}";
     $stmt = db()->prepare('UPDATE mascotas SET ' . implode(', ', $sets) . ' WHERE id = :id AND reportado_por = :reportado_por');
-    $stmt->execute($data + ['id' => $id, 'reportado_por' => current_user_phone()]);
+    $stmt->execute($data + ['id' => $id, 'reportado_por' => $existing['reportado_por']]);
     try {
         $pet = get_mascota($id);
         if ($pet) archive_report($pet, 'updated_snapshot');
@@ -1110,14 +1114,14 @@ function update_report(string $id, array $existing): void {
 
 function remove_report_image(string $id, array $pet, string $target, ?string $image): void {
     if ($target === 'principal') {
-        db()->prepare('UPDATE mascotas SET principal = NULL WHERE id = ? AND reportado_por = ?')->execute([$id, current_user_phone()]);
+        db()->prepare('UPDATE mascotas SET principal = NULL WHERE id = ? AND reportado_por = ?')->execute([$id, $pet['reportado_por']]);
         return;
     }
     if ($target === 'secundaria' && $image) {
         $secondaries = array_values(array_filter(pet_secondaries($pet), function ($img) use ($image) {
             return $img !== $image;
         }));
-        db()->prepare('UPDATE mascotas SET secundarias = ? WHERE id = ? AND reportado_por = ?')->execute([json_encode($secondaries), $id, current_user_phone()]);
+        db()->prepare('UPDATE mascotas SET secundarias = ? WHERE id = ? AND reportado_por = ?')->execute([json_encode($secondaries), $id, $pet['reportado_por']]);
         return;
     }
     throw new RuntimeException('Imagen invalida.');
@@ -1224,7 +1228,7 @@ function render(string $view, array $data = [], int $status = 200): void {
 function view(string $view, array $vars): void {
     extract($vars, EXTR_SKIP);
     if ($view === 'index') { view_index($mascotas, $stats, $filters); return; }
-    if ($view === 'detalle') { view_detalle($mascota, $isOwner, $share, $mapUrl); return; }
+    if ($view === 'detalle') { view_detalle($mascota, $isOwner, $canManage, $share, $mapUrl); return; }
     if ($view === 'registro') { view_registro(); return; }
     if ($view === 'verificar') { view_verificar($phone); return; }
     if ($view === 'set_password') { view_set_password($phone, $recovering); return; }
@@ -1308,7 +1312,7 @@ function view_index(array $mascotas, array $stats, array $filters): void { ?>
   </section><?php else: ?><div class="empty">Todavia no hay reportes publicados.</div><?php endif; ?>
 <?php }
 
-function view_detalle(array $mascota, bool $isOwner, array $share, ?string $mapUrl): void {
+function view_detalle(array $mascota, bool $isOwner, bool $canManage, array $share, ?string $mapUrl): void {
     $secundarias = pet_secondaries($mascota);
     $callPhone = phone_digits($mascota['contacto'] ?? '');
     $waPhone = whatsapp_digits($mascota['contacto'] ?? '');
@@ -1325,9 +1329,9 @@ function view_detalle(array $mascota, bool $isOwner, array $share, ?string $mapU
       <?php if ($secundarias): ?><div class="gallery"><?php foreach ($secundarias as $image): ?><img class="zoomable" src="<?= e($image) ?>" alt="Foto de <?= e($mascota['nombre']) ?>" data-zoom-src="<?= e($image) ?>"><?php endforeach; ?></div><?php endif; ?>
     </div>
     <article class="detail-info">
-      <?php if ($isOwner): ?><div class="detail-owner-actions"><a class="btn edit" href="/mascotas/<?= e($mascota['id']) ?>/editar">Editar</a><form method="post" action="/mascotas/<?= e($mascota['id']) ?>/eliminar" onsubmit="return confirm('Eliminar este reporte?');"><button class="btn delete" type="submit">Eliminar</button></form></div><?php endif; ?>
+      <?php if ($canManage): ?><div class="detail-owner-actions"><a class="btn edit" href="/mascotas/<?= e($mascota['id']) ?>/editar">Editar</a><form method="post" action="/mascotas/<?= e($mascota['id']) ?>/eliminar" onsubmit="return confirm('Eliminar este reporte?');"><button class="btn delete" type="submit">Eliminar</button></form></div><?php endif; ?>
       <?php if ($boostedUntil): ?><div class="boost-panel"><span class="badge boost-badge">Impulsado</span><strong>Activo hasta <?= e($boostedUntil) ?></strong></div><?php endif; ?>
-      <?php if ($isOwner && !$boostedUntil): ?><div class="boost-copy"><div><h2>Impulsa tu anuncio por 10 dias.</h2><p>Lo destacamos en AyudaPet y tambien enviamos tu reporte directo a celulares de personas cercanas a la zona donde se perdio tu mascota.</p><strong><?= e(BOOST_PRICE_LABEL) ?> por <?= e(BOOST_DAYS) ?> dias</strong></div><?php if (boost_button_enabled()): ?><form method="post" action="/mascotas/<?= e($mascota['id']) ?>/impulsar"><button class="btn boost" type="submit">Impulsar ahora</button></form><?php else: ?><a class="btn whatsapp" href="https://wa.me/526564252167?text=<?= urlencode('Quiero activar el impulso de mi reporte') ?>" target="_blank" rel="noopener">Activar por WhatsApp</a><?php endif; ?></div><?php endif; ?>
+      <?php if ($canManage && !$boostedUntil): ?><div class="boost-copy"><div><h2>Impulsa tu anuncio por 10 dias.</h2><p>Lo destacamos en AyudaPet y tambien enviamos tu reporte directo a celulares de personas cercanas a la zona donde se perdio tu mascota.</p><strong><?= e(BOOST_PRICE_LABEL) ?> por <?= e(BOOST_DAYS) ?> dias</strong></div><?php if ($isOwner && boost_button_enabled()): ?><form method="post" action="/mascotas/<?= e($mascota['id']) ?>/impulsar"><button class="btn boost" type="submit">Impulsar ahora</button></form><?php else: ?><a class="btn whatsapp" href="https://wa.me/526564252167?text=<?= urlencode('Quiero activar el impulso de mi reporte') ?>" target="_blank" rel="noopener">Activar por WhatsApp</a><?php endif; ?></div><?php endif; ?>
       <div class="info-list"><?php info_row('Tipo de reporte', report_type_label($mascota['tipo_reporte'] ?? 'extravio')); info_row('Fecha', $mascota['fecha']); info_row('Nombre de mascota', $mascota['nombre']); info_row('Descripcion', $mascota['descripcion']); ?></div>
       <div class="split-info"><?php foreach ([['Tipo de mascota','tipo_mascota'],['Edad','edad'],['Raza','raza'],['Genero','genero'],['Color','color'],['Collar','collar'],['Docil','docil']] as [$label,$key]) info_row($label, $mascota[$key]); ?></div>
       <?php if ($mapUrl): ?><div class="map-frame"><iframe src="<?= e($mapUrl) ?>" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen title="Mapa de direccion de extravio"></iframe></div><?php endif; ?>
@@ -1918,6 +1922,7 @@ function route(): void {
                 'metaImage' => $pet['principal'] ?: full_url('/static/og_image.png'),
                 'mascota' => $pet,
                 'isOwner' => owns_report($pet),
+                'canManage' => can_manage_report($pet),
                 'mapUrl' => $mapUrl,
                 'share' => ['url' => $detailUrl, 'text' => "{$status}: {$pet['nombre']} en AyudaPet", 'message' => "{$status}: {$pet['nombre']} en AyudaPet {$detailUrl}"],
             ]);
@@ -1939,7 +1944,7 @@ function route(): void {
             require_login();
             $pet = get_mascota($m[1]);
             if (!$pet) { render('error', ['title' => 'Reporte no encontrado', 'message' => 'El reporte solicitado no existe.'], 404); return; }
-            if (!owns_report($pet)) { render('error', ['title' => 'Sin permiso', 'message' => 'Solo puedes editar tus propios reportes.'], 403); return; }
+            if (!can_manage_report($pet)) { render('error', ['title' => 'Sin permiso', 'message' => 'No puedes editar este reporte.'], 403); return; }
             if ($method === 'POST') {
                 try { update_report($pet['id'], $pet); flash('Reporte actualizado correctamente.', 'success'); redirect_to('/mascotas/' . $pet['id']); }
                 catch (RuntimeException $e) { flash($e->getMessage(), 'error'); redirect_to('/mascotas/' . $pet['id'] . '/editar'); }
@@ -1952,13 +1957,13 @@ function route(): void {
             require_login();
             $pet = get_mascota($m[1]);
             if (!$pet) { render('error', ['title' => 'Reporte no encontrado', 'message' => 'El reporte solicitado no existe.'], 404); return; }
-            if (!owns_report($pet)) { render('error', ['title' => 'Sin permiso', 'message' => 'Solo puedes eliminar tus propios reportes.'], 403); return; }
+            if (!can_manage_report($pet)) { render('error', ['title' => 'Sin permiso', 'message' => 'No puedes eliminar este reporte.'], 403); return; }
             ensure_archive_table();
             $pdo = db();
             try {
                 $pdo->beginTransaction();
                 archive_report($pet, 'deleted_by_owner');
-                $pdo->prepare('DELETE FROM mascotas WHERE id = ? AND reportado_por = ?')->execute([$pet['id'], current_user_phone()]);
+                $pdo->prepare('DELETE FROM mascotas WHERE id = ? AND reportado_por = ?')->execute([$pet['id'], $pet['reportado_por']]);
                 $pdo->commit();
                 flash('Reporte eliminado. La informacion quedo archivada para historial y mapa de calor.', 'success');
             } catch (Throwable $e) {
@@ -1973,7 +1978,7 @@ function route(): void {
             require_login();
             $pet = get_mascota($m[1]);
             header('Content-Type: application/json');
-            if (!$pet || !owns_report($pet)) { http_response_code(403); echo json_encode(['ok' => false]); return; }
+            if (!$pet || !can_manage_report($pet)) { http_response_code(403); echo json_encode(['ok' => false]); return; }
             $raw = file_get_contents('php://input');
             $data = json_decode($raw ?: '{}', true) ?: $_POST;
             try { remove_report_image($pet['id'], $pet, (string)($data['target'] ?? ''), $data['image'] ?? null); echo json_encode(['ok' => true]); }
