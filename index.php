@@ -1310,7 +1310,7 @@ function view_index(array $mascotas, array $stats, array $filters): void { ?>
     </aside>
   </section>
   <section class="panel search-panel"><details class="filter-dropdown" <?= $activeFilter ? 'open' : '' ?>><summary><span>Buscar y filtrar</span></summary><form class="search-form" method="get" action="/"><div class="field"><label for="q">Buscar</label><input id="q" name="q" value="<?= e($filters['q']) ?>" placeholder="Nombre, direccion o contacto"></div><div class="field"><label for="estado">Estado</label><select id="estado" name="estado"><?php foreach (['todos'=>'Todos','perdidos'=>'Perdidos','resguardo'=>'Resguardados','localizados'=>'Localizados'] as $value => $label): ?><option value="<?= e($value) ?>" <?= $filters['estado'] === $value ? 'selected' : '' ?>><?= e($label) ?></option><?php endforeach; ?></select></div><button class="btn primary" type="submit">Buscar</button></form><p class="filter-meta"><?= e($filters['resultados']) ?> resultado<?= $filters['resultados'] == 1 ? '' : 's' ?></p></details></section>
-  <div class="section-head"><div><h2>Reportes recientes</h2><p>Informacion publica enviada por la comunidad.</p></div></div>
+  <div class="section-head" id="reportes-recientes"><div><h2>Reportes recientes</h2><p>Informacion publica enviada por la comunidad.</p></div></div>
   <?php if ($mascotas): ?><section class="grid">
     <?php foreach ($mascotas as $pet): ?>
       <a class="pet-card <?= is_boosted($pet) ? 'boosted' : '' ?>" href="/mascotas/<?= e($pet['id']) ?>">
@@ -1356,7 +1356,7 @@ function view_detalle(array $mascota, bool $isOwner, bool $canManage, array $sha
       <div class="split-info"><?php info_row('Recompensa', money_display($mascota['recompensa'])); ?></div>
       <?php if ($callPhone): ?><div class="contact-actions"><a class="btn call" href="tel:<?= e($callPhone) ?>">Llamar</a><a class="btn whatsapp" href="https://wa.me/<?= e($waPhone) ?>" target="_blank" rel="noopener">WhatsApp</a></div><?php endif; ?>
       <div class="share-actions" aria-label="Compartir reporte"><p class="share-title">Comparte:</p><button class="btn share" type="button" data-native-share-button data-share-title="<?= e($share['text']) ?>" data-share-text="<?= e($share['message']) ?>" data-share-url="<?= e($share['url']) ?>">Compartir</button><button class="btn" type="button" data-copy-url="<?= e($share['url']) ?>">Copiar enlace</button></div>
-      <div class="actions"><a class="btn back-report" href="/">Volver a reportes</a></div>
+      <div class="actions"><a class="btn back-report" href="/#reportes-recientes">Volver a reportes</a></div>
     </article>
   </section>
 <?php }
