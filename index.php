@@ -348,7 +348,7 @@ function create_boost_checkout(array $pet): string {
     if (!paypal_enabled()) throw new RuntimeException('PayPal todavia no esta configurado.');
     $boostAmount = number_format(BOOST_PRICE_CENTS / 100, 2, '.', '');
     $boostLabel = 'Impulsa tu anuncio por ' . BOOST_DAYS . ' dias.';
-    $boostImage = full_url('/static/logo.png');
+    $boostImage = 'https://ayudapet.com/uploads/images/product.jpeg';
     $order = paypal_request('POST', 'v2/checkout/orders', [
         'intent' => 'CAPTURE',
         'purchase_units' => [[
