@@ -39,6 +39,7 @@ const APP_NAME = 'AyudaPet';
 const APP_DOMAIN = 'ayudapet.com';
 const MAX_SECONDARY_IMAGES = 3;
 const DEFAULT_PUBLIC_CONTACT = '+526564252167';
+const OLD_PUBLIC_CONTACTS = ['+526567787712', '6567787712', '526567787712'];
 const DEFAULT_ADMIN_PHONE = '6564252167';
 const BOOST_DAYS = 10;
 const BOOST_PRICE_LABEL = '$1,300 M.N.';
@@ -409,7 +410,7 @@ function send_boost_notification(array $pet, string $sessionId, string $boostedU
         'Mascota: ' . ($pet['nombre'] ?? 'Sin nombre'),
         'Tipo de reporte: ' . report_type_label($pet['tipo_reporte'] ?? 'extravio'),
         'Telefono del usuario: ' . ($pet['reportado_por'] ?? ''),
-        'Contacto publico: ' . ($pet['contacto'] ?? ''),
+        'Contacto publico: ' . public_contact_value($pet['contacto'] ?? null),
         'Direccion: ' . ($pet['direccion'] ?? ''),
         'Activo hasta: ' . $boostedUntil,
         'Stripe session: ' . $sessionId,
@@ -427,7 +428,7 @@ function send_boost_expired_notification(array $pet): bool {
         'Mascota: ' . ($pet['nombre'] ?? 'Sin nombre'),
         'Tipo de reporte: ' . report_type_label($pet['tipo_reporte'] ?? 'extravio'),
         'Telefono del usuario: ' . ($pet['reportado_por'] ?? ''),
-        'Contacto publico: ' . ($pet['contacto'] ?? ''),
+        'Contacto publico: ' . public_contact_value($pet['contacto'] ?? null),
         'Direccion: ' . ($pet['direccion'] ?? ''),
         'Estuvo activo hasta: ' . ($pet['impulsado_hasta'] ?? ''),
         'Stripe session: ' . ($pet['stripe_session_id'] ?? ''),
@@ -664,6 +665,20 @@ function whatsapp_digits(?string $phone): string {
     return strlen($digits) === 10 ? phone_for_sms($digits) : $digits;
 }
 
+function public_contact_value(?string $contact): string {
+    $normalized = normalize_phone($contact);
+    $current = normalize_phone(DEFAULT_PUBLIC_CONTACT);
+    $old = array_filter(array_map('normalize_phone', OLD_PUBLIC_CONTACTS));
+    if (!$normalized || $normalized === $current || in_array($normalized, $old, true)) {
+        return DEFAULT_PUBLIC_CONTACT;
+    }
+    return trim((string) $contact);
+}
+
+function is_system_public_contact(?string $contact): bool {
+    return public_contact_value($contact) === DEFAULT_PUBLIC_CONTACT;
+}
+
 function post_value(string $name): ?string {
     $value = $_POST[$name] ?? null;
     if (!is_string($value)) return null;
@@ -885,7 +900,7 @@ function google_geocode_area(string $query): ?array {
 function contact_rows_to_sms(array $rows): array {
     $seen = [];
     $contacts = [];
-    $excluded = array_filter([normalize_phone(DEFAULT_PUBLIC_CONTACT)]);
+    $excluded = array_filter(array_merge([normalize_phone(DEFAULT_PUBLIC_CONTACT)], array_map('normalize_phone', OLD_PUBLIC_CONTACTS)));
     foreach ($rows as $row) {
         foreach ([$row['reportado_por'] ?? null, $row['contacto'] ?? null] as $rawPhone) {
             $phone = normalize_phone($rawPhone);
@@ -1316,8 +1331,9 @@ function view_index(array $mascotas, array $stats, array $filters): void { ?>
 
 function view_detalle(array $mascota, bool $isOwner, bool $canManage, array $share, ?string $mapUrl): void {
     $secundarias = pet_secondaries($mascota);
-    $callPhone = phone_digits($mascota['contacto'] ?? '');
-    $waPhone = whatsapp_digits($mascota['contacto'] ?? '');
+    $publicContact = public_contact_value($mascota['contacto'] ?? null);
+    $callPhone = phone_digits($publicContact);
+    $waPhone = whatsapp_digits($publicContact);
     $direccionLabel = report_type_value($mascota['tipo_reporte'] ?? '') === 'resguardo' ? 'Direccion donde se encontro' : 'Direccion de extravio';
     $boostedUntil = boosted_until_label($mascota);
     ?>
@@ -1434,7 +1450,7 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
     <div class="field"><label for="docil">Docil</label><select id="docil" name="docil"><option value="">Seleccionar</option><?php foreach (['Si','No'] as $opt): ?><option <?= $docilActual === lower_text($opt) || ($opt === 'Si' && $docilActual === 'sí') ? 'selected' : '' ?>><?= e($opt) ?></option><?php endforeach; ?></select></div>
     <div class="field full"><label for="direccion"><?= e($direccionLabel) ?></label><input id="direccion" name="direccion" value="<?= e($mascota['direccion'] ?? '') ?>" autocomplete="off" data-address-autocomplete><input type="hidden" name="direccion_completa" value="<?= e($mascota['direccion_completa'] ?? '') ?>" data-address-full><input type="hidden" name="ubicacion_lat" value="<?= e($mascota['ubicacion_lat'] ?? '') ?>" data-address-lat><input type="hidden" name="ubicacion_lng" value="<?= e($mascota['ubicacion_lng'] ?? '') ?>" data-address-lng></div>
     <?php if (!$isResguardo): ?><div class="field"><label for="recompensa">Recompensa</label><input id="recompensa" name="recompensa" type="number" min="0" step="1" inputmode="numeric" value="<?= e($recompensaInput) ?>" placeholder="1000" data-money-input><span class="hint" data-money-preview><?= e(money_display($recompensaInput) ?: 'Se mostrara como $1,000 M.N.') ?></span></div><?php endif; ?>
-    <?php $usesOwnContact = !empty($mascota['contacto']) && $mascota['contacto'] !== DEFAULT_PUBLIC_CONTACT; ?>
+    <?php $usesOwnContact = !empty($mascota['contacto']) && !is_system_public_contact($mascota['contacto']); ?>
     <div class="field">
       <label>Contacto publico</label>
       <label class="switch">
