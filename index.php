@@ -599,6 +599,34 @@ function full_url(string $path): string {
     return 'https://' . APP_DOMAIN . url($path);
 }
 
+function absolute_url(?string $value, string $fallback = '/'): string {
+    $value = trim((string)$value);
+    if ($value === '') return full_url($fallback);
+    if (preg_match('#^https?://#i', $value)) return $value;
+    if (starts_with($value, '//')) return 'https:' . $value;
+    return full_url($value);
+}
+
+function meta_text(string $value, int $limit = 160): string {
+    $value = trim(preg_replace('/\s+/', ' ', $value) ?? '');
+    if (strlen($value) <= $limit) return $value;
+    return rtrim(substr($value, 0, $limit - 1)) . '...';
+}
+
+function meta_image_info(string $url): array {
+    $path = parse_url($url, PHP_URL_PATH);
+    if (!$path) return [];
+    $file = __DIR__ . '/' . ltrim($path, '/');
+    if (!is_file($file)) return [];
+    $info = @getimagesize($file);
+    if (!$info) return [];
+    return [
+        'width' => (string)($info[0] ?? ''),
+        'height' => (string)($info[1] ?? ''),
+        'type' => (string)($info['mime'] ?? ''),
+    ];
+}
+
 function redirect_to(string $path): void {
     header('Location: ' . $path);
     exit;
@@ -1169,9 +1197,13 @@ function render(string $view, array $data = [], int $status = 200): void {
     $year = date('Y');
     $title = $title ?? APP_NAME;
     $metaTitle = $metaTitle ?? $title;
-    $metaDescription = $metaDescription ?? 'AyudaPet conecta reportes de mascotas perdidas y localizadas para que vuelvan a casa mas rapido.';
-    $metaUrl = $metaUrl ?? full_url('/');
-    $metaImage = $metaImage ?? full_url('/static/og_image.png');
+    $metaDescription = meta_text($metaDescription ?? 'AyudaPet conecta reportes de mascotas perdidas y localizadas para que vuelvan a casa mas rapido.');
+    $metaUrl = absolute_url($metaUrl ?? '/', '/');
+    $canonicalUrl = absolute_url($canonicalUrl ?? $metaUrl, '/');
+    $metaImage = absolute_url($metaImage ?? '/static/og_image.png', '/static/og_image.png');
+    $metaImageAlt = meta_text($metaImageAlt ?? $metaTitle, 120);
+    $metaImageInfo = meta_image_info($metaImage);
+    $ogType = $ogType ?? 'website';
     $active = function (string $path): string {
         return path_only() === $path ? 'active' : '';
     };
@@ -1183,17 +1215,25 @@ function render(string $view, array $data = [], int $status = 200): void {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><?= e($title) ?></title>
   <meta name="description" content="<?= e($metaDescription) ?>">
-  <link rel="canonical" href="<?= e($metaUrl) ?>">
-  <meta property="og:type" content="website">
+  <link rel="canonical" href="<?= e($canonicalUrl) ?>">
+  <meta property="og:type" content="<?= e($ogType) ?>">
+  <meta property="og:locale" content="es_MX">
   <meta property="og:site_name" content="AyudaPet">
   <meta property="og:title" content="<?= e($metaTitle) ?>">
   <meta property="og:description" content="<?= e($metaDescription) ?>">
   <meta property="og:url" content="<?= e($metaUrl) ?>">
   <meta property="og:image" content="<?= e($metaImage) ?>">
+  <meta property="og:image:secure_url" content="<?= e($metaImage) ?>">
+  <meta property="og:image:alt" content="<?= e($metaImageAlt) ?>">
+  <?php if (!empty($metaImageInfo['width']) && !empty($metaImageInfo['height'])): ?><meta property="og:image:width" content="<?= e($metaImageInfo['width']) ?>">
+  <meta property="og:image:height" content="<?= e($metaImageInfo['height']) ?>"><?php endif; ?>
+  <?php if (!empty($metaImageInfo['type'])): ?><meta property="og:image:type" content="<?= e($metaImageInfo['type']) ?>"><?php endif; ?>
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:url" content="<?= e($metaUrl) ?>">
   <meta name="twitter:title" content="<?= e($metaTitle) ?>">
   <meta name="twitter:description" content="<?= e($metaDescription) ?>">
   <meta name="twitter:image" content="<?= e($metaImage) ?>">
+  <meta name="twitter:image:alt" content="<?= e($metaImageAlt) ?>">
   <link rel="icon" type="image/png" href="/static/logo.png">
   <link rel="apple-touch-icon" href="/static/logo.png">
   <style><?= css() ?></style>
@@ -1982,8 +2022,11 @@ function route(): void {
                 'title' => "{$pet['nombre']} - {$status} | AyudaPet",
                 'metaTitle' => "{$pet['nombre']} - {$status} | AyudaPet",
                 'metaDescription' => ($pet['descripcion'] ?: 'Reporte de mascota en AyudaPet.') . ($pet['direccion'] ? ' Ubicacion: ' . $pet['direccion'] . '.' : ''),
-                'metaUrl' => $detailUrl,
+                'metaUrl' => $shareUrl,
+                'canonicalUrl' => $detailUrl,
                 'metaImage' => $pet['principal'] ?: full_url('/static/og_image.png'),
+                'metaImageAlt' => 'Foto de ' . ($pet['nombre'] ?: 'mascota') . ' en AyudaPet',
+                'ogType' => 'article',
                 'mascota' => $pet,
                 'isOwner' => owns_report($pet),
                 'canManage' => can_manage_report($pet),
