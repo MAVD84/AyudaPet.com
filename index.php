@@ -448,7 +448,7 @@ function send_boost_expired_notification(array $pet): bool {
 
 function process_expired_boosts(int $limit = 50): array {
     ensure_report_columns();
-    $stmt = db()->prepare("SELECT * FROM mascotas WHERE impulsado_hasta IS NOT NULL AND impulsado_hasta <= NOW() AND stripe_payment_status = 'paid' AND boost_expired_notified_at IS NULL ORDER BY impulsado_hasta ASC LIMIT ?");
+    $stmt = db()->prepare("SELECT * FROM mascotas WHERE impulsado_hasta IS NOT NULL AND impulsado_hasta <= NOW() AND stripe_payment_status IN ('paid', 'manual') AND boost_expired_notified_at IS NULL ORDER BY impulsado_hasta ASC LIMIT ?");
     $stmt->bindValue(1, max(1, min(100, $limit)), PDO::PARAM_INT);
     $stmt->execute();
     $pets = $stmt->fetchAll();
