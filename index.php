@@ -1322,7 +1322,6 @@ function view_index(array $mascotas, array $stats, array $filters): void { ?>
           <?php if (is_boosted($pet)): ?><span class="badge boost-badge">Impulsado</span><?php endif; ?>
           <h3><?= e($pet['nombre']) ?></h3>
           <p class="meta"><?php if ($pet['direccion']): ?><strong>Direccion:</strong> <?= e($pet['direccion']) ?><br><?php endif; ?></p>
-          <?php if ($pet['descripcion']): ?><p class="pet-summary"><?= e($pet['descripcion']) ?></p><?php endif; ?>
         </div>
       </a>
     <?php endforeach; ?>
