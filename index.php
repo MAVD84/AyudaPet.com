@@ -1294,6 +1294,7 @@ function formatLocalPhone(value){const digits=value.replace(/\D/g,"").slice(0,10
 document.querySelectorAll("[data-phone-input]").forEach((input)=>{input.addEventListener("input",()=>{input.value=formatLocalPhone(input.value)});input.form?.addEventListener("submit",()=>{input.value=input.value.replace(/\D/g,"").slice(0,10)})});
 document.querySelectorAll("[data-menu-open]").forEach((button)=>button.addEventListener("click",()=>document.body.classList.add("menu-open")));
 document.querySelectorAll("[data-menu-close]").forEach((button)=>button.addEventListener("click",()=>document.body.classList.remove("menu-open")));
+document.querySelectorAll(".menu-links a").forEach((link)=>link.addEventListener("click",()=>document.body.classList.remove("menu-open")));
 document.addEventListener("keydown",(event)=>{if(event.key==="Escape")document.body.classList.remove("menu-open")});
 (()=>{const button=document.querySelector("[data-scroll-top-button]");if(!button)return;const sync=()=>{button.classList.toggle("show",window.scrollY>Math.max(420,window.innerHeight*.55))};window.addEventListener("scroll",sync,{passive:true});window.addEventListener("resize",sync);sync()})();
 document.querySelectorAll("[data-responsive-open]").forEach((details)=>{const query=window.matchMedia("(min-width: 841px)");const sync=()=>{details.open=query.matches};sync();query.addEventListener?.("change",sync)});
