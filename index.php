@@ -348,6 +348,7 @@ function create_boost_checkout(array $pet): string {
     if (!paypal_enabled()) throw new RuntimeException('PayPal todavia no esta configurado.');
     $boostAmount = number_format(BOOST_PRICE_CENTS / 100, 2, '.', '');
     $boostLabel = 'Impulsa tu anuncio por ' . BOOST_DAYS . ' dias.';
+    $boostImage = full_url('/static/logo.png');
     $order = paypal_request('POST', 'v2/checkout/orders', [
         'intent' => 'CAPTURE',
         'purchase_units' => [[
@@ -367,6 +368,7 @@ function create_boost_checkout(array $pet): string {
             'items' => [[
                 'name' => $boostLabel,
                 'description' => 'Destacado en AyudaPet para el reporte de ' . ($pet['nombre'] ?: 'mascota'),
+                'image_url' => $boostImage,
                 'quantity' => '1',
                 'unit_amount' => [
                     'currency_code' => 'MXN',
@@ -1758,19 +1760,27 @@ function view_mapa_calor(array $reports, array $stats, ?string $mapsApiKey, arra
         streetViewControl: false,
         fullscreenControl: true,
       });
+      const popupFor = (point) => {
+        const image = point.imagen ? `<img class="map-popup-img" src="${escapeHtml(point.imagen)}" alt="${escapeHtml(point.nombre)}">` : "";
+        return new google.maps.InfoWindow({
+          content: `<div class="map-popup">${image}<strong>${escapeHtml(point.nombre)}</strong><span>${escapeHtml(point.direccion)}</span></div>`,
+          maxWidth: 230,
+        });
+      };
+      let activeInfo = null;
       points.forEach((point) => {
         new google.maps.Circle({
           strokeColor: "#e85035",
-          strokeOpacity: 0.78,
+          strokeOpacity: 0.45,
           strokeWeight: 1,
           fillColor: "#e85035",
-          fillOpacity: 0.24,
+          fillOpacity: 0.22,
           map,
           center: { lat: point.lat, lng: point.lng },
-          radius: 420,
+          radius: 1600,
         });
       });
-      points.slice(0, 120).forEach((point) => {
+      points.slice(0, 120).forEach((point, index) => {
         const marker = new google.maps.Marker({
           position: { lat: point.lat, lng: point.lng },
           map,
@@ -1784,9 +1794,16 @@ function view_mapa_calor(array $reports, array $stats, ?string $mapsApiKey, arra
             strokeWeight: 2,
           },
         });
-        const image = point.imagen ? `<img class="map-popup-img" src="${escapeHtml(point.imagen)}" alt="${escapeHtml(point.nombre)}">` : "";
-        const info = new google.maps.InfoWindow({ content: `<div class="map-popup">${image}<strong>${escapeHtml(point.nombre)}</strong><span>${escapeHtml(point.direccion)}</span></div>` });
-        marker.addListener("click", () => info.open({ anchor: marker, map }));
+        const info = popupFor(point);
+        marker.addListener("click", () => {
+          if (activeInfo) activeInfo.close();
+          activeInfo = info;
+          info.open({ anchor: marker, map });
+        });
+        if (index === 0) {
+          activeInfo = info;
+          info.open({ anchor: marker, map });
+        }
       });
     };
   </script><script src="https://maps.googleapis.com/maps/api/js?key=<?= urlencode($mapsApiKey) ?>&callback=initHeatmap" async defer></script><?php endif; ?>
