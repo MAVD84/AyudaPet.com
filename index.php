@@ -38,8 +38,8 @@ load_dotenv_file(__DIR__ . '/.env');
 const APP_NAME = 'AyudaPet';
 const APP_DOMAIN = 'ayudapet.com';
 const MAX_SECONDARY_IMAGES = 3;
-const DEFAULT_PUBLIC_CONTACT = '+526567787712';
-const DEFAULT_ADMIN_PHONE = '6567787712';
+const DEFAULT_PUBLIC_CONTACT = '+526564252167';
+const DEFAULT_ADMIN_PHONE = '6564252167';
 const BOOST_DAYS = 10;
 const BOOST_PRICE_LABEL = '$1,300 M.N.';
 
