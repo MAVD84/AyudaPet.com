@@ -863,20 +863,29 @@ function save_user(string $phone, string $password, ?string $name = null): void 
 function dedupe_reports(array $reports, int $limit = 2000): array {
     $clean = [];
     $seenIds = [];
-    $seenFingerprints = [];
+    $seenKeys = [];
     foreach ($reports as $report) {
         $id = lower_text(trim((string)($report['id'] ?? '')));
+        $name = lower_text(trim((string)($report['nombre'] ?? '')));
         $address = lower_text(trim((string)(($report['direccion_completa'] ?? '') ?: ($report['direccion'] ?? ''))));
-        $fingerprint = implode('|', [
-            lower_text(trim((string)($report['nombre'] ?? ''))),
-            $address,
-            round((float)($report['ubicacion_lat'] ?? 0), 4),
-            round((float)($report['ubicacion_lng'] ?? 0), 4),
-            trim((string)($report['principal'] ?? '')),
-        ]);
-        if (($id !== '' && isset($seenIds[$id])) || isset($seenFingerprints[$fingerprint])) continue;
+        $image = trim((string)($report['principal'] ?? ''));
+        $lat = round((float)($report['ubicacion_lat'] ?? 0), 4);
+        $lng = round((float)($report['ubicacion_lng'] ?? 0), 4);
+        $keys = [];
+        if ($name !== '' && $image !== '') $keys[] = 'img|' . $name . '|' . $image;
+        if ($name !== '' && $address !== '') $keys[] = 'addr|' . $name . '|' . $address;
+        if ($name !== '' && ($lat || $lng)) $keys[] = 'geo|' . $name . '|' . $lat . '|' . $lng;
+        if (!$keys) $keys[] = 'row|' . $id;
+        $isDuplicate = $id !== '' && isset($seenIds[$id]);
+        foreach ($keys as $key) {
+            if (isset($seenKeys[$key])) {
+                $isDuplicate = true;
+                break;
+            }
+        }
+        if ($isDuplicate) continue;
         if ($id !== '') $seenIds[$id] = true;
-        $seenFingerprints[$fingerprint] = true;
+        foreach ($keys as $key) $seenKeys[$key] = true;
         $clean[] = $report;
         if (count($clean) >= $limit) break;
     }
