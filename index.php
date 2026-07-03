@@ -1330,7 +1330,7 @@ function view_index(array $mascotas, array $stats, array $filters): void { ?>
       </details>
     </aside>
   </section>
-  <section class="panel search-panel"><details class="filter-dropdown" <?= $activeFilter ? 'open' : '' ?>><summary><span>Buscar y filtrar</span></summary><form class="search-form" method="get" action="/" data-report-filter-form><div class="field"><label for="q">Buscar</label><input id="q" name="q" value="<?= e($filters['q']) ?>" placeholder="Nombre, direccion o contacto"></div><div class="field"><label for="estado">Estado</label><select id="estado" name="estado"><?php foreach (['todos'=>'Todos','perdidos'=>'Perdidos','resguardo'=>'Resguardados','localizados'=>'En casa'] as $value => $label): ?><option value="<?= e($value) ?>" <?= $filters['estado'] === $value ? 'selected' : '' ?>><?= e($label) ?></option><?php endforeach; ?></select></div><button class="btn primary" type="submit">Buscar</button></form><p class="filter-meta"><?= e($filters['resultados']) ?> resultado<?= $filters['resultados'] == 1 ? '' : 's' ?></p></details></section>
+  <section class="panel search-panel"><details class="filter-dropdown" <?= $activeFilter ? 'open' : '' ?>><summary><span>Buscar y filtrar</span></summary><form class="search-form" method="get" action="/" data-report-filter-form><div class="field"><label for="q">Buscar</label><input id="q" name="q" value="<?= e($filters['q']) ?>" placeholder="Nombre, direccion o contacto"></div><div class="field"><label for="estado">Estado</label><select id="estado" name="estado"><?php foreach (['todos'=>'Todos','perdidos'=>'Perdidos','resguardo'=>'Resguardados','en_casa'=>'En casa'] as $value => $label): ?><option value="<?= e($value) ?>" <?= $filters['estado'] === $value ? 'selected' : '' ?>><?= e($label) ?></option><?php endforeach; ?></select></div><button class="btn primary" type="submit">Buscar</button></form><p class="filter-meta"><?= e($filters['resultados']) ?> resultado<?= $filters['resultados'] == 1 ? '' : 's' ?></p></details></section>
   <div class="section-head" id="reportes-recientes"><div><h2>Reportes recientes</h2><p>Informacion publica enviada por la comunidad.</p></div></div>
   <?php if ($mascotas): ?><section class="grid">
     <?php foreach ($mascotas as $pet): ?>
@@ -1762,7 +1762,8 @@ function route(): void {
             $pets = list_mascotas();
             $q = trim((string)($_GET['q'] ?? ''));
             $estado = strtolower(trim((string)($_GET['estado'] ?? 'todos')));
-            if (!in_array($estado, ['todos', 'perdidos', 'resguardo', 'localizados'], true)) $estado = 'todos';
+            if ($estado === 'localizados') $estado = 'en_casa';
+            if (!in_array($estado, ['todos', 'perdidos', 'resguardo', 'en_casa'], true)) $estado = 'todos';
             $stats = [
                 'total' => count($pets),
                 'activos' => count(array_filter($pets, function ($p) { return !$p['encontrado']; })),
@@ -1774,7 +1775,7 @@ function route(): void {
             if ($estado === 'resguardo') {
                 $pets = array_values(array_filter($pets, function ($p) { return !$p['encontrado'] && report_type_value($p['tipo_reporte'] ?? '') === 'resguardo'; }));
             }
-            if ($estado === 'localizados') {
+            if ($estado === 'en_casa') {
                 $pets = array_values(array_filter($pets, function ($p) { return $p['encontrado']; }));
             }
             if ($q !== '') {
