@@ -374,12 +374,12 @@ function create_boost_checkout(array $pet): string {
     $orderId = (string)($order['id'] ?? '');
     $approveUrl = '';
     foreach (($order['links'] ?? []) as $link) {
-        if (($link['rel'] ?? '') === 'approve' && !empty($link['href'])) {
+        if (in_array(($link['rel'] ?? ''), ['approve', 'payer-action'], true) && !empty($link['href'])) {
             $approveUrl = (string)$link['href'];
             break;
         }
     }
-    if (!$orderId || !$approveUrl) throw new RuntimeException('PayPal no regreso una orden valida.');
+    if (!$orderId || !$approveUrl) throw new RuntimeException('PayPal no regreso una URL de aprobacion valida.');
     db()->prepare('UPDATE mascotas SET paypal_order_id = ?, paypal_payment_status = ? WHERE id = ? AND reportado_por = ?')
         ->execute([$orderId, (string)($order['status'] ?? 'CREATED'), $pet['id'], current_user_phone()]);
     return $approveUrl;
