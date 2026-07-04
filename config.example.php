@@ -21,6 +21,7 @@ define('API_KEY', '');
 define('PAYPAL_CLIENT_ID', '');
 define('PAYPAL_SECRET', '');
 define('PAYPAL_MODE', 'live');
+define('PAYPAL_DONATE_URL', '');
 
 define('BOOST_NOTIFY_EMAIL', '');
 define('MAIL_FROM', 'no-reply@ayudapet.com');

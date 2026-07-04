@@ -35,6 +35,7 @@ API_KEY=
 PAYPAL_CLIENT_ID=
 PAYPAL_SECRET=
 PAYPAL_MODE=live
+PAYPAL_DONATE_URL=
 BOOST_BUTTON_ENABLED=true
 
 BOOST_NOTIFY_EMAIL=
@@ -78,6 +79,7 @@ Necesitas un MySQL accesible y las variables de entorno `MYSQL_*`.
 - Las imagenes se guardan localmente en `/uploads`.
 - No subas archivos `.env` al repositorio.
 - Para impulsar anuncios con PayPal, crea una app REST en PayPal Developer y configura `PAYPAL_CLIENT_ID`, `PAYPAL_SECRET` y `PAYPAL_MODE=live`. El pago se captura al volver a `https://ayudapet.com/paypal/return`.
+- Para donativos por PayPal, crea un enlace de donacion/pago en PayPal y ponlo en `PAYPAL_DONATE_URL`.
 - Usa `BOOST_BUTTON_ENABLED=false` para ocultar temporalmente el boton de impulso y manejarlo manualmente.
 - `BOOST_NOTIFY_EMAIL` recibe un correo cada vez que un anuncio se activa como impulsado.
 - Para correos SMTP usa el email real creado en tu hosting. Normalmente `SMTP_PORT=587` con `SMTP_SECURE=tls`; si tu hosting indica puerto `465`, usa `SMTP_SECURE=ssl`.
