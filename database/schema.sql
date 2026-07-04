@@ -4,6 +4,8 @@ CREATE TABLE IF NOT EXISTS usuarios (
   password_hash VARCHAR(255) NOT NULL,
   nombre VARCHAR(160) NULL,
   foto VARCHAR(500) NULL,
+  terminos_aceptados_at DATETIME NULL,
+  sms_marketing_aceptado_at DATETIME NULL,
   activo TINYINT(1) NOT NULL DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
