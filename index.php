@@ -1688,7 +1688,6 @@ function phone_field(string $id = 'tel', string $name = 'tel'): void { ?>
 function view_registro(): void { ?>
   <section class="form-wrap"><form class="form-panel" method="post"><p class="eyebrow" style="color:var(--brand);">Registro seguro</p><h1>Crea tu cuenta</h1><p class="meta">Solo aceptamos números mexicanos de 10 dígitos.</p><div class="form-grid"><div class="field full"><label for="tel">Teléfono mexicano</label><?php phone_field(); ?></div></div><div class="legal-checks">
     <label class="legal-check"><input type="checkbox" name="acepta_terminos" value="1" required><span>Acepto los <a href="/terminos" target="_blank" rel="noopener">Términos y condiciones</a>.</span></label>
-    <label class="legal-check"><input type="checkbox" name="acepta_sms" value="1" required><span>Acepto recibir SMS de AyudaPet.</span></label>
   </div><div class="actions"><button class="btn primary" type="submit">Enviar codigo</button></div></form></section>
 <?php }
 
@@ -2186,8 +2185,8 @@ function route(): void {
             if ($method === 'POST') {
                 $phone = normalize_phone($_POST['tel'] ?? '');
                 if (!$phone) { flash('Escribe un numero mexicano valido.', 'error'); redirect_to('/registro'); }
-                if (($_POST['acepta_terminos'] ?? '') !== '1' || ($_POST['acepta_sms'] ?? '') !== '1') {
-                    flash('Debes aceptar los terminos y el consentimiento SMS para crear tu cuenta.', 'error');
+                if (($_POST['acepta_terminos'] ?? '') !== '1') {
+                    flash('Debes aceptar los terminos y condiciones para crear tu cuenta.', 'error');
                     redirect_to('/registro');
                 }
                 [$sent, $dev] = create_otp($phone);
