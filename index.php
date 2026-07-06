@@ -1752,7 +1752,7 @@ function view_impulsar(array $mascota): void {
 
                 <!-- SECCIÓN EDITADA: Mensaje profesional de planes -->
                 <div class="boost-price-box" style="padding: 20px; text-align: center;">
-                    <strong style="font-size: 1.1rem; color: var(--brand);">Consulta nuestros planes disponibles</strong>
+                    <strong style="font-size: 1.1rem; color: var(--brand);"></strong>
                     <p style="margin-top: 8px; color: var(--muted); font-size: 0.95rem;">
                         Pregunta por las opciones de alcance y duración que manejamos para ayudarte a encontrar a tu mascota.
                     </p>
