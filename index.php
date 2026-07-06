@@ -1765,7 +1765,7 @@ function view_impulsar(array $mascota): void {
                         <button class="btn boost" type="submit">Continuar a PayPal</button>
                     </form>
                     <?php endif; ?>
-                    <a class="btn whatsapp" href="<?= e($whatsappUrl) ?>" target="_blank" rel="noopener">Preguntar por planes (WhatsApp)</a>
+                    <a class="btn whatsapp" href="<?= e($whatsappUrl) ?>" target="_blank" rel="noopener">Preguntar por WhatsApp</a>
                     <a class="btn ghost" href="/mascotas/<?= e($mascota['id']) ?>">Cancelar</a>
                 </div>
             </div>
