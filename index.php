@@ -1733,33 +1733,44 @@ function view_perfil(array $user, array $reportes): void { ?>
 
 function view_impulsar(array $mascota): void {
     $petName = trim((string)($mascota['nombre'] ?? ''));
-    $title = 'Impulsa tu anuncio por ' . BOOST_DAYS . ' dias.';
+    $title = 'Impulsa tu anuncio'; // Simplificamos el título
     $shareUrl = full_url('/m/' . pet_short_code($mascota));
-    $whatsappUrl = 'https://wa.me/526564252167?text=' . urlencode('Quiero activar el impulso de mi reporte: ' . $shareUrl);
+    
+    // Ajustamos el mensaje para WhatsApp para que sea más profesional
+    $waMessage = "Hola, me interesa obtener más información sobre los planes para impulsar el reporte de mi mascota: " . $shareUrl;
+    $whatsappUrl = 'https://wa.me/526564252167?text=' . urlencode($waMessage);
     ?>
-  <section class="form-wrap boost-checkout-wrap">
-    <div class="form-panel boost-checkout-panel">
-      <div class="boost-product-media"><img src="<?= e(BOOST_PRODUCT_IMAGE_URL) ?>" alt="Impulsa tu anuncio en AyudaPet"></div>
-      <div class="boost-product-info">
-        <p class="eyebrow" style="color:var(--brand);">Impulso</p>
-        <h1><?= e($title) ?></h1>
-        <p class="meta">Lo destacamos en AyudaPet y tambien enviamos tu reporte directo a celulares de personas cercanas a la zona donde se perdio tu mascota.</p>
-        <?php if ($petName !== ''): ?><p class="boost-product-pet">Reporte: <strong><?= e($petName) ?></strong></p><?php endif; ?>
-        <div class="boost-price-box"><span>Total</span><strong><?= e(BOOST_PRICE_LABEL) ?></strong><small>por <?= e(BOOST_DAYS) ?> dias</small></div>
-        <div class="actions">
-          <?php if (boost_button_enabled()): ?>
-          <form method="post" action="/mascotas/<?= e($mascota['id']) ?>/impulsar">
-            <input type="hidden" name="confirmar" value="1">
-            <button class="btn boost" type="submit">Continuar a PayPal</button>
-          </form>
-          <?php else: ?>
-          <a class="btn whatsapp" href="<?= e($whatsappUrl) ?>" target="_blank" rel="noopener">Continuar a WhatsApp</a>
-          <?php endif; ?>
-          <a class="btn ghost" href="/mascotas/<?= e($mascota['id']) ?>">Cancelar</a>
+    <section class="form-wrap boost-checkout-wrap">
+        <div class="form-panel boost-checkout-panel">
+            <div class="boost-product-media"><img src="<?= e(BOOST_PRODUCT_IMAGE_URL) ?>" alt="Impulsa tu anuncio en AyudaPet"></div>
+            <div class="boost-product-info">
+                <p class="eyebrow" style="color:var(--brand);">Impulso</p>
+                <h1><?= e($title) ?></h1>
+                <p class="meta">Destaca tu reporte en AyudaPet y aumenta su alcance enviándolo directamente a los dispositivos de personas en la zona afectada.</p>
+                
+                <?php if ($petName !== ''): ?><p class="boost-product-pet">Reporte: <strong><?= e($petName) ?></strong></p><?php endif; ?>
+
+                <!-- SECCIÓN EDITADA: Mensaje profesional de planes -->
+                <div class="boost-price-box" style="padding: 20px; text-align: center;">
+                    <strong style="font-size: 1.1rem; color: var(--brand);">Consulta nuestros planes disponibles</strong>
+                    <p style="margin-top: 8px; color: var(--muted); font-size: 0.95rem;">
+                        Pregunta por las opciones de alcance y duración que manejamos para ayudarte a encontrar a tu mascota.
+                    </p>
+                </div>
+
+                <div class="actions">
+                    <?php if (boost_button_enabled()): ?>
+                    <form method="post" action="/mascotas/<?= e($mascota['id']) ?>/impulsar">
+                        <input type="hidden" name="confirmar" value="1">
+                        <button class="btn boost" type="submit">Continuar a PayPal</button>
+                    </form>
+                    <?php endif; ?>
+                    <a class="btn whatsapp" href="<?= e($whatsappUrl) ?>" target="_blank" rel="noopener">Preguntar por planes (WhatsApp)</a>
+                    <a class="btn ghost" href="/mascotas/<?= e($mascota['id']) ?>">Cancelar</a>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  </section>
+    </section>
 <?php }
 
 function view_tipo_reporte(): void { ?>
