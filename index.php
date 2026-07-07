@@ -1660,7 +1660,7 @@ function view_detalle(array $mascota, bool $isOwner, bool $canManage, array $sha
     </div>
     <article class="detail-info">
       <?php if ($canManage): ?><div class="detail-owner-actions"><a class="btn edit" href="/mascotas/<?= e($mascota['id']) ?>/editar">Editar</a><form method="post" action="/mascotas/<?= e($mascota['id']) ?>/eliminar" onsubmit="return confirm('Eliminar este reporte?');"><button class="btn delete" type="submit">Eliminar</button></form></div><?php endif; ?>
-      <?php if (is_admin_user()): ?><form class="boost-panel" method="post" action="/mascotas/<?= e($mascota['id']) ?>/impulso-manual"><input type="hidden" name="enabled" value="0"><label class="switch"><span class="switch-text"><span>Impulso manual</span><small><?= $boostedUntil ? 'Activo hasta ' . e($boostedUntil) : 'Activar por ' . e(BOOST_DAYS) . ' dias' ?></small></span><input type="checkbox" name="enabled" value="1" <?= $boostedUntil ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form><?php endif; ?>
+      <?php if (is_admin_user()): ?><form class="boost-panel" method="post" action="/mascotas/<?= e($mascota['id']) ?>/impulso-manual"><input type="hidden" name="enabled" value="0"><?php if (!$boostedUntil): ?><select name="dias" aria-label="Dias de impulso"><?php foreach ([3, 7, 10] as $d): ?><option value="<?= e($d) ?>" <?= $d === BOOST_DAYS ? 'selected' : '' ?>><?= e($d) ?> dias</option><?php endforeach; ?></select><?php endif; ?><label class="switch"><span class="switch-text"><span>Impulso manual</span><small><?= $boostedUntil ? 'Activo hasta ' . e($boostedUntil) : 'Selecciona dias y activa' ?></small></span><input type="checkbox" name="enabled" value="1" <?= $boostedUntil ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form><?php endif; ?>
       <?php if (is_admin_user()): ?><form class="boost-panel admin-views-panel" method="post" action="/mascotas/<?= e($mascota['id']) ?>/vistas"><div class="field"><label for="admin_vistas">Vistas</label><input id="admin_vistas" name="vistas" type="number" min="0" step="1" value="<?= e((string)max(0, (int)($mascota['vistas'] ?? 0))) ?>"></div><button class="btn primary" type="submit">Guardar vistas</button></form><?php endif; ?>
       <?php if ($boostedUntil): ?><div class="boost-panel"><span class="badge boost-badge">Impulsado</span><strong>Activo hasta <?= e($boostedUntil) ?></strong></div><?php endif; ?>
       <?php if ($canManage && !$boostedUntil): ?><div class="boost-copy"><div><h2>Impulsa tu anuncio.</h2><p>Lo destacamos en AyudaPet y tambien enviamos tu reporte directo a celulares de personas cercanas a la zona donde se perdio tu mascota.</p></div><a class="btn <?= boost_button_enabled() ? 'boost' : 'whatsapp' ?>" href="/mascotas/<?= e($mascota['id']) ?>/impulsar"><?= boost_button_enabled() ? 'Impulsar ahora' : 'Activar por WhatsApp' ?></a></div><?php endif; ?>
@@ -2439,9 +2439,11 @@ function route(): void {
             if (!$pet) { render('error', ['title' => 'Reporte no encontrado', 'message' => 'El reporte solicitado no existe.'], 404); return; }
             $enabled = ($_POST['enabled'] ?? '0') === '1';
             if ($enabled) {
-                db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . BOOST_DAYS . ' DAY), paypal_order_id = NULL, paypal_payment_status = ?, stripe_session_id = NULL, stripe_payment_status = ?, boost_expired_notified_at = NULL WHERE id = ?')
+                $dias = (int)($_POST['dias'] ?? BOOST_DAYS);
+                if (!in_array($dias, [3, 7, 10], true)) $dias = BOOST_DAYS;
+                db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . $dias . ' DAY), paypal_order_id = NULL, paypal_payment_status = ?, stripe_session_id = NULL, stripe_payment_status = ?, boost_expired_notified_at = NULL WHERE id = ?')
                     ->execute(['manual', 'manual', $pet['id']]);
-                flash('Impulso manual activado por ' . BOOST_DAYS . ' dias.', 'success');
+                flash('Impulso manual activado por ' . $dias . ' dias.', 'success');
             } else {
                 db()->prepare('UPDATE mascotas SET impulsado_hasta = NULL, paypal_order_id = NULL, paypal_payment_status = NULL, stripe_session_id = NULL, stripe_payment_status = NULL, boost_expired_notified_at = NULL WHERE id = ?')
                     ->execute([$pet['id']]);
