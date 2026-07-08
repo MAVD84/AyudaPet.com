@@ -1797,7 +1797,7 @@ function view_impulsar(array $mascota): void {
                 <p class="meta">Destaca tu reporte en AyudaPet y aumenta su alcance enviandolo directamente a los dispositivos de personas en la zona afectada.</p>
                 
                 <?php if ($petName !== ''): ?><p class="boost-product-pet">Reporte: <strong><?= e($petName) ?></strong></p><?php endif; ?>
-                <div class="boost-info-box">Pregunta por las opciones de alcance y duracion que manejamos para ayudarte a encontrar a tu mascota.</div>
+                <div class="boost-info-box">Elige el plan que mas se ajuste a tus necesidades.</div>
 
                 <div class="actions">
                     <?php if (boost_button_enabled()): ?>
