@@ -1645,6 +1645,7 @@ document.querySelectorAll("[data-max-files]").forEach((input)=>input.addEventLis
 document.querySelectorAll("[data-report-form]").forEach((form)=>form.addEventListener("submit",(event)=>{if(form.dataset.submitting==="1"){event.preventDefault();return}form.dataset.submitting="1";form.querySelectorAll("button[type='submit']").forEach((button)=>{button.disabled=true;button.textContent=button.textContent.includes("Guardar")?"Guardando...":"Publicando..."})}));
 document.querySelectorAll("[data-contact-toggle]").forEach((toggle)=>{const box=document.querySelector("[data-contact-own]");const input=document.querySelector("[data-contact-input]");const sync=()=>{if(!box)return;box.classList.toggle("show",toggle.checked);if(input){input.disabled=!toggle.checked;if(!toggle.checked)input.value=""}};toggle.addEventListener("change",sync);sync()});
 document.querySelectorAll("[data-money-input]").forEach((input)=>{const preview=document.querySelector("[data-money-preview]");const sync=()=>{if(!preview)return;const amount=Number(String(input.value||"").replace(/\D/g,""));preview.textContent=amount>0?`$${amount.toLocaleString("es-MX")} M.N.`:"Se mostrara como $1,000 M.N."};input.addEventListener("input",sync);sync()});
+document.querySelectorAll("[data-boost-whatsapp]").forEach((link)=>{const scope=link.closest(".boost-product-info")||document;const sync=()=>{const checked=scope.querySelector('input[name="plan_dias"]:checked');if(checked?.dataset.whatsappUrl)link.href=checked.dataset.whatsappUrl};scope.querySelectorAll('input[name="plan_dias"]').forEach((input)=>input.addEventListener("change",sync));sync()});
 (()=>{const modal=document.querySelector("[data-donation-modal]");if(!modal)return;const path=window.location.pathname;if(path==="/reportar"||/\/mascotas\/[a-f0-9]{32}\/editar$/.test(path))return;const key="ayudapet_donation_prompt";const close=()=>{modal.classList.remove("open");modal.setAttribute("aria-hidden","true")};try{if(localStorage.getItem(key))return}catch(error){}window.setTimeout(()=>{modal.classList.add("open");modal.setAttribute("aria-hidden","false")},180000);modal.querySelector("[data-donation-no]")?.addEventListener("click",()=>{try{localStorage.setItem(key,"no")}catch(error){}close()});modal.querySelector("[data-donation-yes]")?.addEventListener("click",()=>{try{localStorage.setItem(key,"yes")}catch(error){}});})();
 JS;
 }
@@ -1781,12 +1782,31 @@ function view_perfil(array $user, array $reportes): void { ?>
   </section>
 <?php }
 
+function boost_plan_whatsapp_url(array $plan, string $shareUrl): string {
+    $message = 'Hola me interesa impulsar mi reporte con el plan de ' . $plan['days'] . ' dias ' . $plan['price_label'] . ': ' . $shareUrl;
+    return 'https://wa.me/526564252167?text=' . urlencode($message);
+}
+
+function render_boost_plan_options(string $shareUrl = ''): void { ?>
+  <div class="boost-plans">
+    <?php foreach (boost_plans() as $plan): ?>
+    <label class="boost-plan">
+      <input type="radio" name="plan_dias" value="<?= e((string)$plan['days']) ?>" <?= (int)$plan['days'] === BOOST_DAYS ? 'checked' : '' ?> <?= $shareUrl !== '' ? 'data-whatsapp-url="' . e(boost_plan_whatsapp_url($plan, $shareUrl)) . '"' : '' ?>>
+      <span class="boost-plan-name"><?= e($plan['name']) ?></span>
+      <span class="boost-plan-days"><?= e((string)$plan['days']) ?> dias</span>
+      <span class="boost-plan-price"><?= e($plan['price_label']) ?></span>
+      <ul><?php foreach ($plan['features'] as $feature): ?><li><?= e($feature) ?></li><?php endforeach; ?></ul>
+      <span class="boost-plan-cta">Seleccionar plan</span>
+    </label>
+    <?php endforeach; ?>
+  </div>
+<?php }
+
 function view_impulsar(array $mascota): void {
     $petName = trim((string)($mascota['nombre'] ?? ''));
     $title = 'Impulsa tu anuncio';
     $shareUrl = full_url('/m/' . pet_short_code($mascota));
-    $waMessage = 'Hola, me interesa obtener mas informacion sobre los planes para impulsar el reporte de mi mascota: ' . $shareUrl;
-    $whatsappUrl = 'https://wa.me/526564252167?text=' . urlencode($waMessage);
+    $whatsappUrl = boost_plan_whatsapp_url(boost_plan(BOOST_DAYS), $shareUrl);
     ?>
     <section class="form-wrap boost-checkout-wrap">
         <div class="form-panel boost-checkout-panel">
@@ -1803,22 +1823,12 @@ function view_impulsar(array $mascota): void {
                     <?php if (boost_button_enabled()): ?>
                     <form method="post" action="/mascotas/<?= e($mascota['id']) ?>/impulsar">
                         <input type="hidden" name="confirmar" value="1">
-                        <div class="boost-plans">
-                            <?php foreach (boost_plans() as $plan): ?>
-                            <label class="boost-plan">
-                                <input type="radio" name="plan_dias" value="<?= e((string)$plan['days']) ?>" <?= (int)$plan['days'] === BOOST_DAYS ? 'checked' : '' ?>>
-                                <span class="boost-plan-name"><?= e($plan['name']) ?></span>
-                                <span class="boost-plan-days"><?= e((string)$plan['days']) ?> dias</span>
-                                <span class="boost-plan-price"><?= e($plan['price_label']) ?></span>
-                                <ul><?php foreach ($plan['features'] as $feature): ?><li><?= e($feature) ?></li><?php endforeach; ?></ul>
-                                <span class="boost-plan-cta">Seleccionar plan</span>
-                            </label>
-                            <?php endforeach; ?>
-                        </div>
+                        <?php render_boost_plan_options(); ?>
                         <button class="btn boost" type="submit">Continuar a PayPal</button>
                     </form>
                     <?php else: ?>
-                    <a class="btn whatsapp" href="<?= e($whatsappUrl) ?>" target="_blank" rel="noopener">Preguntar por WhatsApp</a>
+                    <?php render_boost_plan_options($shareUrl); ?>
+                    <a class="btn whatsapp" href="<?= e($whatsappUrl) ?>" target="_blank" rel="noopener" data-boost-whatsapp>Preguntar por WhatsApp</a>
                     <?php endif; ?>
                     <a class="btn ghost" href="/mascotas/<?= e($mascota['id']) ?>">Cancelar</a>
                 </div>
