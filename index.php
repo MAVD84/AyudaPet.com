@@ -80,6 +80,42 @@ function envv(string $key, ?string $default = null): ?string {
     return $value === false || $value === '' ? $default : $value;
 }
 
+function boost_plans(): array {
+    return [
+        3 => [
+            'name' => 'Reaccion rapida',
+            'days' => 3,
+            'price_cents' => 40500,
+            'price_label' => '$405 MXN',
+            'features' => ['Anuncios en Facebook e Instagram', 'Radio de 5 km a la redonda', 'Diseno de ficha profesional', 'Activacion en menos de 30 min'],
+        ],
+        7 => [
+            'name' => 'Impacto semanal',
+            'days' => 7,
+            'price_cents' => 86000,
+            'price_label' => '$860 MXN',
+            'features' => ['Todo lo del Plan 3 dias', 'Asesoria contra extorsiones', 'Radio de 10 km intermedio', 'Activacion en menos de 30 min'],
+        ],
+        10 => [
+            'name' => 'Cobertura total',
+            'days' => 10,
+            'price_cents' => 130000,
+            'price_label' => '$1,300 MXN',
+            'features' => ['Todo lo del Plan 7 dias', 'Formato video/reel', 'Radio de 15 km maximo', 'Activacion en 30 min'],
+        ],
+    ];
+}
+
+function boost_plan(int $days): array {
+    $plans = boost_plans();
+    return $plans[$days] ?? $plans[BOOST_DAYS];
+}
+
+function boost_plan_days($value): int {
+    $days = (int)$value;
+    return array_key_exists($days, boost_plans()) ? $days : BOOST_DAYS;
+}
+
 function db(): PDO {
     static $pdo = null;
     if ($pdo instanceof PDO) return $pdo;
@@ -133,6 +169,9 @@ function ensure_report_columns(): void {
     }
     if (empty($existing['paypal_payment_status'])) {
         db()->exec('ALTER TABLE mascotas ADD COLUMN paypal_payment_status VARCHAR(50) NULL');
+    }
+    if (empty($existing['paypal_boost_days'])) {
+        db()->exec('ALTER TABLE mascotas ADD COLUMN paypal_boost_days TINYINT UNSIGNED NULL');
     }
     if (empty($existing['stripe_session_id'])) {
         db()->exec('ALTER TABLE mascotas ADD COLUMN stripe_session_id VARCHAR(255) NULL');
@@ -199,6 +238,7 @@ function ensure_archive_table(): void {
         impulsado_hasta DATETIME NULL,
         paypal_order_id VARCHAR(255) NULL,
         paypal_payment_status VARCHAR(50) NULL,
+        paypal_boost_days TINYINT UNSIGNED NULL,
         stripe_session_id VARCHAR(255) NULL,
         stripe_payment_status VARCHAR(50) NULL,
         boost_expired_notified_at DATETIME NULL,
@@ -224,6 +264,9 @@ function ensure_archive_table(): void {
     }
     if (empty($existing['paypal_payment_status'])) {
         db()->exec('ALTER TABLE mascotas_archivadas ADD COLUMN paypal_payment_status VARCHAR(50) NULL AFTER paypal_order_id');
+    }
+    if (empty($existing['paypal_boost_days'])) {
+        db()->exec('ALTER TABLE mascotas_archivadas ADD COLUMN paypal_boost_days TINYINT UNSIGNED NULL AFTER paypal_payment_status');
     }
     $indexes = db()->query("SHOW INDEX FROM mascotas_archivadas WHERE Key_name = 'uniq_archivadas_reporte'")->fetchAll();
     if (!$indexes) {
@@ -367,17 +410,19 @@ function paypal_request(string $method, string $endpoint, array $payload = []): 
     return is_array($json) ? $json : [];
 }
 
-function create_boost_checkout(array $pet): string {
+function create_boost_checkout(array $pet, int $days = BOOST_DAYS): string {
     if (!boost_button_enabled()) throw new RuntimeException('El impulso automatico esta desactivado.');
     if (!paypal_enabled()) throw new RuntimeException('PayPal todavia no esta configurado.');
-    $boostAmount = number_format(BOOST_PRICE_CENTS / 100, 2, '.', '');
-    $boostLabel = 'Impulsa tu anuncio por ' . BOOST_DAYS . ' dias.';
+    $plan = boost_plan($days);
+    $days = (int)$plan['days'];
+    $boostAmount = number_format(((int)$plan['price_cents']) / 100, 2, '.', '');
+    $boostLabel = 'Impulsa tu anuncio por ' . $days . ' dias.';
     $boostImage = BOOST_PRODUCT_IMAGE_URL;
     $order = paypal_request('POST', 'v2/checkout/orders', [
         'intent' => 'CAPTURE',
         'purchase_units' => [[
             'reference_id' => $pet['id'],
-            'custom_id' => $pet['id'],
+            'custom_id' => $pet['id'] . ':' . $days,
             'description' => $boostLabel,
             'amount' => [
                 'currency_code' => 'MXN',
@@ -391,7 +436,7 @@ function create_boost_checkout(array $pet): string {
             ],
             'items' => [[
                 'name' => $boostLabel,
-                'description' => 'Destacado en AyudaPet para el reporte de ' . ($pet['nombre'] ?: 'mascota'),
+                'description' => $plan['name'] . ' para el reporte de ' . ($pet['nombre'] ?: 'mascota'),
                 'image_url' => $boostImage,
                 'quantity' => '1',
                 'unit_amount' => [
@@ -424,8 +469,8 @@ function create_boost_checkout(array $pet): string {
         }
     }
     if (!$orderId || !$approveUrl) throw new RuntimeException('PayPal no regreso una URL de aprobacion valida.');
-    db()->prepare('UPDATE mascotas SET paypal_order_id = ?, paypal_payment_status = ? WHERE id = ? AND reportado_por = ?')
-        ->execute([$orderId, (string)($order['status'] ?? 'CREATED'), $pet['id'], current_user_phone()]);
+    db()->prepare('UPDATE mascotas SET paypal_order_id = ?, paypal_payment_status = ?, paypal_boost_days = ? WHERE id = ?')
+        ->execute([$orderId, (string)($order['status'] ?? 'CREATED'), $days, $pet['id']]);
     return $approveUrl;
 }
 
@@ -577,21 +622,22 @@ function process_expired_boosts(int $limit = 50): array {
     return ['checked' => count($pets), 'sent' => $sent, 'failed' => $failed];
 }
 
-function activate_boost(string $petId, string $paymentId, string $provider = 'paypal'): void {
+function activate_boost(string $petId, string $paymentId, string $provider = 'paypal', int $days = BOOST_DAYS): void {
     ensure_report_columns();
+    $days = boost_plan_days($days);
     $pet = get_mascota($petId);
     if (!$pet) return;
     $alreadyNotified = is_boosted($pet) && (($pet['paypal_order_id'] ?? '') === $paymentId || ($pet['stripe_session_id'] ?? '') === $paymentId);
     if ($provider === 'legacy_stripe') {
-        db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . BOOST_DAYS . ' DAY), stripe_session_id = ?, stripe_payment_status = ?, boost_expired_notified_at = NULL WHERE id = ?')
+        db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . $days . ' DAY), stripe_session_id = ?, stripe_payment_status = ?, boost_expired_notified_at = NULL WHERE id = ?')
             ->execute([$paymentId, 'paid', $petId]);
     } else {
-        db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . BOOST_DAYS . ' DAY), paypal_order_id = ?, paypal_payment_status = ?, boost_expired_notified_at = NULL WHERE id = ?')
-            ->execute([$paymentId, 'COMPLETED', $petId]);
+        db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . $days . ' DAY), paypal_order_id = ?, paypal_payment_status = ?, paypal_boost_days = ?, boost_expired_notified_at = NULL WHERE id = ?')
+            ->execute([$paymentId, 'COMPLETED', $days, $petId]);
     }
     if (!$alreadyNotified) {
         $updated = get_mascota($petId);
-        send_boost_notification($updated ?: $pet, $paymentId, (string)(($updated['impulsado_hasta'] ?? null) ?: date('Y-m-d H:i:s', strtotime('+' . BOOST_DAYS . ' days'))));
+        send_boost_notification($updated ?: $pet, $paymentId, (string)(($updated['impulsado_hasta'] ?? null) ?: date('Y-m-d H:i:s', strtotime('+' . $days . ' days'))));
     }
 }
 
@@ -602,9 +648,11 @@ function capture_paypal_boost(string $petId, string $orderId): bool {
     $capture = paypal_request('POST', 'v2/checkout/orders/' . rawurlencode($orderId) . '/capture');
     if (($capture['status'] ?? '') !== 'COMPLETED') return false;
     $purchase = $capture['purchase_units'][0] ?? [];
-    $capturePetId = (string)(($purchase['custom_id'] ?? '') ?: ($purchase['reference_id'] ?? ''));
+    $customParts = explode(':', (string)($purchase['custom_id'] ?? ''), 2);
+    $capturePetId = (string)($customParts[0] ?: ($purchase['reference_id'] ?? ''));
     if ($capturePetId !== $petId) return false;
-    activate_boost($petId, $orderId, 'paypal');
+    $days = boost_plan_days($pet['paypal_boost_days'] ?? ($customParts[1] ?? BOOST_DAYS));
+    activate_boost($petId, $orderId, 'paypal', $days);
     return true;
 }
 
@@ -1041,7 +1089,7 @@ function archive_report(array $pet, string $reason = 'deleted_by_owner'): void {
         'id', 'reportado_por', 'tipo_reporte', 'tipo_mascota', 'nombre', 'descripcion', 'contacto',
         'principal', 'secundarias', 'fecha', 'edad', 'raza', 'genero', 'color', 'collar', 'docil',
         'direccion', 'direccion_completa', 'ubicacion_lat', 'ubicacion_lng', 'calles', 'dueno', 'recompensa', 'encontrado',
-        'vistas', 'impulsado_hasta', 'paypal_order_id', 'paypal_payment_status', 'stripe_session_id', 'stripe_payment_status',
+        'vistas', 'impulsado_hasta', 'paypal_order_id', 'paypal_payment_status', 'paypal_boost_days', 'stripe_session_id', 'stripe_payment_status',
         'boost_expired_notified_at', 'creado_at', 'actualizado_at'
     ];
     $columns = array_merge(['archivado_por', 'archivado_motivo'], $fields, ['snapshot_json']);
@@ -1482,7 +1530,7 @@ function render(string $view, array $data = [], int $status = 200): void {
   <style>.switch input{width:1px!important;height:1px!important;min-width:0!important;min-height:0!important;padding:0!important;margin:0!important;border:0!important}.switch input:checked~.switch-ui{background:var(--green)}.switch input:checked~.switch-ui:before{transform:translateX(22px)}.switch-text{min-width:0;overflow-wrap:anywhere}.menu-setting{margin:0}.menu-setting .switch{min-height:58px}.inline-fields{display:grid;grid-template-columns:88px minmax(0,132px);gap:8px;align-items:center}.inline-fields select,.inline-fields input{min-width:0}.pet-body{padding-right:20px}.btn.facebook{background:#1877f2;color:#fff;border-color:#1877f2}.btn.facebook:hover{background:#145dbd}.btn.donate{background:#22607a;color:#fff;border-color:#22607a}.btn.donate:hover{background:#18475c}.btn.boost{background:#f6a623;color:#18212f;border-color:#f6a623}.btn.boost:hover{background:#e99612}.badge.rescue{background:#fff8e8;color:var(--amber)}.boost-badge{width:max-content;background:#fff4d8;color:#8a570b}.pet-card.boosted{border-color:#f0c56f;box-shadow:0 16px 42px rgba(164,102,20,.16)}.boost-panel,.boost-copy{margin-bottom:16px;padding:14px;border:1px solid #f0c56f;border-radius:8px;background:#fffaf0}.boost-panel{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0;max-width:100%}.boost-panel>*{min-width:0}.boost-panel .switch{width:100%;min-width:0}.boost-panel strong{overflow-wrap:anywhere}.admin-views-panel{align-items:end}.admin-views-panel .field{flex:1;min-width:150px}.admin-views-panel .btn{min-height:44px}.boost-copy h2{margin:0 0 8px;font-size:1.15rem}.boost-copy p{margin:0 0 10px;color:var(--muted);line-height:1.5}.filter-dropdown{position:relative}.filter-dropdown summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:14px;padding-right:32px;cursor:pointer;font-weight:900}.filter-dropdown summary::-webkit-details-marker{display:none}.filter-dropdown summary:after{content:"+";position:absolute;top:0;right:0;color:var(--muted);font-size:1.25rem;line-height:1}.filter-dropdown[open] summary:after{content:"-"}.filter-dropdown .search-form{margin-top:16px}.modal-page{min-height:calc(100vh - 170px);display:grid;place-items:center;padding:clamp(16px,4vw,34px)}.report-type-modal{width:min(680px,100%);padding:clamp(20px,4vw,34px)}.report-type-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:20px}.report-type-option{display:grid;gap:8px;padding:18px;border:1px solid var(--line);border-radius:8px;background:#fbfdff}.report-type-option:hover{border-color:var(--brand);box-shadow:0 12px 28px rgba(20,32,48,.08)}.report-type-option strong{font-size:1.05rem}.report-type-option span{color:var(--muted);line-height:1.45}.donation-modal{position:fixed;inset:0;z-index:90;display:none;place-items:center;padding:18px;background:rgba(10,16,24,.48)}.donation-modal.open{display:grid}.donation-dialog{width:min(460px,100%);padding:24px;border:1px solid var(--line);border-radius:8px;background:#fff;box-shadow:0 24px 80px rgba(20,32,48,.22)}.donation-dialog h2{margin:0;font-size:1.6rem}.donation-dialog p:not(.eyebrow){color:var(--muted);line-height:1.55}.detail-media .views-badge,.detail-media .photo-badge{top:10px;min-width:86px;min-height:28px;padding:0 10px;font-size:.78rem;line-height:1;align-items:center;justify-content:center;text-align:center}.views-badge{position:absolute;left:10px;box-shadow:0 10px 24px rgba(20,32,48,.16);background:rgba(255,255,255,.94);color:var(--ink)}@media(max-width:640px){.report-type-actions{grid-template-columns:1fr}}@media(max-width:420px){.pet-body{padding-right:12px}.filter-dropdown summary{align-items:flex-start;flex-direction:column}.detail-media .views-badge,.detail-media .photo-badge{top:7px;min-width:80px;min-height:24px;padding:0 8px;font-size:.68rem}.views-badge{left:7px}}</style>
   <style>.btn{font-size:.92rem;line-height:1}.btn.logout,.btn.back-report{background:#b93824;color:#fff;border-color:#b93824}.btn.logout:hover,.btn.back-report:hover{background:#922b1b}.btn.call{background:#0d83f2;color:#fff;border-color:#0d83f2}.btn.call:hover{background:#096dce}.btn.whatsapp{background:#128C7E;color:#fff;border-color:#128C7E}.btn.whatsapp:hover{background:#0f766b}.btn.share{background:#25d366;color:#fff;border-color:#25d366}.btn.share:hover{background:#20b858}.detail-owner-actions{display:flex;justify-content:flex-end;gap:10px;margin:0 0 14px}.detail-owner-actions form{display:flex;margin:0}.detail-owner-actions .btn{min-height:38px;padding:0 14px;border:1px solid var(--line);color:#fff}.detail-owner-actions .btn.edit{background:#176b87;border-color:#176b87}.detail-owner-actions .btn.edit:hover{background:#10546c}.detail-owner-actions .btn.delete{background:#b93824;border-color:#b93824}.detail-owner-actions .btn.delete:hover{background:#922b1b}.boost-copy{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:16px;padding:16px 18px}.boost-copy form{margin:0}.boost-copy .btn.boost{min-width:190px;min-height:48px;box-shadow:0 12px 28px rgba(246,166,35,.22)}@media(max-width:840px){.detail-owner-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.detail-owner-actions .btn,.detail-owner-actions form{width:100%}.boost-copy{grid-template-columns:1fr;gap:14px}.boost-copy .btn.boost,.boost-copy form{width:100%}}@media(max-width:420px){.detail-owner-actions .btn{min-height:42px}.boost-copy{padding:14px}.boost-copy h2{font-size:1.05rem}.boost-copy .btn.boost{min-height:46px}}</style>
   <style>.legal-checks{display:grid;gap:10px;margin-top:16px}.legal-check{display:grid;grid-template-columns:18px minmax(0,1fr);gap:10px;align-items:start;color:var(--muted);font-size:.92rem;line-height:1.45}.legal-check input{width:16px!important;min-width:16px!important;height:16px!important;min-height:16px!important;margin-top:3px;padding:0}.legal-check strong,.legal-check a{color:var(--ink);font-weight:900}.terms-page{max-width:820px;margin:0 auto}.terms-page h1{font-size:clamp(2rem,5vw,3.4rem);margin-bottom:14px}.terms-block{display:grid;gap:16px}.terms-block h2{font-size:1.15rem;margin:8px 0 0}.terms-block p{margin:0;color:var(--muted);line-height:1.65}</style>
-  <style>.boost-checkout-wrap{max-width:980px}.boost-checkout-panel{display:grid;grid-template-columns:minmax(260px,360px) minmax(0,1fr);gap:28px;align-items:center}.boost-product-media{overflow:hidden;border:1px solid var(--line);border-radius:8px;background:#fff;box-shadow:0 16px 36px rgba(20,32,48,.08)}.boost-product-media img{width:100%;aspect-ratio:1;object-fit:cover;display:block}.boost-product-info h1{font-size:clamp(2rem,4vw,3.4rem)}.boost-product-info .meta{font-size:1.02rem;line-height:1.58}.boost-product-pet{margin:18px 0 0;color:var(--muted)}.boost-info-box{margin:18px 0 20px;padding:24px 18px;border:1px solid #f0c56f;border-radius:8px;background:#fffaf0;color:var(--muted);text-align:center;line-height:1.45}.boost-checkout-panel .actions{align-items:stretch}.boost-checkout-panel .actions form{display:flex}.boost-checkout-panel .btn{min-height:48px}@media(max-width:760px){.boost-checkout-panel{grid-template-columns:1fr;gap:18px}.boost-product-media{max-width:360px;margin:0 auto}.boost-checkout-panel .actions{display:grid;grid-template-columns:1fr}.boost-checkout-panel .actions form,.boost-checkout-panel .actions .btn{width:100%}}@media(max-width:420px){.boost-checkout-panel{padding:16px}.boost-product-info h1{font-size:2rem}.boost-info-box{padding:18px 14px}}</style>
+  <style>.boost-checkout-wrap{max-width:1100px}.boost-checkout-panel{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:28px;align-items:start}.boost-product-media{overflow:hidden;border:1px solid var(--line);border-radius:8px;background:#fff;box-shadow:0 16px 36px rgba(20,32,48,.08)}.boost-product-media img{width:100%;aspect-ratio:1;object-fit:cover;display:block}.boost-product-info h1{font-size:clamp(2rem,4vw,3.4rem)}.boost-product-info .meta{font-size:1.02rem;line-height:1.58}.boost-product-pet{margin:18px 0 0;color:var(--muted)}.boost-info-box{margin:18px 0 20px;padding:24px 18px;border:1px solid #f0c56f;border-radius:8px;background:#fffaf0;color:var(--muted);text-align:center;line-height:1.45}.boost-plans{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0}.boost-plan{position:relative;display:grid;gap:10px;align-content:start;padding:16px;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer;min-height:230px}.boost-plan input{position:absolute;opacity:0;pointer-events:none}.boost-plan-name{width:max-content;max-width:100%;padding:7px 11px;border-radius:999px;background:#e8f1ff;color:#254f8f;font-size:.78rem;font-weight:900;text-transform:uppercase}.boost-plan:nth-child(2) .boost-plan-name{background:#efe7f6;color:#442069}.boost-plan:nth-child(3) .boost-plan-name{background:#fde7f0;color:#8e2452}.boost-plan-days{font-size:1.75rem;font-weight:900}.boost-plan-price{font-size:1.55rem;font-weight:900}.boost-plan-price small{font-size:.78rem;color:var(--muted)}.boost-plan ul{display:grid;gap:7px;margin:4px 0 0;padding:0;list-style:none;color:var(--muted);font-size:.9rem;line-height:1.3}.boost-plan li:before{content:"✓";margin-right:7px;color:#7b35b5;font-weight:900}.boost-plan input:checked~*{color:inherit}.boost-plan:has(input:checked){border-color:#f0a51f;box-shadow:0 16px 34px rgba(164,102,20,.16);background:#fffaf0}.boost-checkout-panel .actions{align-items:stretch}.boost-checkout-panel .actions form{display:grid;gap:12px}.boost-checkout-panel .btn{min-height:48px}@media(max-width:980px){.boost-checkout-panel{grid-template-columns:1fr}.boost-product-media{max-width:340px;margin:0 auto}.boost-plans{grid-template-columns:1fr}.boost-plan{min-height:0}.boost-checkout-panel .actions{display:grid;grid-template-columns:1fr}.boost-checkout-panel .actions form,.boost-checkout-panel .actions .btn{width:100%}}@media(max-width:420px){.boost-checkout-panel{padding:16px}.boost-product-info h1{font-size:2rem}.boost-info-box{padding:18px 14px}.boost-plan-days{font-size:1.5rem}.boost-plan-price{font-size:1.35rem}}</style>
   <style>.heatmap-page{display:grid;gap:18px}.heatmap-stats{grid-template-columns:repeat(4,minmax(0,1fr));margin:0}.heatmap-panel{padding:0;overflow:hidden}.heatmap-canvas{width:100%;height:min(72vh,720px);min-height:460px}.heatmap-list{margin-top:4px}.heatmap-list .mini-list{gap:12px}.heatmap-list .mini-report{grid-template-columns:64px minmax(0,1fr);align-items:center;gap:14px;padding:10px;min-width:0}.heatmap-list .mini-report>span:not(.mini-thumb){min-width:0;display:block}.heatmap-list .mini-report img,.heatmap-list .mini-thumb{width:64px;height:64px;min-width:64px;border-radius:8px;object-fit:cover}.heatmap-list .mini-report strong{display:block;line-height:1.2}.heatmap-list .mini-report .meta{display:block;margin-top:3px;line-height:1.35;overflow-wrap:anywhere}.map-popup{width:190px;display:grid;gap:7px;color:#18212f}.map-popup-img{width:190px;height:140px;object-fit:cover;border-radius:8px;display:block;background:#edf3f7}.map-popup strong{font-size:.95rem;line-height:1.2}.map-popup span{color:#617084;line-height:1.3;overflow-wrap:anywhere}.sms-search{grid-template-columns:minmax(0,1fr) auto}.sms-copy-box{margin-top:14px;min-height:150px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;line-height:1.5}.sms-contact-list{display:grid;gap:8px;margin-top:14px}.sms-contact{display:grid;gap:3px;padding:10px;border:1px solid var(--line);border-radius:8px;background:#fbfdff}.sms-contact span{color:var(--muted);overflow-wrap:anywhere}@media(max-width:820px){.heatmap-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.heatmap-canvas{height:68vh;min-height:420px}.sms-search{grid-template-columns:1fr}}@media(max-width:480px){.heatmap-stats{grid-template-columns:1fr}.heatmap-canvas{height:62vh;min-height:360px}.heatmap-list .mini-report{grid-template-columns:58px minmax(0,1fr);gap:12px}.heatmap-list .mini-report img,.heatmap-list .mini-thumb{width:58px;height:58px;min-width:58px}.map-popup,.map-popup-img{width:160px}.map-popup-img{height:118px}}</style>
   <style>.pet-card{grid-template-columns:clamp(112px,28%,220px) minmax(0,1fr);align-items:stretch;min-height:0}.pet-media{position:relative;width:100%;height:100%;min-height:100%;background:#edf3f7;display:grid;place-items:center;overflow:hidden}.pet-media:before{content:"";position:absolute;inset:-12px;background-image:var(--pet-image);background-size:cover;background-position:center;filter:blur(14px);transform:scale(1.08);opacity:.55}.pet-media:after{content:"";position:absolute;inset:0;background:rgba(255,255,255,.18)}.pet-media img{position:relative;z-index:1;width:100%;height:100%;object-fit:contain;object-position:center center;display:block;margin:auto}.pet-media .photo-badge{z-index:2}.pet-body{position:relative;min-height:0;align-content:start;padding-top:20px}.pet-body .meta{margin:0;line-height:1.35}.pet-body .boost-badge{position:absolute;top:12px;right:12px}.pet-body.has-boost{padding-top:20px}.pet-body.has-boost h3{padding-right:120px}@media(max-width:520px){.pet-card{grid-template-columns:clamp(104px,30%,140px) minmax(0,1fr);align-items:stretch}.pet-media{width:100%;height:100%;min-height:100%}.pet-media:before{inset:-10px;filter:blur(12px)}.pet-body{min-height:0;padding-top:12px}.pet-body .boost-badge{top:10px;right:10px}.pet-body.has-boost h3{padding-right:112px;padding-top:0}}</style>
   <style>.profile-layout{max-width:1120px;margin:0 auto;grid-template-columns:minmax(280px,340px) minmax(0,1fr);gap:18px}.profile-card{padding:24px}.profile-card h1{font-size:clamp(1.8rem,2.5vw,2.6rem);line-height:1.08;max-width:760px}.profile-layout .profile-card:first-child h1{font-size:clamp(2rem,3vw,2.9rem);line-height:1.02}.profile-card .avatar{width:96px;height:96px;font-size:2rem}.profile-card .form-grid{gap:14px}.profile-card .actions{margin-top:16px}.profile-layout+.profile-card{max-width:1120px;margin:18px auto 0!important}.profile-layout+.profile-card .section-head{align-items:center;margin-bottom:16px}.profile-layout+.profile-card .section-head p{margin:.35rem 0 0;color:var(--muted)}.profile-layout+.profile-card .mini-list{gap:12px}.profile-layout+.profile-card .mini-report{grid-template-columns:64px minmax(0,1fr);min-height:84px}.profile-layout+.profile-card .mini-report img,.profile-layout+.profile-card .mini-thumb{width:64px;height:64px}@media(min-width:841px){.profile-layout .profile-card:nth-child(2){padding:30px}.profile-layout .profile-card:nth-child(2) .actions{justify-content:flex-start}.profile-layout .profile-card:nth-child(2) .btn{min-width:210px}}@media(max-width:840px){.profile-layout{max-width:680px;grid-template-columns:1fr}.profile-layout+.profile-card{max-width:680px}.profile-card h1,.profile-layout .profile-card:first-child h1{font-size:clamp(1.7rem,8vw,2.35rem)}}@media(max-width:520px){.profile-card{padding:16px}.profile-card .form-grid{grid-template-columns:1fr}.profile-layout+.profile-card .section-head{align-items:stretch;flex-direction:column}.profile-layout+.profile-card .section-head .btn{width:100%}.profile-layout+.profile-card .mini-report{grid-template-columns:58px minmax(0,1fr)}.profile-layout+.profile-card .mini-report img,.profile-layout+.profile-card .mini-thumb{width:58px;height:58px}}</style>
@@ -1753,10 +1801,22 @@ function view_impulsar(array $mascota): void {
                     <?php if (boost_button_enabled()): ?>
                     <form method="post" action="/mascotas/<?= e($mascota['id']) ?>/impulsar">
                         <input type="hidden" name="confirmar" value="1">
+                        <div class="boost-plans">
+                            <?php foreach (boost_plans() as $plan): ?>
+                            <label class="boost-plan">
+                                <input type="radio" name="plan_dias" value="<?= e((string)$plan['days']) ?>" <?= (int)$plan['days'] === BOOST_DAYS ? 'checked' : '' ?>>
+                                <span class="boost-plan-name"><?= e($plan['name']) ?></span>
+                                <span class="boost-plan-days"><?= e((string)$plan['days']) ?> dias</span>
+                                <span class="boost-plan-price"><?= e($plan['price_label']) ?></span>
+                                <ul><?php foreach ($plan['features'] as $feature): ?><li><?= e($feature) ?></li><?php endforeach; ?></ul>
+                            </label>
+                            <?php endforeach; ?>
+                        </div>
                         <button class="btn boost" type="submit">Continuar a PayPal</button>
                     </form>
-                    <?php endif; ?>
+                    <?php else: ?>
                     <a class="btn whatsapp" href="<?= e($whatsappUrl) ?>" target="_blank" rel="noopener">Preguntar por WhatsApp</a>
+                    <?php endif; ?>
                     <a class="btn ghost" href="/mascotas/<?= e($mascota['id']) ?>">Cancelar</a>
                 </div>
             </div>
@@ -2345,7 +2405,7 @@ function route(): void {
             }
             try {
                 $confirmed = capture_paypal_boost($petId, $orderId);
-                flash($confirmed ? 'Tu anuncio ya esta impulsado por 10 dias.' : 'No se pudo confirmar el pago de PayPal.', $confirmed ? 'success' : 'error');
+                flash($confirmed ? 'Tu anuncio ya esta impulsado.' : 'No se pudo confirmar el pago de PayPal.', $confirmed ? 'success' : 'error');
             } catch (Throwable $e) {
                 error_log('No se pudo capturar impulso PayPal: ' . $e->getMessage());
                 flash('No se pudo confirmar el pago de PayPal. Intenta de nuevo o contactanos.', 'error');
@@ -2418,7 +2478,7 @@ function route(): void {
                 return;
             }
             if (!boost_button_enabled()) { flash('Continuaremos el impulso por WhatsApp.', 'warning'); redirect_to('/mascotas/' . $pet['id'] . '/impulsar'); }
-            $checkoutUrl = create_boost_checkout($pet);
+            $checkoutUrl = create_boost_checkout($pet, boost_plan_days($_POST['plan_dias'] ?? BOOST_DAYS));
             redirect_to($checkoutUrl);
         }
 
@@ -2432,11 +2492,11 @@ function route(): void {
             if ($enabled) {
                 $dias = (int)($_POST['dias'] ?? BOOST_DAYS);
                 if (!in_array($dias, [3, 7, 10], true)) $dias = BOOST_DAYS;
-                db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . $dias . ' DAY), paypal_order_id = NULL, paypal_payment_status = ?, stripe_session_id = NULL, stripe_payment_status = ?, boost_expired_notified_at = NULL WHERE id = ?')
-                    ->execute(['manual', 'manual', $pet['id']]);
+                db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . $dias . ' DAY), paypal_order_id = NULL, paypal_payment_status = ?, paypal_boost_days = ?, stripe_session_id = NULL, stripe_payment_status = ?, boost_expired_notified_at = NULL WHERE id = ?')
+                    ->execute(['manual', $dias, 'manual', $pet['id']]);
                 flash('Impulso manual activado por ' . $dias . ' dias.', 'success');
             } else {
-                db()->prepare('UPDATE mascotas SET impulsado_hasta = NULL, paypal_order_id = NULL, paypal_payment_status = NULL, stripe_session_id = NULL, stripe_payment_status = NULL, boost_expired_notified_at = NULL WHERE id = ?')
+                db()->prepare('UPDATE mascotas SET impulsado_hasta = NULL, paypal_order_id = NULL, paypal_payment_status = NULL, paypal_boost_days = NULL, stripe_session_id = NULL, stripe_payment_status = NULL, boost_expired_notified_at = NULL WHERE id = ?')
                     ->execute([$pet['id']]);
                 flash('Impulso manual desactivado.', 'success');
             }
