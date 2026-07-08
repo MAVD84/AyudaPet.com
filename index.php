@@ -2074,18 +2074,7 @@ function view_mapa_calor(array $reports, array $stats, ?string $mapsApiKey, arra
         });
       };
       let activeInfo = null;
-      points.forEach((point) => {
-        new google.maps.Circle({
-          strokeColor: "#e85035",
-          strokeOpacity: 0.45,
-          strokeWeight: 1,
-          fillColor: "#e85035",
-          fillOpacity: 0.22,
-          map,
-          center: { lat: point.lat, lng: point.lng },
-          radius: 1600,
-        });
-      });
+      let activeCircle = null;
       points.slice(0, 120).forEach((point, index) => {
         const marker = new google.maps.Marker({
           position: { lat: point.lat, lng: point.lng },
@@ -2103,13 +2092,20 @@ function view_mapa_calor(array $reports, array $stats, ?string $mapsApiKey, arra
         const info = popupFor(point);
         marker.addListener("click", () => {
           if (activeInfo) activeInfo.close();
+          if (activeCircle) activeCircle.setMap(null);
+          activeCircle = new google.maps.Circle({
+            strokeColor: "#e85035",
+            strokeOpacity: 0.45,
+            strokeWeight: 1,
+            fillColor: "#e85035",
+            fillOpacity: 0.22,
+            map,
+            center: { lat: point.lat, lng: point.lng },
+            radius: 1600,
+          });
           activeInfo = info;
           info.open({ anchor: marker, map });
         });
-        if (index === 0) {
-          activeInfo = info;
-          info.open({ anchor: marker, map });
-        }
       });
     };
   </script><script src="https://maps.googleapis.com/maps/api/js?key=<?= urlencode($mapsApiKey) ?>&callback=initHeatmap" async defer></script><?php endif; ?>
