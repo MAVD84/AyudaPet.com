@@ -347,6 +347,11 @@ function donate_button_enabled(): bool {
 }
 
 function donation_url(): string {
+    $hostedButtonId = trim((string)envv('PAYPAL_DONATE_HOSTED_BUTTON_ID', ''));
+    if ($hostedButtonId !== '') {
+        return 'https://www.paypal.com/donate/?hosted_button_id=' . rawurlencode($hostedButtonId);
+    }
+
     return envv('PAYPAL_DONATE_URL', envv('DONATION_URL', DEFAULT_DONATION_URL)) ?: DEFAULT_DONATION_URL;
 }
 
