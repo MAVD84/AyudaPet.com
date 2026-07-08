@@ -2090,6 +2090,13 @@ function view_mapa_calor(array $reports, array $stats, ?string $mapsApiKey, arra
           },
         });
         const info = popupFor(point);
+        info.addListener("closeclick", () => {
+          if (activeInfo === info) activeInfo = null;
+          if (activeCircle) {
+            activeCircle.setMap(null);
+            activeCircle = null;
+          }
+        });
         marker.addListener("click", () => {
           if (activeInfo) activeInfo.close();
           if (activeCircle) activeCircle.setMap(null);
