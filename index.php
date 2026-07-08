@@ -46,7 +46,7 @@ const BOOST_PRICE_CENTS = 130000;
 const BOOST_PRICE_LABEL = '$1,300 M.N.';
 const BOOST_PRODUCT_IMAGE_URL = 'https://ayudapet.com/uploads/images/product.jpeg';
 const DEFAULT_OG_IMAGE = '/static/og-social.jpg';
-const DEFAULT_DONATION_URL = 'https://donate.stripe.com/6oU3cpg1T0Y60sOerJ3ks00';
+const DEFAULT_DONATION_URL = 'https://www.paypal.com/ncp/payment/8PWUWFX8JZFUE';
 
 date_default_timezone_set(getenv('APP_TIMEZONE') ?: 'America/Matamoros');
 
@@ -173,12 +173,6 @@ function ensure_report_columns(): void {
     if (empty($existing['paypal_boost_days'])) {
         db()->exec('ALTER TABLE mascotas ADD COLUMN paypal_boost_days TINYINT UNSIGNED NULL');
     }
-    if (empty($existing['stripe_session_id'])) {
-        db()->exec('ALTER TABLE mascotas ADD COLUMN stripe_session_id VARCHAR(255) NULL');
-    }
-    if (empty($existing['stripe_payment_status'])) {
-        db()->exec('ALTER TABLE mascotas ADD COLUMN stripe_payment_status VARCHAR(50) NULL');
-    }
     if (empty($existing['boost_expired_notified_at'])) {
         db()->exec('ALTER TABLE mascotas ADD COLUMN boost_expired_notified_at DATETIME NULL');
     }
@@ -239,8 +233,6 @@ function ensure_archive_table(): void {
         paypal_order_id VARCHAR(255) NULL,
         paypal_payment_status VARCHAR(50) NULL,
         paypal_boost_days TINYINT UNSIGNED NULL,
-        stripe_session_id VARCHAR(255) NULL,
-        stripe_payment_status VARCHAR(50) NULL,
         boost_expired_notified_at DATETIME NULL,
         creado_at TIMESTAMP NULL,
         actualizado_at TIMESTAMP NULL,
@@ -347,12 +339,7 @@ function donate_button_enabled(): bool {
 }
 
 function donation_url(): string {
-    $hostedButtonId = trim((string)envv('PAYPAL_DONATE_HOSTED_BUTTON_ID', ''));
-    if ($hostedButtonId !== '') {
-        return 'https://www.paypal.com/donate/?hosted_button_id=' . rawurlencode($hostedButtonId);
-    }
-
-    return envv('PAYPAL_DONATE_URL', envv('DONATION_URL', DEFAULT_DONATION_URL)) ?: DEFAULT_DONATION_URL;
+    return envv('PAYPAL_DONATE_URL', DEFAULT_DONATION_URL) ?: DEFAULT_DONATION_URL;
 }
 
 function paypal_base_url(): string {
@@ -600,7 +587,7 @@ function send_boost_expired_notification(array $pet): bool {
         'Contacto publico: ' . public_contact_value($pet['contacto'] ?? null),
         'Direccion: ' . ($pet['direccion'] ?? ''),
         'Estuvo activo hasta: ' . ($pet['impulsado_hasta'] ?? ''),
-        'PayPal order: ' . (($pet['paypal_order_id'] ?? '') ?: ($pet['stripe_session_id'] ?? '')),
+        'PayPal order: ' . ($pet['paypal_order_id'] ?? ''),
         '',
         'Ver reporte: ' . $url,
     ]);
@@ -610,7 +597,7 @@ function send_boost_expired_notification(array $pet): bool {
 
 function process_expired_boosts(int $limit = 50): array {
     ensure_report_columns();
-    $stmt = db()->prepare("SELECT * FROM mascotas WHERE impulsado_hasta IS NOT NULL AND impulsado_hasta <= NOW() AND (paypal_payment_status IN ('COMPLETED', 'manual') OR stripe_payment_status IN ('paid', 'manual')) AND boost_expired_notified_at IS NULL ORDER BY impulsado_hasta ASC LIMIT ?");
+    $stmt = db()->prepare("SELECT * FROM mascotas WHERE impulsado_hasta IS NOT NULL AND impulsado_hasta <= NOW() AND paypal_payment_status IN ('COMPLETED', 'manual') AND boost_expired_notified_at IS NULL ORDER BY impulsado_hasta ASC LIMIT ?");
     $stmt->bindValue(1, max(1, min(100, $limit)), PDO::PARAM_INT);
     $stmt->execute();
     $pets = $stmt->fetchAll();
@@ -632,14 +619,9 @@ function activate_boost(string $petId, string $paymentId, string $provider = 'pa
     $days = boost_plan_days($days);
     $pet = get_mascota($petId);
     if (!$pet) return;
-    $alreadyNotified = is_boosted($pet) && (($pet['paypal_order_id'] ?? '') === $paymentId || ($pet['stripe_session_id'] ?? '') === $paymentId);
-    if ($provider === 'legacy_stripe') {
-        db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . $days . ' DAY), stripe_session_id = ?, stripe_payment_status = ?, boost_expired_notified_at = NULL WHERE id = ?')
-            ->execute([$paymentId, 'paid', $petId]);
-    } else {
-        db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . $days . ' DAY), paypal_order_id = ?, paypal_payment_status = ?, paypal_boost_days = ?, boost_expired_notified_at = NULL WHERE id = ?')
-            ->execute([$paymentId, 'COMPLETED', $days, $petId]);
-    }
+    $alreadyNotified = is_boosted($pet) && (($pet['paypal_order_id'] ?? '') === $paymentId);
+    db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . $days . ' DAY), paypal_order_id = ?, paypal_payment_status = ?, paypal_boost_days = ?, boost_expired_notified_at = NULL WHERE id = ?')
+        ->execute([$paymentId, 'COMPLETED', $days, $petId]);
     if (!$alreadyNotified) {
         $updated = get_mascota($petId);
         send_boost_notification($updated ?: $pet, $paymentId, (string)(($updated['impulsado_hasta'] ?? null) ?: date('Y-m-d H:i:s', strtotime('+' . $days . ' days'))));
@@ -1094,7 +1076,7 @@ function archive_report(array $pet, string $reason = 'deleted_by_owner'): void {
         'id', 'reportado_por', 'tipo_reporte', 'tipo_mascota', 'nombre', 'descripcion', 'contacto',
         'principal', 'secundarias', 'fecha', 'edad', 'raza', 'genero', 'color', 'collar', 'docil',
         'direccion', 'direccion_completa', 'ubicacion_lat', 'ubicacion_lng', 'calles', 'dueno', 'recompensa', 'encontrado',
-        'vistas', 'impulsado_hasta', 'paypal_order_id', 'paypal_payment_status', 'paypal_boost_days', 'stripe_session_id', 'stripe_payment_status',
+        'vistas', 'impulsado_hasta', 'paypal_order_id', 'paypal_payment_status', 'paypal_boost_days',
         'boost_expired_notified_at', 'creado_at', 'actualizado_at'
     ];
     $columns = array_merge(['archivado_por', 'archivado_motivo'], $fields, ['snapshot_json']);
@@ -2513,11 +2495,11 @@ function route(): void {
             if ($enabled) {
                 $dias = (int)($_POST['dias'] ?? BOOST_DAYS);
                 if (!in_array($dias, [3, 7, 10], true)) $dias = BOOST_DAYS;
-                db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . $dias . ' DAY), paypal_order_id = NULL, paypal_payment_status = ?, paypal_boost_days = ?, stripe_session_id = NULL, stripe_payment_status = ?, boost_expired_notified_at = NULL WHERE id = ?')
-                    ->execute(['manual', $dias, 'manual', $pet['id']]);
+                db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . $dias . ' DAY), paypal_order_id = NULL, paypal_payment_status = ?, paypal_boost_days = ?, boost_expired_notified_at = NULL WHERE id = ?')
+                    ->execute(['manual', $dias, $pet['id']]);
                 flash('Impulso manual activado por ' . $dias . ' dias.', 'success');
             } else {
-                db()->prepare('UPDATE mascotas SET impulsado_hasta = NULL, paypal_order_id = NULL, paypal_payment_status = NULL, paypal_boost_days = NULL, stripe_session_id = NULL, stripe_payment_status = NULL, boost_expired_notified_at = NULL WHERE id = ?')
+                db()->prepare('UPDATE mascotas SET impulsado_hasta = NULL, paypal_order_id = NULL, paypal_payment_status = NULL, paypal_boost_days = NULL, boost_expired_notified_at = NULL WHERE id = ?')
                     ->execute([$pet['id']]);
                 flash('Impulso manual desactivado.', 'success');
             }
