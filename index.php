@@ -1698,7 +1698,7 @@ function view_detalle(array $mascota, bool $isOwner, bool $canManage, array $sha
     </div>
     <article class="detail-info">
       <?php if ($canManage): ?><div class="detail-owner-actions"><a class="btn edit" href="/mascotas/<?= e($mascota['id']) ?>/editar">Editar</a><form method="post" action="/mascotas/<?= e($mascota['id']) ?>/eliminar" onsubmit="return confirm('Eliminar este reporte?');"><button class="btn delete" type="submit">Eliminar</button></form></div><?php endif; ?>
-      <?php if (is_admin_user()): ?><div class="boost-panel"><div><span class="badge">Solo admin</span><div class="info-list" style="margin-top:12px;"><?php info_row('Usuario', ($reportOwner['nombre'] ?? '') ?: 'Sin nombre'); info_row('Telefono registrado', $mascota['reportado_por'] ?? ''); ?></div></div></div><?php endif; ?>
+      <?php if (is_admin_user()): ?><div class="boost-panel"><div><span class="badge">Solo admin</span><div class="info-list" style="margin-top:12px;"><?php info_row('Usuario', ($reportOwner['nombre'] ?? '') ?: 'Sin nombre'); info_row('Telefono registrado', $mascota['reportado_por'] ?? ''); info_row('Direccion real', ($mascota['direccion_completa'] ?? '') ?: ($mascota['direccion'] ?? '')); ?></div></div></div><?php endif; ?>
       <?php if (is_admin_user()): ?><form class="boost-panel" method="post" action="/mascotas/<?= e($mascota['id']) ?>/impulso-manual"><input type="hidden" name="enabled" value="0"><?php if (!$boostedUntil): ?><select name="dias" aria-label="Dias de impulso"><?php foreach ([3, 7, 10] as $d): ?><option value="<?= e($d) ?>" <?= $d === BOOST_DAYS ? 'selected' : '' ?>><?= e($d) ?> dias</option><?php endforeach; ?></select><?php endif; ?><label class="switch"><span class="switch-text"><span>Impulso manual</span><small><?= $boostedUntil ? 'Activo hasta ' . e($boostedUntil) : 'Selecciona dias y activa' ?></small></span><input type="checkbox" name="enabled" value="1" <?= $boostedUntil ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form><?php endif; ?>
       <?php if (is_admin_user()): ?><form class="boost-panel admin-views-panel" method="post" action="/mascotas/<?= e($mascota['id']) ?>/vistas"><div class="field"><label for="admin_vistas">Vistas</label><input id="admin_vistas" name="vistas" type="number" min="0" step="1" value="<?= e((string)max(0, (int)($mascota['vistas'] ?? 0))) ?>"></div><button class="btn primary" type="submit">Guardar vistas</button></form><?php endif; ?>
       <?php if ($boostedUntil): ?><div class="boost-panel"><span class="badge boost-badge">Impulsado</span><strong>Activo hasta <?= e($boostedUntil) ?></strong></div><?php endif; ?>
@@ -2135,8 +2135,9 @@ function render_mascota_detail_page(array $pet, bool $skipViewIncrement = false)
     $detailUrl = full_url('/mascotas/' . $pet['id']);
     $shareUrl = full_url('/m/' . pet_short_code($pet));
     $mapUrl = null;
-    if (envv('API_KEY') && $pet['direccion']) {
-        $mapUrl = 'https://www.google.com/maps/embed/v1/place?key=' . urlencode(envv('API_KEY')) . '&q=' . urlencode($pet['direccion'] . ', Mexico');
+    $mapAddress = (is_admin_user() && !empty($pet['direccion_completa'])) ? $pet['direccion_completa'] : ($pet['direccion'] ?? '');
+    if (envv('API_KEY') && $mapAddress) {
+        $mapUrl = 'https://www.google.com/maps/embed/v1/place?key=' . urlencode(envv('API_KEY')) . '&q=' . urlencode($mapAddress . ', Mexico');
     }
     render('detalle', [
         'title' => "{$pet['nombre']} - {$status} | AyudaPet",
