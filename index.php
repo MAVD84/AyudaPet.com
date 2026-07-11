@@ -309,6 +309,11 @@ function money_display(?string $value): ?string {
     return '$' . number_format((int)$amount, 0, '.', ',') . ' M.N.';
 }
 
+function reward_display(array $pet): ?string {
+    if (report_type_value($pet['tipo_reporte'] ?? '') === 'resguardo') return null;
+    return money_display($pet['recompensa'] ?? null) ?: 'Sin recompensa';
+}
+
 function is_boosted(array $pet): bool {
     $until = trim((string)($pet['impulsado_hasta'] ?? ''));
     return $until !== '' && strtotime($until) !== false && strtotime($until) > time();
@@ -1421,7 +1426,16 @@ function create_report(): string {
     $id = bin2hex(random_bytes(16));
     $data = report_payload($id);
     $duplicateId = recent_duplicate_report_id($data, (string)current_user_phone());
-    if ($duplicateId) return $duplicateId;
+    if ($duplicateId) {
+        save_report_data($duplicateId, (string)current_user_phone(), $data);
+        try {
+            $pet = get_mascota($duplicateId);
+            if ($pet) archive_report($pet, 'updated_duplicate_snapshot');
+        } catch (Throwable $e) {
+            error_log('No se pudo actualizar el archivo del reporte duplicado ' . $duplicateId . ': ' . $e->getMessage());
+        }
+        return $duplicateId;
+    }
     $sql = 'INSERT INTO mascotas (id, reportado_por, tipo_reporte, tipo_mascota, nombre, descripcion, contacto, principal, secundarias, fecha, edad, raza, genero, color, collar, docil, direccion, direccion_completa, ubicacion_lat, ubicacion_lng, calles, dueno, recompensa, encontrado)
             VALUES (:id, :reportado_por, :tipo_reporte, :tipo_mascota, :nombre, :descripcion, :contacto, :principal, :secundarias, :fecha, :edad, :raza, :genero, :color, :collar, :docil, :direccion, :direccion_completa, :ubicacion_lat, :ubicacion_lng, :calles, :dueno, :recompensa, :encontrado)';
     $stmt = db()->prepare($sql);
@@ -1435,13 +1449,17 @@ function create_report(): string {
     return $id;
 }
 
-function update_report(string $id, array $existing): void {
-    ensure_report_columns();
-    $data = report_payload($id, $existing);
+function save_report_data(string $id, string $owner, array $data): void {
     $sets = [];
     foreach ($data as $key => $_) $sets[] = "{$key} = :{$key}";
     $stmt = db()->prepare('UPDATE mascotas SET ' . implode(', ', $sets) . ' WHERE id = :id AND reportado_por = :reportado_por');
-    $stmt->execute($data + ['id' => $id, 'reportado_por' => $existing['reportado_por']]);
+    $stmt->execute($data + ['id' => $id, 'reportado_por' => $owner]);
+}
+
+function update_report(string $id, array $existing): void {
+    ensure_report_columns();
+    $data = report_payload($id, $existing);
+    save_report_data($id, (string)$existing['reportado_por'], $data);
     try {
         $pet = get_mascota($id);
         if ($pet) archive_report($pet, 'updated_snapshot');
@@ -1707,7 +1725,7 @@ function view_detalle(array $mascota, bool $isOwner, bool $canManage, array $sha
       <div class="split-info"><?php foreach ([['Tipo de mascota','tipo_mascota'],['Edad','edad'],['Raza','raza'],['Genero','genero'],['Color','color'],['Collar','collar'],['Docil','docil']] as [$label,$key]) info_row($label, $mascota[$key]); ?></div>
       <?php if ($mapUrl): ?><div class="map-frame"><iframe src="<?= e($mapUrl) ?>" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen title="Mapa de direccion de extravio"></iframe></div><?php endif; ?>
       <div class="info-list"><?php info_row($direccionLabel, $mascota['direccion']); ?></div>
-      <div class="split-info"><?php info_row('Recompensa', money_display($mascota['recompensa'])); ?></div>
+      <div class="split-info"><?php info_row('Recompensa', reward_display($mascota)); ?></div>
       <?php if ($callPhone): ?><div class="contact-actions"><a class="btn call" href="tel:<?= e($callPhone) ?>">Llamar</a><a class="btn whatsapp" href="https://wa.me/<?= e($waPhone) ?>" target="_blank" rel="noopener">WhatsApp</a></div><?php endif; ?>
       <div class="share-actions" aria-label="Compartir reporte"><p class="share-title">Comparte:</p><button class="btn share" type="button" data-native-share-button data-share-title="<?= e($share['text']) ?>" data-share-text="<?= e($share['message']) ?>" data-share-url="<?= e($share['url']) ?>">Compartir</button><button class="btn" type="button" data-copy-url="<?= e($share['url']) ?>">Copiar enlace</button></div>
       <div class="actions"><a class="btn back-report" href="/#reportes-recientes">Volver a reportes</a></div>
