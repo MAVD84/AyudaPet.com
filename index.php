@@ -46,6 +46,7 @@ const BOOST_PRICE_CENTS = 130000;
 const BOOST_PRICE_LABEL = '$1,300 M.N.';
 const BOOST_PRODUCT_IMAGE_URL = 'https://ayudapet.com/uploads/images/product.jpeg';
 const DEFAULT_OG_IMAGE = '/static/og-social.jpg';
+const PET_OG_VERSION = 'v3';
 const DEFAULT_DONATION_URL = 'https://www.paypal.com/ncp/payment/8PWUWFX8JZFUE';
 
 date_default_timezone_set(getenv('APP_TIMEZONE') ?: 'America/Matamoros');
@@ -764,6 +765,15 @@ function orient_image_from_exif($image, string $source) {
     if ($orientation === 6) return imagerotate($image, -90, 0) ?: $image;
     if ($orientation === 8) return imagerotate($image, 90, 0) ?: $image;
     if ($orientation === 2 && function_exists('imageflip')) imageflip($image, IMG_FLIP_HORIZONTAL);
+    if ($orientation === 4 && function_exists('imageflip')) imageflip($image, IMG_FLIP_VERTICAL);
+    if ($orientation === 5 && function_exists('imageflip')) {
+        imageflip($image, IMG_FLIP_HORIZONTAL);
+        return imagerotate($image, 90, 0) ?: $image;
+    }
+    if ($orientation === 7 && function_exists('imageflip')) {
+        imageflip($image, IMG_FLIP_HORIZONTAL);
+        return imagerotate($image, -90, 0) ?: $image;
+    }
     return $image;
 }
 
@@ -822,7 +832,7 @@ function pet_social_image(array $pet): string {
     if ($principal === '') return full_url(DEFAULT_OG_IMAGE);
     $id = preg_replace('/[^a-f0-9]/i', '', (string)($pet['id'] ?? ''));
     if ($id) {
-        $target = '/uploads/reportes/' . $id . '/og-v2.jpg';
+        $target = '/uploads/reportes/' . $id . '/og-' . PET_OG_VERSION . '.jpg';
         if (is_file(__DIR__ . $target) || create_social_image($principal, $target)) {
             return full_url($target);
         }
@@ -1364,7 +1374,7 @@ function upload_image(array $file, string $reportId, string $label): ?string {
         throw new RuntimeException('No se pudo guardar la imagen.');
     }
     $publicPath = '/uploads/reportes/' . $reportId . '/' . $name;
-    if ($label === 'principal') create_social_image($publicPath, '/uploads/reportes/' . $reportId . '/og.jpg');
+    if ($label === 'principal') create_social_image($publicPath, '/uploads/reportes/' . $reportId . '/og-' . PET_OG_VERSION . '.jpg');
     return $publicPath;
 }
 
