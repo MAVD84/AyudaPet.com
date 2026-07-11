@@ -754,6 +754,19 @@ function local_public_path(?string $urlOrPath): ?string {
     return $realFile;
 }
 
+function orient_image_from_exif($image, string $source) {
+    if (!function_exists('exif_read_data')) return $image;
+    $info = @getimagesize($source);
+    if (($info['mime'] ?? '') !== 'image/jpeg') return $image;
+    $exif = @exif_read_data($source);
+    $orientation = (int)($exif['Orientation'] ?? 1);
+    if ($orientation === 3) return imagerotate($image, 180, 0) ?: $image;
+    if ($orientation === 6) return imagerotate($image, -90, 0) ?: $image;
+    if ($orientation === 8) return imagerotate($image, 90, 0) ?: $image;
+    if ($orientation === 2 && function_exists('imageflip')) imageflip($image, IMG_FLIP_HORIZONTAL);
+    return $image;
+}
+
 function create_social_image(?string $sourceUrlOrPath, string $targetPublicPath): ?string {
     if (!function_exists('imagecreatefromstring') || !function_exists('imagejpeg')) return null;
     $source = local_public_path($sourceUrlOrPath);
@@ -765,19 +778,37 @@ function create_social_image(?string $sourceUrlOrPath, string $targetPublicPath)
     if ($raw === false) return null;
     $image = @imagecreatefromstring($raw);
     if (!$image) return null;
+    $oriented = orient_image_from_exif($image, $source);
+    if ($oriented !== $image) {
+        imagedestroy($image);
+        $image = $oriented;
+    }
     $canvasW = 1200;
     $canvasH = 630;
     $canvas = imagecreatetruecolor($canvasW, $canvasH);
-    $white = imagecolorallocate($canvas, 255, 255, 255);
-    imagefilledrectangle($canvas, 0, 0, $canvasW, $canvasH, $white);
+    $wash = imagecolorallocate($canvas, 237, 243, 247);
+    imagefilledrectangle($canvas, 0, 0, $canvasW, $canvasH, $wash);
     $srcW = imagesx($image);
     $srcH = imagesy($image);
     if ($srcW > 0 && $srcH > 0) {
-        $scale = min($canvasW / $srcW, $canvasH / $srcH);
+        $bgScale = max($canvasW / $srcW, $canvasH / $srcH);
+        $bgW = (int)ceil($srcW * $bgScale);
+        $bgH = (int)ceil($srcH * $bgScale);
+        $bgX = (int)floor(($canvasW - $bgW) / 2);
+        $bgY = (int)floor(($canvasH - $bgH) / 2);
+        imagecopyresampled($canvas, $image, $bgX, $bgY, 0, 0, $bgW, $bgH, $srcW, $srcH);
+        for ($i = 0; $i < 12; $i++) imagefilter($canvas, IMG_FILTER_GAUSSIAN_BLUR);
+        imagefilter($canvas, IMG_FILTER_BRIGHTNESS, 18);
+
+        $safeW = 1040;
+        $safeH = 570;
+        $scale = min($safeW / $srcW, $safeH / $srcH);
         $dstW = (int)round($srcW * $scale);
         $dstH = (int)round($srcH * $scale);
         $dstX = (int)floor(($canvasW - $dstW) / 2);
         $dstY = (int)floor(($canvasH - $dstH) / 2);
+        $shadow = imagecolorallocatealpha($canvas, 20, 32, 48, 86);
+        imagefilledrectangle($canvas, $dstX + 14, $dstY + 14, $dstX + $dstW + 14, $dstY + $dstH + 14, $shadow);
         imagecopyresampled($canvas, $image, $dstX, $dstY, 0, 0, $dstW, $dstH, $srcW, $srcH);
     }
     $saved = imagejpeg($canvas, $target, 86);
@@ -791,7 +822,7 @@ function pet_social_image(array $pet): string {
     if ($principal === '') return full_url(DEFAULT_OG_IMAGE);
     $id = preg_replace('/[^a-f0-9]/i', '', (string)($pet['id'] ?? ''));
     if ($id) {
-        $target = '/uploads/reportes/' . $id . '/og.jpg';
+        $target = '/uploads/reportes/' . $id . '/og-v2.jpg';
         if (is_file(__DIR__ . $target) || create_social_image($principal, $target)) {
             return full_url($target);
         }
