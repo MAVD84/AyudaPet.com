@@ -46,7 +46,7 @@ const BOOST_PRICE_CENTS = 130000;
 const BOOST_PRICE_LABEL = '$1,300 M.N.';
 const BOOST_PRODUCT_IMAGE_URL = 'https://ayudapet.com/uploads/images/product.jpeg';
 const DEFAULT_OG_IMAGE = '/static/og-social.jpg';
-const PET_OG_VERSION = 'v4';
+const PET_OG_VERSION = 'v5';
 const DEFAULT_DONATION_URL = 'https://www.paypal.com/ncp/payment/8PWUWFX8JZFUE';
 
 date_default_timezone_set(getenv('APP_TIMEZONE') ?: 'America/Matamoros');
@@ -796,8 +796,8 @@ function create_social_image(?string $sourceUrlOrPath, string $targetPublicPath)
     $canvasW = 1200;
     $canvasH = 630;
     $canvas = imagecreatetruecolor($canvasW, $canvasH);
-    $wash = imagecolorallocate($canvas, 237, 243, 247);
-    imagefilledrectangle($canvas, 0, 0, $canvasW, $canvasH, $wash);
+    $white = imagecolorallocate($canvas, 255, 255, 255);
+    imagefilledrectangle($canvas, 0, 0, $canvasW, $canvasH, $white);
     $srcW = imagesx($image);
     $srcH = imagesy($image);
     if ($srcW > 0 && $srcH > 0) {
@@ -808,8 +808,6 @@ function create_social_image(?string $sourceUrlOrPath, string $targetPublicPath)
         $dstH = (int)round($srcH * $scale);
         $dstX = (int)floor(($canvasW - $dstW) / 2);
         $dstY = (int)floor(($canvasH - $dstH) / 2);
-        $shadow = imagecolorallocatealpha($canvas, 20, 32, 48, 86);
-        imagefilledrectangle($canvas, $dstX + 14, $dstY + 14, $dstX + $dstW + 14, $dstY + $dstH + 14, $shadow);
         imagecopyresampled($canvas, $image, $dstX, $dstY, 0, 0, $dstW, $dstH, $srcW, $srcH);
     }
     $saved = imagejpeg($canvas, $target, 86);
