@@ -46,7 +46,7 @@ const BOOST_PRICE_CENTS = 130000;
 const BOOST_PRICE_LABEL = '$1,300 M.N.';
 const BOOST_PRODUCT_IMAGE_URL = 'https://ayudapet.com/uploads/images/product.jpeg';
 const DEFAULT_OG_IMAGE = '/static/og-social.jpg';
-const PET_OG_VERSION = 'v5';
+const PET_OG_VERSION = 'v6';
 const DEFAULT_DONATION_URL = 'https://www.paypal.com/ncp/payment/8PWUWFX8JZFUE';
 
 date_default_timezone_set(getenv('APP_TIMEZONE') ?: 'America/Matamoros');
@@ -801,11 +801,9 @@ function create_social_image(?string $sourceUrlOrPath, string $targetPublicPath)
     $srcW = imagesx($image);
     $srcH = imagesy($image);
     if ($srcW > 0 && $srcH > 0) {
-        $safeW = 1040;
-        $safeH = 570;
-        $scale = min($safeW / $srcW, $safeH / $srcH);
+        $scale = $canvasH / $srcH;
         $dstW = (int)round($srcW * $scale);
-        $dstH = (int)round($srcH * $scale);
+        $dstH = $canvasH;
         $dstX = (int)floor(($canvasW - $dstW) / 2);
         $dstY = (int)floor(($canvasH - $dstH) / 2);
         imagecopyresampled($canvas, $image, $dstX, $dstY, 0, 0, $dstW, $dstH, $srcW, $srcH);
