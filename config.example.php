@@ -22,6 +22,7 @@ define('PAYPAL_CLIENT_ID', '');
 define('PAYPAL_SECRET', '');
 define('PAYPAL_MODE', 'live');
 define('PAYPAL_DONATE_URL', 'https://www.paypal.com/ncp/payment/8PWUWFX8JZFUE');
+define('DONATION_MODAL_ENABLED', 'true');
 
 define('BOOST_NOTIFY_EMAIL', '');
 define('MAIL_FROM', 'no-reply@ayudapet.com');

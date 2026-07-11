@@ -344,6 +344,13 @@ function donate_button_enabled(): bool {
     return !in_array($value, ['0', 'false', 'off', 'no'], true);
 }
 
+function donation_modal_enabled(): bool {
+    $value = app_setting('donation_modal_enabled');
+    if ($value === null) $value = envv('DONATION_MODAL_ENABLED', 'true');
+    $value = lower_text(trim((string)$value));
+    return !in_array($value, ['0', 'false', 'off', 'no'], true);
+}
+
 function donation_url(): string {
     return envv('PAYPAL_DONATE_URL', DEFAULT_DONATION_URL) ?: DEFAULT_DONATION_URL;
 }
@@ -1589,7 +1596,7 @@ function render(string $view, array $data = [], int $status = 200): void {
         <a class="btn ghost <?= $active('/perfil') ?>" href="/perfil">Mi perfil</a>
         <a class="btn ghost <?= $active('/reportar') ?>" href="/reportar">Reportar mascota</a>
         <a class="btn ghost <?= $active('/') ?>" href="/#reportes-recientes">Reportes</a>
-        <?php if (is_admin_user()): ?><a class="btn ghost <?= $active('/mapa-calor') ?>" href="/mapa-calor">Mapa de calor</a><form class="menu-setting" method="post" action="/admin/boost-button"><input type="hidden" name="enabled" value="0"><input type="hidden" name="next" value="<?= e($_SERVER['REQUEST_URI'] ?? '/') ?>"><label class="switch"><span class="switch-text"><span>Impulso automatico</span><small><?= boost_button_enabled() ? 'Boton activo' : 'WhatsApp manual' ?></small></span><input type="checkbox" name="enabled" value="1" <?= boost_button_enabled() ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form><form class="menu-setting" method="post" action="/admin/donate-button"><input type="hidden" name="enabled" value="0"><input type="hidden" name="next" value="<?= e($_SERVER['REQUEST_URI'] ?? '/') ?>"><label class="switch"><span class="switch-text"><span>Boton donar</span><small><?= donate_button_enabled() ? 'Visible' : 'Oculto' ?></small></span><input type="checkbox" name="enabled" value="1" <?= donate_button_enabled() ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form><?php endif; ?>
+        <?php if (is_admin_user()): ?><a class="btn ghost <?= $active('/mapa-calor') ?>" href="/mapa-calor">Mapa de calor</a><form class="menu-setting" method="post" action="/admin/boost-button"><input type="hidden" name="enabled" value="0"><input type="hidden" name="next" value="<?= e($_SERVER['REQUEST_URI'] ?? '/') ?>"><label class="switch"><span class="switch-text"><span>Impulso automatico</span><small><?= boost_button_enabled() ? 'Boton activo' : 'WhatsApp manual' ?></small></span><input type="checkbox" name="enabled" value="1" <?= boost_button_enabled() ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form><form class="menu-setting" method="post" action="/admin/donate-button"><input type="hidden" name="enabled" value="0"><input type="hidden" name="next" value="<?= e($_SERVER['REQUEST_URI'] ?? '/') ?>"><label class="switch"><span class="switch-text"><span>Boton donar</span><small><?= donate_button_enabled() ? 'Visible' : 'Oculto' ?></small></span><input type="checkbox" name="enabled" value="1" <?= donate_button_enabled() ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form><form class="menu-setting" method="post" action="/admin/donation-modal"><input type="hidden" name="enabled" value="0"><input type="hidden" name="next" value="<?= e($_SERVER['REQUEST_URI'] ?? '/') ?>"><label class="switch"><span class="switch-text"><span>Modal donativo</span><small><?= donation_modal_enabled() ? 'Activo' : 'Apagado' ?></small></span><input type="checkbox" name="enabled" value="1" <?= donation_modal_enabled() ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form><?php endif; ?>
         <a class="btn facebook" href="https://www.facebook.com/AyudaPet26" target="_blank" rel="noopener">Facebook</a>
         <?php if (donate_button_enabled()): ?><a class="btn donate" href="<?= e(donation_url()) ?>" target="_blank" rel="noopener">Donar</a><?php endif; ?>
         <a class="btn logout" href="/logout">Cerrar sesion</a>
@@ -1611,7 +1618,7 @@ function render(string $view, array $data = [], int $status = 200): void {
   </main>
   <a class="page-floating float-top" href="#top" aria-label="Volver arriba" data-scroll-top-button>&uarr;</a>
   <a class="page-floating float-wa" href="https://wa.me/526564252167" target="_blank" rel="noopener" aria-label="WhatsApp AyudaPet"><svg viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16.04 3.2A12.74 12.74 0 0 0 5.22 22.7L3.6 28.8l6.25-1.6a12.73 12.73 0 0 0 6.18 1.57h.01A12.79 12.79 0 0 0 16.04 3.2Zm7.53 18.05c-.31.88-1.82 1.68-2.55 1.79-.65.1-1.48.14-2.39-.15-.55-.17-1.26-.41-2.17-.8-3.82-1.65-6.31-5.5-6.5-5.75-.19-.26-1.55-2.06-1.55-3.93s.98-2.79 1.33-3.17c.35-.38.76-.48 1.02-.48h.73c.23.01.55-.09.86.66.31.76 1.06 2.6 1.15 2.79.09.19.16.41.03.67-.13.26-.19.41-.38.63-.19.22-.4.49-.57.66-.19.19-.39.4-.17.78.22.38.97 1.6 2.08 2.59 1.43 1.27 2.64 1.67 3.02 1.86.38.19.6.16.82-.1.22-.25.95-1.11 1.2-1.49.25-.38.51-.32.86-.19.35.13 2.22 1.05 2.6 1.24.38.19.63.29.73.45.09.16.09.92-.22 1.8Z"/></svg><span>WhatsApp</span></a>
-  <?php if (donate_button_enabled()): ?><div class="donation-modal" data-donation-modal aria-hidden="true">
+  <?php if (donation_modal_enabled()): ?><div class="donation-modal" data-donation-modal aria-hidden="true">
     <section class="donation-dialog" role="dialog" aria-modal="true" aria-labelledby="donation-title">
       <button class="donation-close" type="button" aria-label="Cerrar" data-donation-close>&times;</button>
       <p class="eyebrow" style="color:var(--brand);">AyudaPet</p>
@@ -2401,6 +2408,18 @@ function route(): void {
             $enabled = ($_POST['enabled'] ?? '0') === '1';
             set_app_setting('donate_button_enabled', $enabled ? 'true' : 'false');
             flash($enabled ? 'Boton de donar activado.' : 'Boton de donar oculto.', 'success');
+            redirect_to(safe_next($_POST['next'] ?? '/'));
+        }
+
+        if ($path === '/admin/donation-modal' && $method === 'POST') {
+            require_login();
+            if (!is_admin_user()) {
+                render('error', ['title' => 'Sin permiso', 'message' => 'Esta accion es privada.'], 403);
+                return;
+            }
+            $enabled = ($_POST['enabled'] ?? '0') === '1';
+            set_app_setting('donation_modal_enabled', $enabled ? 'true' : 'false');
+            flash($enabled ? 'Modal de donativos activado.' : 'Modal de donativos apagado.', 'success');
             redirect_to(safe_next($_POST['next'] ?? '/'));
         }
 
