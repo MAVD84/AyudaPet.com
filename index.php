@@ -1761,7 +1761,7 @@ function view_detalle(array $mascota, bool $isOwner, bool $canManage, array $sha
       <?php if ($mapUrl): ?><div class="map-frame"><iframe src="<?= e($mapUrl) ?>" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen title="Mapa de direccion de extravio"></iframe></div><?php endif; ?>
       <div class="info-list"><?php info_row($direccionLabel, $mascota['direccion']); ?></div>
       <div class="split-info"><?php info_row('Recompensa', reward_display($mascota)); ?></div>
-      <?php if ($callPhone): ?><div class="contact-actions"><a class="btn call" href="tel:<?= e($callPhone) ?>">Llamar</a><a class="btn whatsapp" href="https://wa.me/<?= e($waPhone) ?>" target="_blank" rel="noopener">WhatsApp</a></div><?php endif; ?>
+      <?php if ($callPhone && empty($mascota['encontrado'])): ?><div class="contact-actions"><a class="btn call" href="tel:<?= e($callPhone) ?>">Llamar</a><a class="btn whatsapp" href="https://wa.me/<?= e($waPhone) ?>" target="_blank" rel="noopener">WhatsApp</a></div><?php endif; ?>
       <div class="share-actions" aria-label="Compartir reporte"><p class="share-title">Comparte:</p><button class="btn share" type="button" data-native-share-button data-share-title="<?= e($share['text']) ?>" data-share-text="<?= e($share['message']) ?>" data-share-url="<?= e($share['url']) ?>">Compartir</button><button class="btn" type="button" data-copy-url="<?= e($share['url']) ?>">Copiar enlace</button></div>
       <div class="actions"><a class="btn back-report" href="/#reportes-recientes">Volver a reportes</a></div>
     </article>
