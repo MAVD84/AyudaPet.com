@@ -1930,6 +1930,7 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
     <div class="field full"><label for="direccion"><?= e($direccionLabel) ?></label><input id="direccion" name="direccion" value="<?= e($mascota['direccion'] ?? '') ?>" autocomplete="off" data-address-autocomplete><input type="hidden" name="direccion_completa" value="<?= e($mascota['direccion_completa'] ?? '') ?>" data-address-full><input type="hidden" name="ubicacion_lat" value="<?= e($mascota['ubicacion_lat'] ?? '') ?>" data-address-lat><input type="hidden" name="ubicacion_lng" value="<?= e($mascota['ubicacion_lng'] ?? '') ?>" data-address-lng></div>
     <?php if (!$isResguardo): ?><div class="field"><label for="recompensa">Recompensa</label><input id="recompensa" name="recompensa" type="number" min="0" step="1" inputmode="numeric" value="<?= e($recompensaInput) ?>" placeholder="1000" data-money-input><span class="hint" data-money-preview><?= e(money_display($recompensaInput) ?: 'Se mostrara como $1,000 M.N.') ?></span></div><?php endif; ?>
     <?php $usesOwnContact = !empty($mascota['contacto']) && !is_system_public_contact($mascota['contacto']); ?>
+    <?php $registeredContactPhone = (string)(($mascota['reportado_por'] ?? '') ?: (current_user_phone() ?? '')); ?>
     <div class="field">
       <label>Contacto publico</label>
       <label class="switch">
@@ -1940,7 +1941,7 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
     </div>
     <div class="field contact-own <?= $usesOwnContact ? 'show' : '' ?>" data-contact-own>
       <label for="contacto">Tu contacto</label>
-      <input id="contacto" name="contacto" value="<?= e($usesOwnContact ? ($mascota['contacto'] ?? '') : '') ?>" placeholder="Telefono, WhatsApp o correo" data-contact-input data-registered-phone="<?= e(current_user_phone() ?? '') ?>">
+      <input id="contacto" name="contacto" value="<?= e($usesOwnContact ? ($mascota['contacto'] ?? '') : '') ?>" placeholder="Telefono, WhatsApp o correo" data-contact-input data-registered-phone="<?= e($registeredContactPhone) ?>">
     </div>
     <div class="field">
       <label>Estado del reporte</label>
