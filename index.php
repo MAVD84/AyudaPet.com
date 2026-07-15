@@ -1246,6 +1246,35 @@ function google_geocode_area(string $query): ?array {
     ];
 }
 
+function address_looks_exact(?string $address): bool {
+    $address = lower_text(trim((string)$address));
+    if ($address === '') return false;
+    $firstPart = trim(explode(',', $address)[0] ?? $address);
+    return (bool)preg_match('/\d|\b(calle|av|avenida|blvd|boulevard|privada|priv|calz|calzada|cerrada|cda|camino|carretera|prolongacion|prol)\b/u', $firstPart);
+}
+
+function public_area_address(?string $address): ?string {
+    $address = trim((string)$address);
+    if ($address === '') return null;
+
+    $parts = array_values(array_filter(array_map('trim', explode(',', $address)), fn($part) => $part !== ''));
+    if (count($parts) > 1 && address_looks_exact($parts[0])) {
+        array_shift($parts);
+        $protected = trim(implode(', ', $parts));
+        return $protected !== '' ? $protected : $address;
+    }
+
+    if (address_looks_exact($address)) {
+        if (preg_match('/\b(col\.?|colonia|fracc\.?|fraccionamiento|residencial|unidad|barrio)\b\s*(.+)$/iu', $address, $matches)) {
+            $protected = trim($matches[0]);
+            return $protected !== '' ? $protected : 'Zona no especificada';
+        }
+        return 'Zona no especificada';
+    }
+
+    return $address;
+}
+
 function contact_rows_to_sms(array $rows): array {
     $seen = [];
     $contacts = [];
@@ -1384,6 +1413,9 @@ function report_payload(string $id, ?array $existing = null): array {
     if (!$direccionCompleta && $direccion && $direccion === ($existing['direccion'] ?? null)) {
         $direccionCompleta = $existing['direccion_completa'] ?? null;
     }
+    if (!$direccionCompleta && address_looks_exact($direccion)) {
+        $direccionCompleta = $direccion;
+    }
     $ubicacionLat = geo_value(post_value('ubicacion_lat'), -90, 90);
     $ubicacionLng = geo_value(post_value('ubicacion_lng'), -180, 180);
     if (($ubicacionLat === null || $ubicacionLng === null) && $direccion) {
@@ -1391,9 +1423,12 @@ function report_payload(string $id, ?array $existing = null): array {
         if ($geo) {
             $ubicacionLat = round((float)$geo['lat'], 6);
             $ubicacionLng = round((float)$geo['lng'], 6);
-            if (!$direccionCompleta) $direccionCompleta = $geo['label'] ?? null;
+            if (!$direccionCompleta || address_looks_exact($direccionCompleta)) {
+                $direccionCompleta = $geo['label'] ?? $direccionCompleta;
+            }
         }
     }
+    $direccion = public_area_address($direccionCompleta ?: $direccion);
 
     $principal = !empty($_POST['remove_principal']) ? null : ($existing['principal'] ?? null);
     if (isset($_FILES['principal'])) {
@@ -1973,6 +2008,18 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
         return item ? (shortName ? item.short_name : item.long_name) : "";
       };
 
+      const stripExactAddress = (value) => {
+        const raw = String(value || "").trim();
+        if (!raw) return "";
+        const parts = raw.split(",").map((part) => part.trim()).filter(Boolean);
+        const exactPattern = /\d|\b(calle|av|avenida|blvd|boulevard|privada|priv|calz|calzada|cerrada|cda|camino|carretera|prolongacion|prol)\b/i;
+        const firstPartIsExact = exactPattern.test(parts[0] || raw);
+        if (parts.length > 1 && firstPartIsExact) return parts.slice(1).join(", ");
+        const areaMatch = raw.match(/\b(col\.?|colonia|fracc\.?|fraccionamiento|residencial|unidad|barrio)\b\s*(.+)$/i);
+        if (areaMatch) return areaMatch[0].trim();
+        return firstPartIsExact ? "" : raw;
+      };
+
       const privateAddress = (place) => {
         const parts = place.address_components || [];
         const neighborhood =
@@ -1991,7 +2038,7 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
         if (safeParts.length >= 2) return safeParts.join(", ");
         const formattedParts = (place.formatted_address || "").split(",").map((part) => part.trim()).filter(Boolean);
         if (formattedParts.length > 2) return formattedParts.slice(1).join(", ");
-        return place.name || input.value;
+        return stripExactAddress(place.name || input.value) || stripExactAddress(place.formatted_address) || input.value;
       };
 
       const closeSuggestions = () => {
