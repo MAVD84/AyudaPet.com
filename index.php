@@ -95,14 +95,14 @@ function boost_plans(): array {
             'days' => 7,
             'price_cents' => 86000,
             'price_label' => '$860 MXN',
-            'features' => ['Todo lo del Plan 3 dias', 'Asesoria contra extorsiones', 'Radio de 10 km intermedio', 'Activacion en menos de 30 min'],
+            'features' => ['Anuncios en Facebook e Instagram', 'Radio de 10 km intermedio', 'Diseno de ficha profesional', 'Asesoria contra extorsiones', 'Activacion en menos de 30 min'],
         ],
         10 => [
             'name' => 'Cobertura total',
             'days' => 10,
             'price_cents' => 130000,
             'price_label' => '$1,300 MXN',
-            'features' => ['Todo lo del Plan 7 dias', 'Formato video/reel', 'Radio de 15 km maximo', 'Activacion en 30 min'],
+            'features' => ['Anuncios en Facebook e Instagram', 'Radio de 15 km maximo', 'Diseno de ficha profesional', 'Asesoria contra extorsiones', 'Formato video/reel', 'Activacion en 30 min'],
         ],
     ];
 }
