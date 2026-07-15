@@ -107,14 +107,33 @@ function boost_plans(): array {
     ];
 }
 
+function boost_plan_enabled(int $days): bool {
+    if (!array_key_exists($days, boost_plans())) return false;
+    $value = app_setting('boost_plan_' . $days . '_enabled');
+    if ($value === null) $value = envv('BOOST_PLAN_' . $days . '_ENABLED', 'true');
+    $value = lower_text(trim((string)$value));
+    return !in_array($value, ['0', 'false', 'off', 'no'], true);
+}
+
+function visible_boost_plans(): array {
+    $plans = array_filter(boost_plans(), fn($plan) => boost_plan_enabled((int)$plan['days']));
+    return $plans ?: [BOOST_DAYS => boost_plan(BOOST_DAYS)];
+}
+
+function default_boost_plan_days(): int {
+    $plans = visible_boost_plans();
+    return isset($plans[BOOST_DAYS]) ? BOOST_DAYS : (int)array_key_first($plans);
+}
+
 function boost_plan(int $days): array {
     $plans = boost_plans();
     return $plans[$days] ?? $plans[BOOST_DAYS];
 }
 
-function boost_plan_days($value): int {
+function boost_plan_days($value, bool $visibleOnly = true): int {
     $days = (int)$value;
-    return array_key_exists($days, boost_plans()) ? $days : BOOST_DAYS;
+    $plans = $visibleOnly ? visible_boost_plans() : boost_plans();
+    return array_key_exists($days, $plans) ? $days : default_boost_plan_days();
 }
 
 function db(): PDO {
@@ -418,6 +437,7 @@ function paypal_request(string $method, string $endpoint, array $payload = []): 
 function create_boost_checkout(array $pet, int $days = BOOST_DAYS): string {
     if (!boost_button_enabled()) throw new RuntimeException('El impulso automatico esta desactivado.');
     if (!paypal_enabled()) throw new RuntimeException('PayPal todavia no esta configurado.');
+    $days = boost_plan_days($days);
     $plan = boost_plan($days);
     $days = (int)$plan['days'];
     $boostAmount = number_format(((int)$plan['price_cents']) / 100, 2, '.', '');
@@ -629,7 +649,7 @@ function process_expired_boosts(int $limit = 50): array {
 
 function activate_boost(string $petId, string $paymentId, string $provider = 'paypal', int $days = BOOST_DAYS): void {
     ensure_report_columns();
-    $days = boost_plan_days($days);
+    $days = boost_plan_days($days, false);
     $pet = get_mascota($petId);
     if (!$pet) return;
     $alreadyNotified = is_boosted($pet) && (($pet['paypal_order_id'] ?? '') === $paymentId);
@@ -651,7 +671,7 @@ function capture_paypal_boost(string $petId, string $orderId): bool {
     $customParts = explode(':', (string)($purchase['custom_id'] ?? ''), 2);
     $capturePetId = (string)($customParts[0] ?: ($purchase['reference_id'] ?? ''));
     if ($capturePetId !== $petId) return false;
-    $days = boost_plan_days($pet['paypal_boost_days'] ?? ($customParts[1] ?? BOOST_DAYS));
+    $days = boost_plan_days($pet['paypal_boost_days'] ?? ($customParts[1] ?? BOOST_DAYS), false);
     activate_boost($petId, $orderId, 'paypal', $days);
     return true;
 }
@@ -1631,7 +1651,13 @@ function render(string $view, array $data = [], int $status = 200): void {
         <a class="btn ghost <?= $active('/perfil') ?>" href="/perfil">Mi perfil</a>
         <a class="btn ghost <?= $active('/reportar') ?>" href="/reportar">Reportar mascota</a>
         <a class="btn ghost <?= $active('/') ?>" href="/#reportes-recientes">Reportes</a>
-        <?php if (is_admin_user()): ?><a class="btn ghost <?= $active('/mapa-calor') ?>" href="/mapa-calor">Mapa de calor</a><form class="menu-setting" method="post" action="/admin/boost-button"><input type="hidden" name="enabled" value="0"><input type="hidden" name="next" value="<?= e($_SERVER['REQUEST_URI'] ?? '/') ?>"><label class="switch"><span class="switch-text"><span>Impulso automatico</span><small><?= boost_button_enabled() ? 'Boton activo' : 'WhatsApp manual' ?></small></span><input type="checkbox" name="enabled" value="1" <?= boost_button_enabled() ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form><form class="menu-setting" method="post" action="/admin/donate-button"><input type="hidden" name="enabled" value="0"><input type="hidden" name="next" value="<?= e($_SERVER['REQUEST_URI'] ?? '/') ?>"><label class="switch"><span class="switch-text"><span>Boton donar</span><small><?= donate_button_enabled() ? 'Visible' : 'Oculto' ?></small></span><input type="checkbox" name="enabled" value="1" <?= donate_button_enabled() ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form><form class="menu-setting" method="post" action="/admin/donation-modal"><input type="hidden" name="enabled" value="0"><input type="hidden" name="next" value="<?= e($_SERVER['REQUEST_URI'] ?? '/') ?>"><label class="switch"><span class="switch-text"><span>Modal donativo</span><small><?= donation_modal_enabled() ? 'Activo' : 'Apagado' ?></small></span><input type="checkbox" name="enabled" value="1" <?= donation_modal_enabled() ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form><?php endif; ?>
+        <?php if (is_admin_user()): ?>
+          <a class="btn ghost <?= $active('/mapa-calor') ?>" href="/mapa-calor">Mapa de calor</a>
+          <form class="menu-setting" method="post" action="/admin/boost-button"><input type="hidden" name="enabled" value="0"><input type="hidden" name="next" value="<?= e($_SERVER['REQUEST_URI'] ?? '/') ?>"><label class="switch"><span class="switch-text"><span>Impulso automatico</span><small><?= boost_button_enabled() ? 'Boton activo' : 'WhatsApp manual' ?></small></span><input type="checkbox" name="enabled" value="1" <?= boost_button_enabled() ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form>
+          <?php render_admin_boost_plan_switches(); ?>
+          <form class="menu-setting" method="post" action="/admin/donate-button"><input type="hidden" name="enabled" value="0"><input type="hidden" name="next" value="<?= e($_SERVER['REQUEST_URI'] ?? '/') ?>"><label class="switch"><span class="switch-text"><span>Boton donar</span><small><?= donate_button_enabled() ? 'Visible' : 'Oculto' ?></small></span><input type="checkbox" name="enabled" value="1" <?= donate_button_enabled() ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form>
+          <form class="menu-setting" method="post" action="/admin/donation-modal"><input type="hidden" name="enabled" value="0"><input type="hidden" name="next" value="<?= e($_SERVER['REQUEST_URI'] ?? '/') ?>"><label class="switch"><span class="switch-text"><span>Modal donativo</span><small><?= donation_modal_enabled() ? 'Activo' : 'Apagado' ?></small></span><input type="checkbox" name="enabled" value="1" <?= donation_modal_enabled() ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form>
+        <?php endif; ?>
         <a class="btn facebook" href="https://www.facebook.com/AyudaPet26" target="_blank" rel="noopener">Facebook</a>
         <?php if (donate_button_enabled()): ?><a class="btn donate" href="<?= e(donation_url()) ?>" target="_blank" rel="noopener">Donar</a><?php endif; ?>
         <a class="btn logout" href="/logout">Cerrar sesion</a>
@@ -1787,7 +1813,7 @@ function view_detalle(array $mascota, bool $isOwner, bool $canManage, array $sha
     <article class="detail-info">
       <?php if ($canManage): ?><div class="detail-owner-actions"><a class="btn edit" href="/mascotas/<?= e($mascota['id']) ?>/editar">Editar</a><form method="post" action="/mascotas/<?= e($mascota['id']) ?>/eliminar" onsubmit="return confirm('Eliminar este reporte?');"><button class="btn delete" type="submit">Eliminar</button></form></div><?php endif; ?>
       <?php if (is_admin_user()): ?><div class="boost-panel"><div><span class="badge">Solo admin</span><div class="info-list" style="margin-top:12px;"><?php info_row('Usuario', ($reportOwner['nombre'] ?? '') ?: 'Sin nombre'); info_row('Telefono registrado', $mascota['reportado_por'] ?? ''); info_row('Direccion real', ($mascota['direccion_completa'] ?? '') ?: ($mascota['direccion'] ?? '')); ?></div></div></div><?php endif; ?>
-      <?php if (is_admin_user()): ?><form class="boost-panel" method="post" action="/mascotas/<?= e($mascota['id']) ?>/impulso-manual"><input type="hidden" name="enabled" value="0"><?php if (!$boostedUntil): ?><select name="dias" aria-label="Dias de impulso"><?php foreach ([3, 7, 10] as $d): ?><option value="<?= e($d) ?>" <?= $d === BOOST_DAYS ? 'selected' : '' ?>><?= e($d) ?> dias</option><?php endforeach; ?></select><?php endif; ?><label class="switch"><span class="switch-text"><span>Impulso manual</span><small><?= $boostedUntil ? 'Activo hasta ' . e($boostedUntil) : 'Selecciona dias y activa' ?></small></span><input type="checkbox" name="enabled" value="1" <?= $boostedUntil ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form><?php endif; ?>
+      <?php if (is_admin_user()): ?><form class="boost-panel" method="post" action="/mascotas/<?= e($mascota['id']) ?>/impulso-manual"><input type="hidden" name="enabled" value="0"><?php if (!$boostedUntil): ?><select name="dias" aria-label="Dias de impulso"><?php foreach (visible_boost_plans() as $plan): $d = (int)$plan['days']; ?><option value="<?= e((string)$d) ?>" <?= $d === default_boost_plan_days() ? 'selected' : '' ?>><?= e((string)$d) ?> dias</option><?php endforeach; ?></select><?php endif; ?><label class="switch"><span class="switch-text"><span>Impulso manual</span><small><?= $boostedUntil ? 'Activo hasta ' . e($boostedUntil) : 'Selecciona dias y activa' ?></small></span><input type="checkbox" name="enabled" value="1" <?= $boostedUntil ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form><?php endif; ?>
       <?php if (is_admin_user()): ?><form class="boost-panel admin-views-panel" method="post" action="/mascotas/<?= e($mascota['id']) ?>/vistas"><div class="field"><label for="admin_vistas">Vistas</label><input id="admin_vistas" name="vistas" type="number" min="0" step="1" value="<?= e((string)max(0, (int)($mascota['vistas'] ?? 0))) ?>"></div><button class="btn primary" type="submit">Guardar vistas</button></form><?php endif; ?>
       <?php if ($boostedUntil): ?><div class="boost-panel"><span class="badge boost-badge">Impulsado</span><strong>Activo hasta <?= e($boostedUntil) ?></strong></div><?php endif; ?>
       <?php if ($canManage && !$boostedUntil): ?><div class="boost-copy"><div><h2>Impulsa tu anuncio.</h2><p>Lo destacamos en AyudaPet y tambien enviamos tu reporte directo a celulares de personas cercanas a la zona donde se perdio tu mascota.</p></div><a class="btn <?= boost_button_enabled() ? 'boost' : 'whatsapp' ?>" href="/mascotas/<?= e($mascota['id']) ?>/impulsar"><?= boost_button_enabled() ? 'Impulsar ahora' : 'Activar por WhatsApp' ?></a></div><?php endif; ?>
@@ -1865,9 +1891,9 @@ function boost_plan_whatsapp_url(array $plan, string $shareUrl): string {
 
 function render_boost_plan_options(string $shareUrl = ''): void { ?>
   <div class="boost-plans">
-    <?php foreach (boost_plans() as $plan): ?>
+    <?php $defaultDays = default_boost_plan_days(); foreach (visible_boost_plans() as $plan): ?>
     <label class="boost-plan">
-      <input type="radio" name="plan_dias" value="<?= e((string)$plan['days']) ?>" <?= (int)$plan['days'] === BOOST_DAYS ? 'checked' : '' ?> <?= $shareUrl !== '' ? 'data-whatsapp-url="' . e(boost_plan_whatsapp_url($plan, $shareUrl)) . '"' : '' ?>>
+      <input type="radio" name="plan_dias" value="<?= e((string)$plan['days']) ?>" <?= (int)$plan['days'] === $defaultDays ? 'checked' : '' ?> <?= $shareUrl !== '' ? 'data-whatsapp-url="' . e(boost_plan_whatsapp_url($plan, $shareUrl)) . '"' : '' ?>>
       <span class="boost-plan-name"><?= e($plan['name']) ?></span>
       <span class="boost-plan-days"><?= e((string)$plan['days']) ?> dias</span>
       <span class="boost-plan-price"><?= e($plan['price_label']) ?></span>
@@ -1878,11 +1904,29 @@ function render_boost_plan_options(string $shareUrl = ''): void { ?>
   </div>
 <?php }
 
+function render_admin_boost_plan_switches(): void {
+    foreach (boost_plans() as $plan):
+        $days = (int)$plan['days'];
+        ?>
+        <form class="menu-setting" method="post" action="/admin/boost-plan">
+            <input type="hidden" name="days" value="<?= e((string)$days) ?>">
+            <input type="hidden" name="enabled" value="0">
+            <input type="hidden" name="next" value="<?= e($_SERVER['REQUEST_URI'] ?? '/') ?>">
+            <label class="switch">
+                <span class="switch-text"><span>Plan <?= e((string)$days) ?> dias</span><small><?= boost_plan_enabled($days) ? 'Visible' : 'Oculto' ?></small></span>
+                <input type="checkbox" name="enabled" value="1" <?= boost_plan_enabled($days) ? 'checked' : '' ?> onchange="this.form.submit()">
+                <span class="switch-ui" aria-hidden="true"></span>
+            </label>
+        </form>
+        <?php
+    endforeach;
+}
+
 function view_impulsar(array $mascota): void {
     $petName = trim((string)($mascota['nombre'] ?? ''));
     $title = 'Impulsa tu anuncio';
     $shareUrl = full_url('/m/' . pet_short_code($mascota));
-    $whatsappUrl = boost_plan_whatsapp_url(boost_plan(BOOST_DAYS), $shareUrl);
+    $whatsappUrl = boost_plan_whatsapp_url(boost_plan(default_boost_plan_days()), $shareUrl);
     ?>
     <section class="form-wrap boost-checkout-wrap">
         <div class="form-panel boost-checkout-panel">
@@ -2454,6 +2498,27 @@ function route(): void {
             redirect_to(safe_next($_POST['next'] ?? '/'));
         }
 
+        if ($path === '/admin/boost-plan' && $method === 'POST') {
+            require_login();
+            if (!is_admin_user()) {
+                render('error', ['title' => 'Sin permiso', 'message' => 'Esta accion es privada.'], 403);
+                return;
+            }
+            $days = (int)($_POST['days'] ?? 0);
+            if (!array_key_exists($days, boost_plans())) {
+                flash('Plan no valido.', 'error');
+                redirect_to(safe_next($_POST['next'] ?? '/'));
+            }
+            $enabled = ($_POST['enabled'] ?? '0') === '1';
+            if (!$enabled && boost_plan_enabled($days) && count(visible_boost_plans()) <= 1) {
+                flash('Debe quedar al menos un plan visible.', 'warning');
+                redirect_to(safe_next($_POST['next'] ?? '/'));
+            }
+            set_app_setting('boost_plan_' . $days . '_enabled', $enabled ? 'true' : 'false');
+            flash($enabled ? 'Plan de ' . $days . ' dias visible.' : 'Plan de ' . $days . ' dias oculto.', 'success');
+            redirect_to(safe_next($_POST['next'] ?? '/'));
+        }
+
         if ($path === '/admin/donate-button' && $method === 'POST') {
             require_login();
             if (!is_admin_user()) {
@@ -2615,8 +2680,7 @@ function route(): void {
             if (!$pet) { render('error', ['title' => 'Reporte no encontrado', 'message' => 'El reporte solicitado no existe.'], 404); return; }
             $enabled = ($_POST['enabled'] ?? '0') === '1';
             if ($enabled) {
-                $dias = (int)($_POST['dias'] ?? BOOST_DAYS);
-                if (!in_array($dias, [3, 7, 10], true)) $dias = BOOST_DAYS;
+                $dias = boost_plan_days($_POST['dias'] ?? default_boost_plan_days());
                 db()->prepare('UPDATE mascotas SET impulsado_hasta = DATE_ADD(NOW(), INTERVAL ' . $dias . ' DAY), paypal_order_id = NULL, paypal_payment_status = ?, paypal_boost_days = ?, boost_expired_notified_at = NULL WHERE id = ?')
                     ->execute(['manual', $dias, $pet['id']]);
                 flash('Impulso manual activado por ' . $dias . ' dias.', 'success');
