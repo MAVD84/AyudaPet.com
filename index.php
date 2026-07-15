@@ -1250,7 +1250,7 @@ function address_looks_exact(?string $address): bool {
     $address = lower_text(trim((string)$address));
     if ($address === '') return false;
     $firstPart = trim(explode(',', $address)[0] ?? $address);
-    return (bool)preg_match('/\d|\b(calle|av|avenida|blvd|boulevard|privada|priv|calz|calzada|cerrada|cda|camino|carretera|prolongacion|prol)\b/u', $firstPart);
+    return (bool)preg_match('/\d|\b(c\.?|calle|av\.?|avenida|blvd\.?|boulevard|privada|priv\.?|calz\.?|calzada|cerrada|cda\.?|camino|carretera|prolongacion|prol\.?)\b/u', $firstPart);
 }
 
 function public_area_address(?string $address): ?string {
@@ -2012,7 +2012,7 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
         const raw = String(value || "").trim();
         if (!raw) return "";
         const parts = raw.split(",").map((part) => part.trim()).filter(Boolean);
-        const exactPattern = /\d|\b(calle|av|avenida|blvd|boulevard|privada|priv|calz|calzada|cerrada|cda|camino|carretera|prolongacion|prol)\b/i;
+        const exactPattern = /\d|\b(c\.?|calle|av\.?|avenida|blvd\.?|boulevard|privada|priv\.?|calz\.?|calzada|cerrada|cda\.?|camino|carretera|prolongacion|prol\.?)\b/i;
         const firstPartIsExact = exactPattern.test(parts[0] || raw);
         if (parts.length > 1 && firstPartIsExact) return parts.slice(1).join(", ");
         const areaMatch = raw.match(/\b(col\.?|colonia|fracc\.?|fraccionamiento|residencial|unidad|barrio)\b\s*(.+)$/i);
@@ -2074,12 +2074,19 @@ function view_reportar(array $mascota, bool $editing, ?string $mapsApiKey): void
           closeSuggestions();
           return;
         }
+        const fullAddress = place.formatted_address || place.name || input.value || "";
+        const safeAddress = privateAddress(place);
         if (fullInput) {
-          fullInput.value = place.formatted_address || place.name || input.value || "";
+          fullInput.value = fullAddress;
         }
-        selectedPrivateAddress = privateAddress(place);
-        input.value = selectedPrivateAddress;
+        selectedPrivateAddress = safeAddress;
+        input.value = safeAddress;
         setCoordinates(place);
+        window.setTimeout(() => {
+          if (fullInput) fullInput.value = fullAddress;
+          input.value = safeAddress;
+          closeSuggestions();
+        }, 80);
         input.dispatchEvent(new Event("change", { bubbles: true }));
         closeSuggestions();
       };
