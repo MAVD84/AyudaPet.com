@@ -1780,8 +1780,8 @@ function view_index(array $mascotas, array $stats, array $filters): void { ?>
     <div class="id-plates-visual"><img src="/static/plaquitas.png" alt="Plaquitas inteligentes con codigo QR para mascotas"></div>
     <div class="id-plates-copy">
       <p class="eyebrow" style="color:var(--brand);">Plaquitas inteligentes</p>
-      <h2>Nunca pierdas de vista a tu mascota</h2>
-      <p>Con las placas inteligentes para mascotas con Codigo QR de Ubican ID, cualquier persona puede escanearlas y acceder a la informacion vital de tu mascota en segundos. En AyudaPet solo las promocionamos como una opcion para reforzar su seguridad.</p>
+      <h2>¿Te angustia que tu mejor amigo se pierda?</h2>
+      <p>Despídete de la preocupación con las Placas Inteligentes UBICAN ID. Un simple escaneo con cualquier celular, sin apps, es todo lo que se necesita. Toda su info protegida y actualizada: contacto, medicación y más, siempre a la mano. El sistema envía por correo la ubicación compartida durante el escaneo. Dale la protección más inteligente y colorida. La tranquilidad está a un escaneo de distancia.</p>
     </div>
     <a class="btn primary" href="https://articulo.mercadolibre.com.mx/MLM-2221510741-placas-ubican-id-_JM" target="_blank" rel="noopener">Comprar en Mercado Libre</a>
   </section>
