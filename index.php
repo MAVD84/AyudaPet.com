@@ -299,6 +299,25 @@ function ensure_settings_table(): void {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 }
 
+function ensure_promo_cards_table(): void {
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    db()->exec("CREATE TABLE IF NOT EXISTS promo_cards (
+        id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        titulo VARCHAR(180) NOT NULL,
+        texto TEXT NULL,
+        imagen VARCHAR(500) NULL,
+        boton_texto VARCHAR(80) NULL,
+        boton_url VARCHAR(700) NULL,
+        activo TINYINT(1) NOT NULL DEFAULT 1,
+        orden INT NOT NULL DEFAULT 0,
+        creado_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        actualizado_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_promo_cards_activo (activo, orden)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+}
+
 function app_setting(string $key): ?string {
     try {
         ensure_settings_table();
@@ -373,6 +392,31 @@ function donation_modal_enabled(): bool {
 
 function donation_url(): string {
     return envv('PAYPAL_DONATE_URL', DEFAULT_DONATION_URL) ?: DEFAULT_DONATION_URL;
+}
+
+function default_promo_cards(): array {
+    return [[
+        'id' => 0,
+        'titulo' => '¿Te angustia que tu mejor amigo se pierda?',
+        'texto' => 'Despídete de la preocupación con las Placas Inteligentes UBICAN ID. Un simple escaneo con cualquier celular, sin apps, es todo lo que se necesita. Toda su info protegida y actualizada: contacto, medicación y más, siempre a la mano. El sistema envía por correo la ubicación compartida durante el escaneo. Dale la protección más inteligente y colorida. La tranquilidad está a un escaneo de distancia.',
+        'imagen' => '/static/plaquitas.png',
+        'boton_texto' => 'Comprar en Mercado Libre',
+        'boton_url' => 'https://articulo.mercadolibre.com.mx/MLM-2221510741-placas-ubican-id-_JM',
+        'activo' => 1,
+        'orden' => 1,
+    ]];
+}
+
+function promo_cards(bool $activeOnly = true): array {
+    try {
+        ensure_promo_cards_table();
+        $sql = 'SELECT * FROM promo_cards' . ($activeOnly ? ' WHERE activo = 1' : '') . ' ORDER BY orden ASC, id DESC';
+        $cards = db()->query($sql)->fetchAll();
+        return $activeOnly && !$cards ? default_promo_cards() : $cards;
+    } catch (Throwable $e) {
+        error_log('No se pudieron cargar promos: ' . $e->getMessage());
+        return $activeOnly ? default_promo_cards() : [];
+    }
 }
 
 function paypal_base_url(): string {
@@ -1491,6 +1535,48 @@ function upload_image(array $file, string $reportId, string $label): ?string {
     return $publicPath;
 }
 
+function upload_promo_image(array $file): ?string {
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) return null;
+    if (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+        throw new RuntimeException('No se pudo subir la imagen de la promo.');
+    }
+    $mime = mime_content_type($file['tmp_name']);
+    $ext = match ($mime) {
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+        default => null,
+    };
+    if (!$ext) throw new RuntimeException('La promo debe ser JPG, PNG o WEBP.');
+    $dir = __DIR__ . '/uploads/promos';
+    if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+        throw new RuntimeException('No se pudo preparar la carpeta de promos.');
+    }
+    $name = date('YmdHis') . '-' . bin2hex(random_bytes(4)) . '.' . $ext;
+    $target = $dir . '/' . $name;
+    if (!move_uploaded_file($file['tmp_name'], $target)) {
+        throw new RuntimeException('No se pudo guardar la imagen de la promo.');
+    }
+    return '/uploads/promos/' . $name;
+}
+
+function promo_form_data(?array $existing = null): array {
+    $image = (string)($existing['imagen'] ?? '');
+    if (isset($_FILES['imagen'])) {
+        $uploaded = upload_promo_image($_FILES['imagen']);
+        if ($uploaded) $image = $uploaded;
+    }
+    return [
+        'titulo' => post_value('titulo'),
+        'texto' => post_value('texto'),
+        'imagen' => $image,
+        'boton_texto' => post_value('boton_texto'),
+        'boton_url' => post_value('boton_url'),
+        'activo' => isset($_POST['activo']) ? 1 : 0,
+        'orden' => (int)($_POST['orden'] ?? 0),
+    ];
+}
+
 function report_payload(string $id, ?array $existing = null): array {
     $existing = $existing ?? [];
     $reportType = report_type_value(post_value('tipo_reporte') ?: ($existing['tipo_reporte'] ?? 'extravio'));
@@ -1696,11 +1782,12 @@ function render(string $view, array $data = [], int $status = 200): void {
   <style>.btn{font-size:.92rem;line-height:1}.btn.logout,.btn.back-report{background:#b93824;color:#fff;border-color:#b93824}.btn.logout:hover,.btn.back-report:hover{background:#922b1b}.btn.call{background:#0d83f2;color:#fff;border-color:#0d83f2}.btn.call:hover{background:#096dce}.btn.whatsapp{background:#128C7E;color:#fff;border-color:#128C7E}.btn.whatsapp:hover{background:#0f766b}.btn.share{background:#25d366;color:#fff;border-color:#25d366}.btn.share:hover{background:#20b858}.detail-owner-actions{display:flex;justify-content:flex-end;gap:10px;margin:0 0 14px}.detail-owner-actions form{display:flex;margin:0}.detail-owner-actions .btn{min-height:38px;padding:0 14px;border:1px solid var(--line);color:#fff}.detail-owner-actions .btn.edit{background:#176b87;border-color:#176b87}.detail-owner-actions .btn.edit:hover{background:#10546c}.detail-owner-actions .btn.delete{background:#b93824;border-color:#b93824}.detail-owner-actions .btn.delete:hover{background:#922b1b}.boost-copy{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:16px;padding:16px 18px}.boost-copy form{margin:0}.boost-copy .btn.boost{min-width:190px;min-height:48px;box-shadow:0 12px 28px rgba(246,166,35,.22)}@media(max-width:840px){.detail-owner-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.detail-owner-actions .btn,.detail-owner-actions form{width:100%}.boost-copy{grid-template-columns:1fr;gap:14px}.boost-copy .btn.boost,.boost-copy form{width:100%}}@media(max-width:420px){.detail-owner-actions .btn{min-height:42px}.boost-copy{padding:14px}.boost-copy h2{font-size:1.05rem}.boost-copy .btn.boost{min-height:46px}}</style>
   <style>.side-menu{max-height:100dvh;overflow:hidden}.menu-head,.menu-foot{flex:0 0 auto}.menu-links{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-bottom:18px;scrollbar-width:thin;align-content:start;grid-auto-rows:max-content}.menu-links::-webkit-scrollbar{width:8px}.menu-links::-webkit-scrollbar-thumb{background:#cfd9e4;border-radius:999px}.menu-links::-webkit-scrollbar-track{background:transparent}.menu-foot{background:#fff}body.menu-open{overflow:hidden;touch-action:none}.side-menu{touch-action:auto}</style>
   <style>.admin-page{max-width:1120px;margin:0 auto}.admin-page .section-head{align-items:center}.admin-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.admin-card{display:grid;gap:14px;align-content:start;padding:18px}.admin-card h2{margin:0;font-size:1.2rem}.admin-card .meta{margin:.4rem 0 0;line-height:1.45;font-size:.92rem}.admin-controls{display:grid;gap:8px}.admin-card .menu-setting{display:block}.admin-card .switch{width:100%;min-height:48px;padding:8px 10px}.admin-card .switch-text span{font-size:.92rem}.admin-card .switch-text small{font-size:.78rem}.admin-card .switch-ui{width:46px;height:26px}.admin-card .switch-ui:before{width:18px;height:18px}.admin-card .switch input:checked~.switch-ui:before{transform:translateX(20px)}.admin-page .section-head .btn{min-height:38px;padding:0 14px;font-size:.86rem}@media(max-width:980px){.admin-grid{grid-template-columns:1fr 1fr}}@media(max-width:640px){.admin-page .section-head{align-items:stretch;flex-direction:column}.admin-page .section-head .btn{width:100%}.admin-grid{grid-template-columns:1fr}}</style>
+  <style>.admin-promos{margin-top:18px}.promo-admin-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:12px}.promo-admin-form .switch{align-self:end}.promo-admin-list{display:grid;gap:14px;margin-top:20px}.promo-admin-item{display:grid;grid-template-columns:120px minmax(0,1fr);gap:16px;padding:14px;border:1px solid var(--line);border-radius:8px;background:#fbfdff}.promo-admin-item>img,.promo-admin-item>.mini-thumb{width:120px;height:120px;border-radius:8px;object-fit:cover;background:#edf3f7;display:grid;place-items:center;color:var(--blue);font-weight:900}.promo-admin-fields{min-width:0}.promo-admin-fields .form-grid{margin-top:0}.promo-admin-fields textarea{min-height:82px}.promo-admin-fields .actions{margin-top:12px}.promo-admin-fields .btn.delete{background:#b93824;color:#fff;border-color:#b93824}@media(max-width:760px){.promo-admin-form{grid-template-columns:1fr}.promo-admin-item{grid-template-columns:1fr}.promo-admin-item>img,.promo-admin-item>.mini-thumb{width:100%;height:auto;aspect-ratio:16/9}.promo-admin-fields .form-grid{grid-template-columns:1fr}}</style>
   <style>.legal-checks{display:grid;gap:10px;margin-top:16px}.legal-check{display:grid;grid-template-columns:18px minmax(0,1fr);gap:10px;align-items:start;color:var(--muted);font-size:.92rem;line-height:1.45}.legal-check input{width:16px!important;min-width:16px!important;height:16px!important;min-height:16px!important;margin-top:3px;padding:0}.legal-check strong,.legal-check a{color:var(--ink);font-weight:900}.terms-page{max-width:820px;margin:0 auto}.terms-page h1{font-size:clamp(2rem,5vw,3.4rem);margin-bottom:14px}.terms-block{display:grid;gap:16px}.terms-block h2{font-size:1.15rem;margin:8px 0 0}.terms-block p{margin:0;color:var(--muted);line-height:1.65}</style>
   <style>.boost-checkout-wrap{max-width:1240px}.boost-checkout-panel{display:grid;grid-template-columns:minmax(240px,320px) minmax(0,1fr);gap:28px;align-items:start}.boost-product-media{overflow:hidden;border:1px solid var(--line);border-radius:8px;background:#fff;box-shadow:0 16px 36px rgba(20,32,48,.08)}.boost-product-media img{width:100%;aspect-ratio:1;object-fit:cover;display:block}.boost-product-info h1{font-size:clamp(2rem,4vw,3.4rem)}.boost-product-info .meta{font-size:1.02rem;line-height:1.58}.boost-product-pet{margin:18px 0 0;color:var(--muted)}.boost-info-box{margin:18px 0 20px;padding:24px 18px;border:1px solid #f0c56f;border-radius:8px;background:#fffaf0;color:var(--muted);text-align:center;line-height:1.45}.boost-plans{display:grid;grid-template-columns:repeat(3,minmax(210px,1fr));gap:14px;margin:18px 0;align-items:stretch}.boost-plan{position:relative;display:grid;grid-template-rows:auto auto auto 1fr auto;gap:10px;padding:16px;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer;min-height:330px}.boost-plan input{position:absolute;opacity:0;pointer-events:none}.boost-plan-name{width:max-content;max-width:100%;padding:7px 11px;border-radius:999px;background:#e8f1ff;color:#254f8f;font-size:.72rem;font-weight:900;text-transform:uppercase}.boost-plan:nth-child(2) .boost-plan-name{background:#efe7f6;color:#442069}.boost-plan:nth-child(3) .boost-plan-name{background:#fde7f0;color:#8e2452}.boost-plan-days{font-size:1.65rem;font-weight:900}.boost-plan-price{font-size:1.45rem;font-weight:900}.boost-plan-price small{font-size:.78rem;color:var(--muted)}.boost-plan ul{display:grid;align-content:start;gap:7px;margin:4px 0 0;padding:0;list-style:none;color:var(--muted);font-size:.82rem;line-height:1.25}.boost-plan li{overflow-wrap:anywhere}.boost-plan li:before{content:"✓";margin-right:7px;color:#7b35b5;font-weight:900}.boost-plan-cta{align-self:end;margin-top:auto;min-height:40px;border-radius:8px;border:1px solid var(--line);background:#edf3f7;color:var(--ink);display:inline-flex;align-items:center;justify-content:center;font-weight:900;font-size:.86rem;text-align:center}.boost-plan input:checked~*{color:inherit}.boost-plan:has(input:checked){border-color:#f0a51f;box-shadow:0 16px 34px rgba(164,102,20,.16);background:#fffaf0}.boost-plan:has(input:checked) .boost-plan-cta{background:#22607a;border-color:#22607a;color:#fff}.boost-plan:has(input:checked) .boost-plan-cta:before{content:"✓ ";margin-right:5px}.boost-checkout-panel .actions{align-items:stretch}.boost-checkout-panel .actions form{display:grid;gap:12px}.boost-checkout-panel .btn{min-height:48px}@media(max-width:1120px){.boost-checkout-panel{grid-template-columns:1fr}.boost-product-media{max-width:340px;margin:0 auto}.boost-plans{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:860px){.boost-plans{grid-template-columns:1fr}.boost-plan{min-height:0}.boost-checkout-panel .actions{display:grid;grid-template-columns:1fr}.boost-checkout-panel .actions form,.boost-checkout-panel .actions .btn{width:100%}}@media(max-width:420px){.boost-checkout-panel{padding:16px}.boost-product-info h1{font-size:2rem}.boost-info-box{padding:18px 14px}.boost-plan-days{font-size:1.5rem}.boost-plan-price{font-size:1.35rem}}</style>
   <style>.heatmap-page{display:grid;gap:18px}.heatmap-stats{grid-template-columns:repeat(4,minmax(0,1fr));margin:0}.heatmap-panel{padding:0;overflow:hidden}.heatmap-canvas{width:100%;height:min(72vh,720px);min-height:460px}.heatmap-list{margin-top:4px}.heatmap-list .mini-list{gap:12px}.heatmap-list .mini-report{grid-template-columns:64px minmax(0,1fr);align-items:center;gap:14px;padding:10px;min-width:0}.heatmap-list .mini-report>span:not(.mini-thumb){min-width:0;display:block}.heatmap-list .mini-report img,.heatmap-list .mini-thumb{width:64px;height:64px;min-width:64px;border-radius:8px;object-fit:cover}.heatmap-list .mini-report strong{display:block;line-height:1.2}.heatmap-list .mini-report .meta{display:block;margin-top:3px;line-height:1.35;overflow-wrap:anywhere}.map-popup{width:190px;display:grid;gap:7px;color:#18212f}.map-popup-img{width:190px;height:140px;object-fit:cover;border-radius:8px;display:block;background:#edf3f7}.map-popup strong{font-size:.95rem;line-height:1.2}.map-popup span{color:#617084;line-height:1.3;overflow-wrap:anywhere}.sms-search{grid-template-columns:minmax(0,1fr) auto}.sms-copy-box{margin-top:14px;min-height:150px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;line-height:1.5}.sms-contact-list{display:grid;gap:8px;margin-top:14px}.sms-contact{display:grid;gap:3px;padding:10px;border:1px solid var(--line);border-radius:8px;background:#fbfdff}.sms-contact span{color:var(--muted);overflow-wrap:anywhere}@media(max-width:820px){.heatmap-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.heatmap-canvas{height:68vh;min-height:420px}.sms-search{grid-template-columns:1fr}}@media(max-width:480px){.heatmap-stats{grid-template-columns:1fr}.heatmap-canvas{height:62vh;min-height:360px}.heatmap-list .mini-report{grid-template-columns:58px minmax(0,1fr);gap:12px}.heatmap-list .mini-report img,.heatmap-list .mini-thumb{width:58px;height:58px;min-width:58px}.map-popup,.map-popup-img{width:160px}.map-popup-img{height:118px}}</style>
   <style>.pet-card{grid-template-columns:clamp(112px,28%,220px) minmax(0,1fr);align-items:stretch;min-height:0}.pet-media{position:relative;width:100%;height:100%;min-height:100%;background:#edf3f7;display:grid;place-items:center;overflow:hidden}.pet-media:before{content:"";position:absolute;inset:-12px;background-image:var(--pet-image);background-size:cover;background-position:center;filter:blur(14px);transform:scale(1.08);opacity:.55}.pet-media:after{content:"";position:absolute;inset:0;background:rgba(255,255,255,.18)}.pet-media img{position:relative;z-index:1;width:100%;height:100%;object-fit:contain;object-position:center center;display:block;margin:auto}.pet-media .photo-badge{z-index:2}.pet-body{position:relative;min-height:0;align-content:start;padding-top:20px}.pet-body .meta{margin:0;line-height:1.35}.pet-body .boost-badge{position:absolute;top:12px;right:12px}.pet-body.has-boost{padding-top:20px}.pet-body.has-boost h3{padding-right:120px}@media(max-width:520px){.pet-card{grid-template-columns:clamp(104px,30%,140px) minmax(0,1fr);align-items:stretch}.pet-media{width:100%;height:100%;min-height:100%}.pet-media:before{inset:-10px;filter:blur(12px)}.pet-body{min-height:0;padding-top:12px}.pet-body .boost-badge{top:10px;right:10px}.pet-body.has-boost h3{padding-right:112px;padding-top:0}}</style>
-  <style>.id-plates-panel{scroll-margin-top:92px;margin:-6px 0 24px;padding:18px;border:1px solid var(--line);border-radius:8px;background:#fff;box-shadow:0 10px 34px rgba(20,32,48,.06);display:grid;grid-template-columns:160px minmax(0,1fr) auto;gap:20px;align-items:center}.id-plates-visual{width:160px;aspect-ratio:1;border-radius:8px;background:#edf3f7;overflow:hidden;box-shadow:0 14px 30px rgba(34,96,122,.16)}.id-plates-visual img{width:100%;height:100%;object-fit:cover;display:block}.id-plates-copy h2{margin:0;font-size:clamp(1.45rem,3vw,2.2rem);line-height:1.05}.id-plates-copy p:not(.eyebrow){margin:10px 0 0;color:var(--muted);line-height:1.55;max-width:760px}.id-plates-panel .btn{min-height:48px;white-space:nowrap}@media(max-width:900px){.id-plates-panel{grid-template-columns:124px minmax(0,1fr);align-items:center}.id-plates-visual{width:124px}.id-plates-panel .btn{grid-column:1/-1;width:100%}}@media(max-width:520px){.id-plates-panel{grid-template-columns:96px minmax(0,1fr);gap:14px;padding:14px}.id-plates-visual{width:96px}.id-plates-copy h2{font-size:1.35rem}.id-plates-copy p:not(.eyebrow){font-size:.92rem}}@media(max-width:390px){.id-plates-panel{grid-template-columns:1fr}.id-plates-visual{width:100%;max-width:220px}}</style>
+  <style>.promo-carousel-section{scroll-margin-top:92px;margin:-6px 0 24px}.promo-carousel{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(320px,520px);gap:16px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;padding:2px 2px 14px;scrollbar-width:thin}.promo-card{scroll-snap-align:start;display:grid;grid-template-columns:160px minmax(0,1fr);gap:18px;align-items:center;min-height:190px;padding:16px;border:1px solid var(--line);border-radius:8px;background:#fff;box-shadow:0 10px 34px rgba(20,32,48,.06)}.promo-card-media{width:160px;aspect-ratio:1;border-radius:8px;background:#edf3f7;overflow:hidden;box-shadow:0 14px 30px rgba(34,96,122,.16)}.promo-card-media img{width:100%;height:100%;object-fit:cover;display:block}.promo-card-body{display:grid;gap:10px;min-width:0}.promo-card-body h3{margin:0;font-size:clamp(1.25rem,2.4vw,1.8rem);line-height:1.08}.promo-card-body p{margin:0;color:var(--muted);line-height:1.48;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}.promo-card-body .btn{width:max-content;min-height:44px}@media(max-width:640px){.promo-carousel{grid-auto-columns:min(86vw,420px)}.promo-card{grid-template-columns:120px minmax(0,1fr);gap:14px;min-height:160px;padding:14px}.promo-card-media{width:120px}.promo-card-body h3{font-size:1.18rem}.promo-card-body p{-webkit-line-clamp:3;font-size:.92rem}.promo-card-body .btn{width:100%}}@media(max-width:420px){.promo-card{grid-template-columns:1fr}.promo-card-media{width:100%;max-width:240px}.promo-card-body p{-webkit-line-clamp:5}}</style>
   <style>.profile-layout{max-width:1120px;margin:0 auto;grid-template-columns:minmax(280px,340px) minmax(0,1fr);gap:18px}.profile-card{padding:24px}.profile-card h1{font-size:clamp(1.8rem,2.5vw,2.6rem);line-height:1.08;max-width:760px}.profile-layout .profile-card:first-child h1{font-size:clamp(2rem,3vw,2.9rem);line-height:1.02}.profile-card .avatar{width:96px;height:96px;font-size:2rem}.profile-card .form-grid{gap:14px}.profile-card .actions{margin-top:16px}.profile-layout+.profile-card{max-width:1120px;margin:18px auto 0!important}.profile-layout+.profile-card .section-head{align-items:center;margin-bottom:16px}.profile-layout+.profile-card .section-head p{margin:.35rem 0 0;color:var(--muted)}.profile-layout+.profile-card .mini-list{gap:12px}.profile-layout+.profile-card .mini-report{grid-template-columns:64px minmax(0,1fr);min-height:84px}.profile-layout+.profile-card .mini-report img,.profile-layout+.profile-card .mini-thumb{width:64px;height:64px}@media(min-width:841px){.profile-layout .profile-card:nth-child(2){padding:30px}.profile-layout .profile-card:nth-child(2) .actions{justify-content:flex-start}.profile-layout .profile-card:nth-child(2) .btn{min-width:210px}}@media(max-width:840px){.profile-layout{max-width:680px;grid-template-columns:1fr}.profile-layout+.profile-card{max-width:680px}.profile-card h1,.profile-layout .profile-card:first-child h1{font-size:clamp(1.7rem,8vw,2.35rem)}}@media(max-width:520px){.profile-card{padding:16px}.profile-card .form-grid{grid-template-columns:1fr}.profile-layout+.profile-card .section-head{align-items:stretch;flex-direction:column}.profile-layout+.profile-card .section-head .btn{width:100%}.profile-layout+.profile-card .mini-report{grid-template-columns:58px minmax(0,1fr)}.profile-layout+.profile-card .mini-report img,.profile-layout+.profile-card .mini-thumb{width:58px;height:58px}}</style>
   <style>.profile-layout{grid-template-areas:"account security" "account reports";align-items:start}.profile-account{grid-area:account}.profile-security{grid-area:security}.profile-reports{grid-area:reports;margin:0}.profile-reports .section-head{align-items:center;margin-bottom:16px}.profile-reports .section-head p{margin:.35rem 0 0;color:var(--muted)}.profile-reports .mini-list{gap:12px}.profile-reports .mini-report{grid-template-columns:64px minmax(0,1fr);min-height:84px}.profile-reports .mini-report img,.profile-reports .mini-thumb{width:64px;height:64px}@media(max-width:840px){.profile-layout{grid-template-areas:"account" "security" "reports"}.profile-reports{margin:0}}@media(max-width:520px){.profile-reports .section-head{align-items:stretch;flex-direction:column}.profile-reports .section-head .btn{width:100%}.profile-reports .mini-report{grid-template-columns:58px minmax(0,1fr)}.profile-reports .mini-report img,.profile-reports .mini-thumb{width:58px;height:58px}}</style>
   <style>html{scroll-behavior:smooth;overflow-x:hidden}body{overflow-x:hidden}.detail-wrap,.detail-info{min-width:0}.detail-info{overflow-wrap:anywhere}.page-floating{position:fixed;z-index:25;bottom:22px;display:inline-flex;align-items:center;justify-content:center;min-height:52px;border-radius:999px;box-shadow:0 14px 34px rgba(20,32,48,.18);font-weight:900;text-decoration:none}.float-top{left:18px;width:52px;height:52px;background:#fff;color:var(--ink);border:1px solid var(--line);font-size:1.45rem;opacity:0;pointer-events:none;transform:translateY(10px);transition:opacity .2s ease,transform .2s ease}.float-top.show{opacity:1;pointer-events:auto;transform:translateY(0)}.float-wa{right:18px;min-width:132px;padding:0 18px;gap:8px;background:#128C7E;color:#fff;border:1px solid #128C7E}.float-wa svg{width:20px;height:20px;display:block;flex:0 0 auto}.float-wa:hover{background:#0f766b;color:#fff}.float-top:hover{transform:translateY(-1px)}@media(max-width:520px){.page-floating{bottom:14px;min-height:46px}.float-top{left:12px;width:46px;height:46px}.float-wa{right:12px;min-width:112px;padding:0 14px}}</style>
@@ -1846,15 +1933,23 @@ function view_index(array $mascotas, array $stats, array $filters): void { ?>
       </details>
     </aside>
   </section>
-  <section class="id-plates-panel" id="plaquitas">
-    <div class="id-plates-visual"><img src="/static/plaquitas.png" alt="Plaquitas inteligentes con codigo QR para mascotas"></div>
-    <div class="id-plates-copy">
-      <p class="eyebrow" style="color:var(--brand);">Plaquitas inteligentes</p>
-      <h2>¿Te angustia que tu mejor amigo se pierda?</h2>
-      <p>Despídete de la preocupación con las Placas Inteligentes UBICAN ID. Un simple escaneo con cualquier celular, sin apps, es todo lo que se necesita. Toda su info protegida y actualizada: contacto, medicación y más, siempre a la mano. El sistema envía por correo la ubicación compartida durante el escaneo. Dale la protección más inteligente y colorida. La tranquilidad está a un escaneo de distancia.</p>
+  <?php $promos = promo_cards(); if ($promos): ?>
+  <section class="promo-carousel-section" id="plaquitas">
+    <div class="section-head"><div><p class="eyebrow" style="color:var(--brand);">Recomendaciones</p><h2>Promociones para cuidar a tu mascota</h2></div></div>
+    <div class="promo-carousel" aria-label="Promociones">
+      <?php foreach ($promos as $promo): ?>
+      <article class="promo-card">
+        <?php if (!empty($promo['imagen'])): ?><div class="promo-card-media"><img src="<?= e($promo['imagen']) ?>" alt="<?= e($promo['titulo'] ?: 'Promocion') ?>"></div><?php endif; ?>
+        <div class="promo-card-body">
+          <h3><?= e($promo['titulo']) ?></h3>
+          <?php if (!empty($promo['texto'])): ?><p><?= e($promo['texto']) ?></p><?php endif; ?>
+          <?php if (!empty($promo['boton_url']) && !empty($promo['boton_texto'])): ?><a class="btn primary" href="<?= e($promo['boton_url']) ?>" target="_blank" rel="noopener"><?= e($promo['boton_texto']) ?></a><?php endif; ?>
+        </div>
+      </article>
+      <?php endforeach; ?>
     </div>
-    <a class="btn primary" href="https://articulo.mercadolibre.com.mx/MLM-2221510741-placas-ubican-id-_JM" target="_blank" rel="noopener">Comprar en Mercado Libre</a>
   </section>
+  <?php endif; ?>
   <section class="panel search-panel"><details class="filter-dropdown" <?= $activeFilter ? 'open' : '' ?>><summary><span>Buscar y filtrar</span></summary><form class="search-form" method="get" action="/" data-report-filter-form><div class="field"><label for="q">Buscar</label><input id="q" name="q" value="<?= e($filters['q']) ?>" placeholder="Nombre, direccion o contacto"></div><div class="field"><label for="estado">Estado</label><select id="estado" name="estado"><?php foreach (['todos'=>'Todos','perdidos'=>'Perdidos','resguardo'=>'Resguardados','en_casa'=>'En casa'] as $value => $label): ?><option value="<?= e($value) ?>" <?= $filters['estado'] === $value ? 'selected' : '' ?>><?= e($label) ?></option><?php endforeach; ?></select></div><button class="btn primary" type="submit">Buscar</button></form><p class="filter-meta"><?= e($filters['resultados']) ?> resultado<?= $filters['resultados'] == 1 ? '' : 's' ?></p></details></section>
   <div class="section-head" id="reportes-recientes"><div><h2>Reportes recientes</h2><p>Informacion publica enviada por la comunidad.</p></div></div>
   <?php if ($mascotas): ?><section class="grid">
@@ -2022,6 +2117,38 @@ function view_admin_panel(): void { ?>
         <form class="menu-setting" method="post" action="/admin/donation-modal"><input type="hidden" name="enabled" value="0"><input type="hidden" name="next" value="/admin"><label class="switch"><span class="switch-text"><span>Modal donativo</span><small><?= donation_modal_enabled() ? 'Activo' : 'Apagado' ?></small></span><input type="checkbox" name="enabled" value="1" <?= donation_modal_enabled() ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form>
       </section>
     </div>
+    <section class="panel admin-promos">
+      <div class="section-head" style="margin-top:0;"><div><h2>Carrusel promocional</h2><p>Administra las cards que aparecen en la pagina principal.</p></div></div>
+      <form class="promo-admin-form" method="post" action="/admin/promos" enctype="multipart/form-data">
+        <div class="field"><label for="promo_titulo">Titulo</label><input id="promo_titulo" name="titulo" required placeholder="Ej. Placas inteligentes UBICAN ID"></div>
+        <div class="field"><label for="promo_orden">Orden</label><input id="promo_orden" name="orden" type="number" step="1" value="10"></div>
+        <div class="field full"><label for="promo_texto">Texto</label><textarea id="promo_texto" name="texto" placeholder="Descripcion de la promocion"></textarea></div>
+        <div class="field"><label for="promo_boton_texto">Texto del boton</label><input id="promo_boton_texto" name="boton_texto" placeholder="Comprar"></div>
+        <div class="field"><label for="promo_boton_url">URL del boton</label><input id="promo_boton_url" name="boton_url" placeholder="https://..."></div>
+        <div class="field"><label for="promo_imagen">Imagen</label><input id="promo_imagen" name="imagen" type="file" accept="image/*"></div>
+        <label class="switch"><span class="switch-text"><span>Visible</span><small>Mostrar en el carrusel</small></span><input type="checkbox" name="activo" checked><span class="switch-ui" aria-hidden="true"></span></label>
+        <div class="actions"><button class="btn primary" type="submit">Crear promo</button></div>
+      </form>
+      <div class="promo-admin-list">
+        <?php foreach (promo_cards(false) as $promo): ?>
+        <form class="promo-admin-item" method="post" action="/admin/promos/<?= e((string)$promo['id']) ?>" enctype="multipart/form-data">
+          <?php if (!empty($promo['imagen'])): ?><img src="<?= e($promo['imagen']) ?>" alt="<?= e($promo['titulo']) ?>"><?php else: ?><span class="mini-thumb"><?= e(first_letter($promo['titulo'] ?? '?')) ?></span><?php endif; ?>
+          <div class="promo-admin-fields">
+            <div class="form-grid">
+              <div class="field"><label>Titulo</label><input name="titulo" value="<?= e($promo['titulo']) ?>" required></div>
+              <div class="field"><label>Orden</label><input name="orden" type="number" step="1" value="<?= e((string)($promo['orden'] ?? 0)) ?>"></div>
+              <div class="field full"><label>Texto</label><textarea name="texto"><?= e($promo['texto'] ?? '') ?></textarea></div>
+              <div class="field"><label>Texto del boton</label><input name="boton_texto" value="<?= e($promo['boton_texto'] ?? '') ?>"></div>
+              <div class="field"><label>URL del boton</label><input name="boton_url" value="<?= e($promo['boton_url'] ?? '') ?>"></div>
+              <div class="field"><label>Cambiar imagen</label><input name="imagen" type="file" accept="image/*"></div>
+              <label class="switch"><span class="switch-text"><span>Visible</span><small><?= !empty($promo['activo']) ? 'Activa' : 'Oculta' ?></small></span><input type="checkbox" name="activo" <?= !empty($promo['activo']) ? 'checked' : '' ?>><span class="switch-ui" aria-hidden="true"></span></label>
+            </div>
+            <div class="actions"><button class="btn primary" type="submit">Guardar</button><button class="btn delete" type="submit" formaction="/admin/promos/<?= e((string)$promo['id']) ?>/eliminar" formmethod="post" formnovalidate onclick="return confirm('Eliminar esta promo?');">Eliminar</button></div>
+          </div>
+        </form>
+        <?php endforeach; ?>
+      </div>
+    </section>
   </section>
 <?php }
 
@@ -2476,6 +2603,71 @@ function route(): void {
             }
             render('admin', ['title' => 'Administrar AyudaPet']);
             return;
+        }
+
+        if ($path === '/admin/promos' && $method === 'POST') {
+            require_login();
+            if (!is_admin_user()) {
+                render('error', ['title' => 'Sin permiso', 'message' => 'Esta accion es privada.'], 403);
+                return;
+            }
+            try {
+                ensure_promo_cards_table();
+                $data = promo_form_data();
+                if ($data['titulo'] === '') {
+                    flash('El titulo de la promo es obligatorio.', 'error');
+                    redirect_to('/admin');
+                }
+                db()->prepare('INSERT INTO promo_cards (titulo, texto, imagen, boton_texto, boton_url, activo, orden) VALUES (?, ?, ?, ?, ?, ?, ?)')
+                    ->execute([$data['titulo'], $data['texto'], $data['imagen'], $data['boton_texto'], $data['boton_url'], $data['activo'], $data['orden']]);
+                flash('Promo creada.', 'success');
+            } catch (Throwable $e) {
+                error_log('No se pudo crear promo: ' . $e->getMessage());
+                flash('No se pudo crear la promo.', 'error');
+            }
+            redirect_to('/admin');
+        }
+
+        if (preg_match('#^/admin/promos/(\d+)$#', $path, $m) && $method === 'POST') {
+            require_login();
+            if (!is_admin_user()) {
+                render('error', ['title' => 'Sin permiso', 'message' => 'Esta accion es privada.'], 403);
+                return;
+            }
+            try {
+                ensure_promo_cards_table();
+                $stmt = db()->prepare('SELECT * FROM promo_cards WHERE id = ? LIMIT 1');
+                $stmt->execute([(int)$m[1]]);
+                $promo = $stmt->fetch();
+                if (!$promo) {
+                    flash('Promo no encontrada.', 'error');
+                    redirect_to('/admin');
+                }
+                $data = promo_form_data($promo);
+                if ($data['titulo'] === '') {
+                    flash('El titulo de la promo es obligatorio.', 'error');
+                    redirect_to('/admin');
+                }
+                db()->prepare('UPDATE promo_cards SET titulo = ?, texto = ?, imagen = ?, boton_texto = ?, boton_url = ?, activo = ?, orden = ? WHERE id = ?')
+                    ->execute([$data['titulo'], $data['texto'], $data['imagen'], $data['boton_texto'], $data['boton_url'], $data['activo'], $data['orden'], (int)$m[1]]);
+                flash('Promo actualizada.', 'success');
+            } catch (Throwable $e) {
+                error_log('No se pudo actualizar promo: ' . $e->getMessage());
+                flash('No se pudo actualizar la promo.', 'error');
+            }
+            redirect_to('/admin');
+        }
+
+        if (preg_match('#^/admin/promos/(\d+)/eliminar$#', $path, $m) && $method === 'POST') {
+            require_login();
+            if (!is_admin_user()) {
+                render('error', ['title' => 'Sin permiso', 'message' => 'Esta accion es privada.'], 403);
+                return;
+            }
+            ensure_promo_cards_table();
+            db()->prepare('DELETE FROM promo_cards WHERE id = ?')->execute([(int)$m[1]]);
+            flash('Promo eliminada.', 'success');
+            redirect_to('/admin');
         }
 
         if ($path === '/') {
