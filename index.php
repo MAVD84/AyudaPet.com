@@ -1659,6 +1659,7 @@ function render(string $view, array $data = [], int $status = 200): void {
           <form class="menu-setting" method="post" action="/admin/donation-modal"><input type="hidden" name="enabled" value="0"><input type="hidden" name="next" value="<?= e($_SERVER['REQUEST_URI'] ?? '/') ?>"><label class="switch"><span class="switch-text"><span>Modal donativo</span><small><?= donation_modal_enabled() ? 'Activo' : 'Apagado' ?></small></span><input type="checkbox" name="enabled" value="1" <?= donation_modal_enabled() ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form>
         <?php endif; ?>
         <a class="btn facebook" href="https://www.facebook.com/AyudaPet26" target="_blank" rel="noopener">Facebook</a>
+        <a class="btn ghost" href="https://ayudapet-nfts.vercel.app/" target="_blank" rel="noopener">AyudaPet Memorial</a>
         <?php if (donate_button_enabled()): ?><a class="btn donate" href="<?= e(donation_url()) ?>" target="_blank" rel="noopener">Donar</a><?php endif; ?>
         <a class="btn logout" href="/logout">Cerrar sesion</a>
       <?php else: ?>
@@ -1666,6 +1667,7 @@ function render(string $view, array $data = [], int $status = 200): void {
         <a class="btn ghost <?= $active('/registro') ?>" href="/registro">Crear cuenta</a>
         <a class="btn ghost <?= $active('/') ?>" href="/#reportes-recientes">Reportes</a>
         <a class="btn facebook" href="https://www.facebook.com/AyudaPet26" target="_blank" rel="noopener">Facebook</a>
+        <a class="btn ghost" href="https://ayudapet-nfts.vercel.app/" target="_blank" rel="noopener">AyudaPet Memorial</a>
         <?php if (donate_button_enabled()): ?><a class="btn donate" href="<?= e(donation_url()) ?>" target="_blank" rel="noopener">Donar</a><?php endif; ?>
       <?php endif; ?>
     </div>
