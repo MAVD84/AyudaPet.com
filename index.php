@@ -1948,7 +1948,7 @@ function view_impulsar(array $mascota): void {
                     </form>
                     <?php else: ?>
                     <?php render_boost_plan_options($shareUrl); ?>
-                    <a class="btn whatsapp" href="<?= e($whatsappUrl) ?>" target="_blank" rel="noopener" data-boost-whatsapp>Preguntar por WhatsApp</a>
+                    <a class="btn whatsapp" href="<?= e($whatsappUrl) ?>" target="_blank" rel="noopener" data-boost-whatsapp>Pagar por WhatsApp</a>
                     <?php endif; ?>
                     <a class="btn ghost" href="/mascotas/<?= e($mascota['id']) ?>">Cancelar</a>
                 </div>
