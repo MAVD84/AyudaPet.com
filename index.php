@@ -2202,6 +2202,7 @@ function view_mapa_calor(array $reports, array $stats, ?string $mapsApiKey, arra
             'direccion' => (string)(($report['direccion_completa'] ?? '') ?: ($report['direccion'] ?? '')),
             'imagen' => (string)($report['principal'] ?? ''),
             'tipo' => report_type_value($report['tipo_reporte'] ?? ''),
+            'en_casa' => !empty($report['encontrado']),
         ];
     }
     $centerLat = $points ? array_sum(array_column($points, 'lat')) / count($points) : 31.6904;
@@ -2261,6 +2262,7 @@ function view_mapa_calor(array $reports, array $stats, ?string $mapsApiKey, arra
       let activeInfo = null;
       let activeCircle = null;
       points.slice(0, 120).forEach((point, index) => {
+        const markerColor = point.en_casa ? "#287c5a" : "#e85035";
         const marker = new google.maps.Marker({
           position: { lat: point.lat, lng: point.lng },
           map,
@@ -2268,7 +2270,7 @@ function view_mapa_calor(array $reports, array $stats, ?string $mapsApiKey, arra
           icon: {
             path: google.maps.SymbolPath.CIRCLE,
             scale: 7,
-            fillColor: "#e85035",
+            fillColor: markerColor,
             fillOpacity: 1,
             strokeColor: "#ffffff",
             strokeWeight: 2,
@@ -2286,10 +2288,10 @@ function view_mapa_calor(array $reports, array $stats, ?string $mapsApiKey, arra
           if (activeInfo) activeInfo.close();
           if (activeCircle) activeCircle.setMap(null);
           activeCircle = new google.maps.Circle({
-            strokeColor: "#e85035",
+            strokeColor: markerColor,
             strokeOpacity: 0.45,
             strokeWeight: 1,
-            fillColor: "#e85035",
+            fillColor: markerColor,
             fillOpacity: 0.22,
             map,
             center: { lat: point.lat, lng: point.lng },
