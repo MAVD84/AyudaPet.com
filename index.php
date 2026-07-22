@@ -621,6 +621,7 @@ function send_boost_expired_notification(array $pet): bool {
         'Contacto publico: ' . public_contact_value($pet['contacto'] ?? null),
         'Direccion: ' . ($pet['direccion'] ?? ''),
         'Estuvo activo hasta: ' . ($pet['impulsado_hasta'] ?? ''),
+        'Estado de pago: ' . (($pet['paypal_payment_status'] ?? '') ?: 'Sin estado'),
         'PayPal order: ' . ($pet['paypal_order_id'] ?? ''),
         '',
         'Ver reporte: ' . $url,
@@ -631,7 +632,7 @@ function send_boost_expired_notification(array $pet): bool {
 
 function process_expired_boosts(int $limit = 50): array {
     ensure_report_columns();
-    $stmt = db()->prepare("SELECT * FROM mascotas WHERE impulsado_hasta IS NOT NULL AND impulsado_hasta <= NOW() AND paypal_payment_status IN ('COMPLETED', 'manual') AND boost_expired_notified_at IS NULL ORDER BY impulsado_hasta ASC LIMIT ?");
+    $stmt = db()->prepare("SELECT * FROM mascotas WHERE impulsado_hasta IS NOT NULL AND impulsado_hasta <= NOW() AND boost_expired_notified_at IS NULL ORDER BY impulsado_hasta ASC LIMIT ?");
     $stmt->bindValue(1, max(1, min(100, $limit)), PDO::PARAM_INT);
     $stmt->execute();
     $pets = $stmt->fetchAll();
