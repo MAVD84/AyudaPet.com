@@ -1185,6 +1185,7 @@ function remove_expired_free_reports(int $limit = 50): array {
     ensure_archive_table();
     $stmt = db()->prepare("SELECT * FROM mascotas
         WHERE creado_at <= DATE_SUB(NOW(), INTERVAL ? DAY)
+          AND encontrado = 0
           AND impulsado_hasta IS NULL
           AND (paypal_payment_status IS NULL OR paypal_payment_status NOT IN ('COMPLETED', 'manual'))
         ORDER BY creado_at ASC
