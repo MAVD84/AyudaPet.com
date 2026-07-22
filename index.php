@@ -2142,7 +2142,7 @@ function render_admin_boost_plan_switches(): void {
 
 function view_admin_panel(): void { ?>
   <section class="admin-page">
-    <div class="section-head"><div><p class="eyebrow" style="color:var(--brand);">Privado</p><h1>Administrar</h1><p>Controles internos de AyudaPet.</p></div><a class="btn ghost" href="/mapa-calor">Mapa de calor</a></div>
+    <div class="section-head"><div><p class="eyebrow" style="color:var(--brand);">Privado</p><h1>Administrar</h1><p>Controles internos de AyudaPet.</p></div></div>
     <div class="admin-grid">
       <section class="panel admin-card">
         <div><h2>Impulso</h2><p class="meta">Controla si los usuarios pagan directo por PayPal o solicitan el impulso por WhatsApp.</p></div>
@@ -2156,6 +2156,10 @@ function view_admin_panel(): void { ?>
         <div><h2>Donativos</h2><p class="meta">Controla el boton de donar y el modal de apoyo.</p></div>
         <form class="menu-setting" method="post" action="/admin/donate-button"><input type="hidden" name="enabled" value="0"><input type="hidden" name="next" value="/admin"><label class="switch"><span class="switch-text"><span>Boton donar</span><small><?= donate_button_enabled() ? 'Visible' : 'Oculto' ?></small></span><input type="checkbox" name="enabled" value="1" <?= donate_button_enabled() ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form>
         <form class="menu-setting" method="post" action="/admin/donation-modal"><input type="hidden" name="enabled" value="0"><input type="hidden" name="next" value="/admin"><label class="switch"><span class="switch-text"><span>Modal donativo</span><small><?= donation_modal_enabled() ? 'Activo' : 'Apagado' ?></small></span><input type="checkbox" name="enabled" value="1" <?= donation_modal_enabled() ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form>
+      </section>
+      <section class="panel admin-card">
+        <div><h2>Mapa de calor</h2><p class="meta">Consulta incidencias, ubicaciones y telefonos por zona.</p></div>
+        <a class="btn ghost" href="/mapa-calor">Abrir mapa de calor</a>
       </section>
     </div>
     <section class="panel admin-promos">
