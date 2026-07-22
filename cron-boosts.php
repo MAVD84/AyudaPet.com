@@ -13,9 +13,11 @@ require __DIR__ . '/index.php';
 try {
     $result = process_expired_boosts();
     $archives = sync_report_archives();
+    $freeReports = remove_expired_free_reports();
     echo 'boost_checked=' . $result['checked'] . ' boost_sent=' . $result['sent'] . ' boost_failed=' . $result['failed']
-        . ' archive_checked=' . $archives['checked'] . ' archive_synced=' . $archives['synced'] . ' archive_failed=' . $archives['failed'] . PHP_EOL;
-    exit(($result['failed'] + $archives['failed']) > 0 ? 1 : 0);
+        . ' archive_checked=' . $archives['checked'] . ' archive_synced=' . $archives['synced'] . ' archive_failed=' . $archives['failed']
+        . ' free_checked=' . $freeReports['checked'] . ' free_removed=' . $freeReports['removed'] . ' free_failed=' . $freeReports['failed'] . PHP_EOL;
+    exit(($result['failed'] + $archives['failed'] + $freeReports['failed']) > 0 ? 1 : 0);
 } catch (Throwable $e) {
     error_log('Cron boosts failed: ' . $e->getMessage());
     echo 'error=' . $e->getMessage() . PHP_EOL;

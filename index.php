@@ -41,6 +41,7 @@ const MAX_SECONDARY_IMAGES = 3;
 const DEFAULT_PUBLIC_CONTACT = '+526564252167';
 const OLD_PUBLIC_CONTACTS = ['+526567787712', '6567787712', '526567787712'];
 const DEFAULT_ADMIN_PHONE = '6564252167';
+const FREE_REPORT_DAYS = 3;
 const BOOST_DAYS = 10;
 const BOOST_PRICE_CENTS = 130000;
 const BOOST_PRICE_LABEL = '$1,300 M.N.';
@@ -1179,6 +1180,37 @@ function sync_report_archives(int $limit = 500): array {
     return ['checked' => count($pets), 'synced' => $synced, 'failed' => $failed];
 }
 
+function remove_expired_free_reports(int $limit = 50): array {
+    ensure_archive_table();
+    $stmt = db()->prepare("SELECT * FROM mascotas
+        WHERE creado_at <= DATE_SUB(NOW(), INTERVAL ? DAY)
+          AND impulsado_hasta IS NULL
+          AND (paypal_payment_status IS NULL OR paypal_payment_status NOT IN ('COMPLETED', 'manual'))
+        ORDER BY creado_at ASC
+        LIMIT ?");
+    $stmt->bindValue(1, FREE_REPORT_DAYS, PDO::PARAM_INT);
+    $stmt->bindValue(2, max(1, min(100, $limit)), PDO::PARAM_INT);
+    $stmt->execute();
+    $pets = $stmt->fetchAll();
+    $removed = 0;
+    $failed = 0;
+    $pdo = db();
+    foreach ($pets as $pet) {
+        try {
+            $pdo->beginTransaction();
+            archive_report($pet, 'free_report_expired');
+            $pdo->prepare('DELETE FROM mascotas WHERE id = ?')->execute([$pet['id']]);
+            $pdo->commit();
+            $removed++;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $failed++;
+            error_log('No se pudo eliminar reporte gratis vencido ' . ($pet['id'] ?? '') . ': ' . $e->getMessage());
+        }
+    }
+    return ['checked' => count($pets), 'removed' => $removed, 'failed' => $failed];
+}
+
 function backfill_missing_report_coordinates(int $limit = 25): void {
     if (!envv('API_KEY')) return;
     ensure_report_columns();
@@ -1828,7 +1860,7 @@ function view_detalle(array $mascota, bool $isOwner, bool $canManage, array $sha
       <?php if (is_admin_user()): ?><form class="boost-panel" method="post" action="/mascotas/<?= e($mascota['id']) ?>/impulso-manual"><input type="hidden" name="enabled" value="0"><?php if (!$boostedUntil): ?><select name="dias" aria-label="Dias de impulso"><?php foreach (visible_boost_plans() as $plan): $d = (int)$plan['days']; ?><option value="<?= e((string)$d) ?>" <?= $d === default_boost_plan_days() ? 'selected' : '' ?>><?= e((string)$d) ?> dias</option><?php endforeach; ?></select><?php endif; ?><label class="switch"><span class="switch-text"><span>Impulso manual</span><small><?= $boostedUntil ? 'Activo hasta ' . e($boostedUntil) : 'Selecciona dias y activa' ?></small></span><input type="checkbox" name="enabled" value="1" <?= $boostedUntil ? 'checked' : '' ?> onchange="this.form.submit()"><span class="switch-ui" aria-hidden="true"></span></label></form><?php endif; ?>
       <?php if (is_admin_user()): ?><form class="boost-panel admin-views-panel" method="post" action="/mascotas/<?= e($mascota['id']) ?>/vistas"><div class="field"><label for="admin_vistas">Vistas</label><input id="admin_vistas" name="vistas" type="number" min="0" step="1" value="<?= e((string)max(0, (int)($mascota['vistas'] ?? 0))) ?>"></div><button class="btn primary" type="submit">Guardar vistas</button></form><?php endif; ?>
       <?php if ($boostedUntil): ?><div class="boost-panel"><span class="badge boost-badge">Impulsado</span><strong>Activo hasta <?= e($boostedUntil) ?></strong></div><?php endif; ?>
-      <?php if ($canManage && !$boostedUntil): ?><div class="boost-copy"><div><h2>Impulsa tu anuncio.</h2><p>Lo destacamos en AyudaPet y tambien enviamos tu reporte directo a celulares de personas cercanas a la zona donde se perdio tu mascota.</p></div><a class="btn <?= boost_button_enabled() ? 'boost' : 'whatsapp' ?>" href="/mascotas/<?= e($mascota['id']) ?>/impulsar"><?= boost_button_enabled() ? 'Impulsar ahora' : 'Activar por WhatsApp' ?></a></div><?php endif; ?>
+      <?php if ($canManage && !$boostedUntil): ?><div class="boost-copy"><div><h2>Impulsa tu anuncio.</h2><p>Tu reporte se mostrara gratis durante <?= e((string)FREE_REPORT_DAYS) ?> dias. Si no se impulsa dentro de ese periodo, el sistema eliminara el reporte publico para mantener disponible la plataforma.</p><p>Lo destacamos en AyudaPet y tambien enviamos tu reporte directo a celulares de personas cercanas a la zona donde se perdio tu mascota.</p></div><a class="btn <?= boost_button_enabled() ? 'boost' : 'whatsapp' ?>" href="/mascotas/<?= e($mascota['id']) ?>/impulsar"><?= boost_button_enabled() ? 'Impulsar ahora' : 'Activar por WhatsApp' ?></a></div><?php endif; ?>
       <div class="info-list"><?php info_row('Tipo de reporte', report_type_label($mascota['tipo_reporte'] ?? 'extravio')); info_row('Fecha', $mascota['fecha']); info_row('Nombre de mascota', $mascota['nombre']); info_row('Descripcion', $mascota['descripcion']); ?></div>
       <div class="split-info"><?php foreach ([['Tipo de mascota','tipo_mascota'],['Edad','edad'],['Raza','raza'],['Genero','genero'],['Color','color'],['Collar','collar'],['Docil','docil']] as [$label,$key]) info_row($label, $mascota[$key]); ?></div>
       <?php if ($mapUrl): ?><div class="map-frame"><iframe src="<?= e($mapUrl) ?>" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen title="Mapa de direccion de extravio"></iframe></div><?php endif; ?>
@@ -2357,9 +2389,11 @@ function route(): void {
             }
             $result = process_expired_boosts();
             $archives = sync_report_archives();
+            $freeReports = remove_expired_free_reports();
             header('Content-Type: text/plain; charset=UTF-8');
             echo 'boost_checked=' . $result['checked'] . ' boost_sent=' . $result['sent'] . ' boost_failed=' . $result['failed']
-                . ' archive_checked=' . $archives['checked'] . ' archive_synced=' . $archives['synced'] . ' archive_failed=' . $archives['failed'];
+                . ' archive_checked=' . $archives['checked'] . ' archive_synced=' . $archives['synced'] . ' archive_failed=' . $archives['failed']
+                . ' free_checked=' . $freeReports['checked'] . ' free_removed=' . $freeReports['removed'] . ' free_failed=' . $freeReports['failed'];
             return;
         }
 
