@@ -1132,15 +1132,19 @@ function increment_report_views(string $id): void {
     db()->prepare('UPDATE mascotas SET vistas = vistas + 1 WHERE id = ?')->execute([$id]);
 }
 
-function archive_report(array $pet, string $reason = 'deleted_by_owner'): void {
-    ensure_archive_table();
-    $fields = [
+function report_archive_fields(): array {
+    return [
         'id', 'reportado_por', 'tipo_reporte', 'tipo_mascota', 'nombre', 'descripcion', 'contacto',
         'principal', 'secundarias', 'fecha', 'edad', 'raza', 'genero', 'color', 'collar', 'docil',
         'direccion', 'direccion_completa', 'ubicacion_lat', 'ubicacion_lng', 'calles', 'dueno', 'recompensa', 'encontrado',
         'vistas', 'impulsado_hasta', 'paypal_order_id', 'paypal_payment_status', 'paypal_boost_days',
         'boost_expired_notified_at', 'creado_at', 'actualizado_at'
     ];
+}
+
+function archive_report(array $pet, string $reason = 'deleted_by_owner'): void {
+    ensure_archive_table();
+    $fields = report_archive_fields();
     $columns = array_merge(['archivado_por', 'archivado_motivo'], $fields, ['snapshot_json']);
     $params = array_map(fn($column) => ':' . $column, $columns);
     $data = [
@@ -1179,6 +1183,38 @@ function sync_report_archives(int $limit = 500): array {
         }
     }
     return ['checked' => count($pets), 'synced' => $synced, 'failed' => $failed];
+}
+
+function restore_resolved_archived_reports(int $limit = 100): array {
+    ensure_archive_table();
+    $stmt = db()->prepare("SELECT a.* FROM mascotas_archivadas a
+        LEFT JOIN mascotas m ON m.id = a.id
+        WHERE a.encontrado = 1
+          AND m.id IS NULL
+        ORDER BY a.archivado_at DESC
+        LIMIT ?");
+    $stmt->bindValue(1, max(1, min(500, $limit)), PDO::PARAM_INT);
+    $stmt->execute();
+    $archives = $stmt->fetchAll();
+    $fields = report_archive_fields();
+    $params = array_map(fn($field) => ':' . $field, $fields);
+    $sql = 'INSERT INTO mascotas (' . implode(', ', $fields) . ') VALUES (' . implode(', ', $params) . ')';
+    $restored = 0;
+    $failed = 0;
+    foreach ($archives as $archive) {
+        $data = [];
+        foreach ($fields as $field) {
+            $data[$field] = $archive[$field] ?? null;
+        }
+        try {
+            db()->prepare($sql)->execute($data);
+            $restored++;
+        } catch (Throwable $e) {
+            $failed++;
+            error_log('No se pudo restaurar reporte En casa archivado ' . ($archive['id'] ?? '') . ': ' . $e->getMessage());
+        }
+    }
+    return ['checked' => count($archives), 'restored' => $restored, 'failed' => $failed];
 }
 
 function remove_expired_free_reports(int $limit = 50): array {
@@ -2390,10 +2426,12 @@ function route(): void {
                 return;
             }
             $result = process_expired_boosts();
+            $restored = restore_resolved_archived_reports();
             $archives = sync_report_archives();
             $freeReports = remove_expired_free_reports();
             header('Content-Type: text/plain; charset=UTF-8');
             echo 'boost_checked=' . $result['checked'] . ' boost_sent=' . $result['sent'] . ' boost_failed=' . $result['failed']
+                . ' restored_checked=' . $restored['checked'] . ' restored=' . $restored['restored'] . ' restored_failed=' . $restored['failed']
                 . ' archive_checked=' . $archives['checked'] . ' archive_synced=' . $archives['synced'] . ' archive_failed=' . $archives['failed']
                 . ' free_checked=' . $freeReports['checked'] . ' free_removed=' . $freeReports['removed'] . ' free_failed=' . $freeReports['failed'];
             return;
